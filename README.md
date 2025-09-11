@@ -1,24 +1,32 @@
-Team Name: PrintNet
+# Project PrintNet (Starter)
 
-Team Members
+This bundle includes the starter backend (Spring Boot + Kotlin), worker service (Kotlin), infra docker-compose, and VS Code configs.
 
-Mitchell Koski – Computer Science, University of Cincinnati- Koskima@mai.uc.edu
+## Run
 
-Muhanad Al-Khasawneh – Computer Science, University of Cincinnati - alkhasmr@mail.uc.edu
+**Infra**
+```bash
+docker compose -f infra/docker-compose.dev.yml up
+```
 
-Muneer Al-Khasawneh – Computer Science, University of Cincinnati - alkhasme@mail.uc.edu
+**Backend**
+```bash
+cd backend
+./gradlew bootRun
+# health check: http://localhost:8080/api/health
+```
 
-Project Topic Area
+**Worker**
+```bash
+cd worker
+./gradlew run
+```
 
-Development of a web-based platform for the 3D Print Lab, with server integration for cloud-based print management. The system will allow students to submit print jobs online, lab managers to approve/monitor jobs, and admins to manage printer resources, maintenance, and user access.
-
-Advisor
-
-Jeremy Hill
-
-Repository Link: 
-
-GitHub Repository 
-GitHub
-GitHub - Electrovian/Senor-capstone-: capstone project
-capstone project. Contribute to Electrovian/Senor-capstone- development by creating an account on GitHub.
+**Frontend**
+Create a Vite React app in the `frontend/` folder:
+```bash
+npm create vite@latest frontend -- --template react-ts
+cd frontend
+npm install
+npm run dev
+```
