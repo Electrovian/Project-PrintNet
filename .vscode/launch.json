@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Spring Boot Backend",
+      "mainClass": "edu.uc.printnet.PrintNetApplication",
+      "projectName": "backend"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Frontend (React)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "${workspaceFolder}/frontend",
+      "port": 3000
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Worker Service",
+      "mainClass": "edu.uc.printnet.worker.SlicerJobRunner",
+      "projectName": "worker"
+    }
+  ]
+}
