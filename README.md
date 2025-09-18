@@ -15,10 +15,3 @@ Development of a web-based platform for the 3D Print Lab, with server integratio
 Advisor
 
 Jeremy Hill
-
-Repository Link: 
-
-GitHub Repository 
-GitHub
-GitHub - Electrovian/Senor-capstone-: capstone project
-capstone project. Contribute to Electrovian/Senor-capstone- development by creating an account on GitHub.
