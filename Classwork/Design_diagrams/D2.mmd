@@ -1,0 +1,55 @@
+---
+config:
+  layout: elk
+  theme: neo-dark
+---
+flowchart LR
+  UI["Web UI (Auth, Jobs, Printers, Maintenance)"]
+  DB["Airtable"]
+  SL["Slicer (Slic3r)"]
+  PRN["Printer Farm"]
+
+  subgraph BE ["Backend API"]
+    UM["User Management (AuthZ, RBAC, tokens)"]
+    JM["Job Manager (Queue, approvals, lifecycle)"]
+    PM["Printer Manager (Drivers, G-code streaming, telemetry)"]
+    MM["Maintenance Manager (Tickets, schedules, usage)"]
+    IN["Integrations (Webhooks, Airtable Sync)"]
+    AU["Audit Log (Actions, diffs)"]
+  end
+
+  %% UI routes
+  UI --> |Login or signup| UM
+  UI --> |Submit job, view status| JM
+  UI --> |Approve or deny, prioritize| JM
+  UI --> |Printer dashboards| PM
+  UI --> |Open or close tickets, schedules| MM
+  UI --> |Admin users and roles| UM
+
+  %% Backend <-> DB
+  UM <--> |Users, roles| DB
+  JM <--> |Jobs, files, queue| DB
+  MM <--> |Tickets, schedules| DB
+  IN <--> |Sync state and IDs| DB
+
+  %% Slicing path
+  JM --> |Model file and profile| SL
+  SL --> |G-code file| JM
+  JM --> |Enqueue print| PM
+
+  %% Printing path
+  PM --> |Start, stop, pause| PRN
+  PRN --> |Status, telemetry| PM
+
+  %% Maintenance signals
+  PM -.-> |Usage counters, errors| MM
+
+  %% Cross-cutting audit
+  UM -.-> AU
+  JM -.-> AU
+  PM -.-> AU
+  MM -.-> AU
+  IN -.-> AU
+
+  %% Notifications
+  IN -.-> |Events, webhooks| UI

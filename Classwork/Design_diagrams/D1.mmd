@@ -1,0 +1,22 @@
+---
+config:
+  layout: elk
+  theme: neo-dark
+---
+flowchart LR
+  U([Users: General, Staff, Manager, Admin, Dev]) --> UI["Web UI (Portal)"]
+  UI -->|REST or GraphQL| API["Backend API (App Server)"]
+
+  DB["Airtable Cloud DB"]
+  SL["Slicer (Slic3r)"]
+  PF["Printer Farm (Multiple 3D Printers)"]
+
+  API <--> |CRUD entities| DB
+  API --> |Send model for slicing| SL
+  SL --> |G-code| API
+
+  API --> |Start, stop, monitor| PF
+  PF --> |Telemetry, status| API
+
+  API -.-> |Webhooks, events| UI
+  UI --> |Uploads STL| API

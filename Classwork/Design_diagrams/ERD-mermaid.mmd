@@ -1,0 +1,194 @@
+---
+config:
+  layout: elk
+---
+erDiagram
+  Role ||--o{ User : grants
+  User ||--o{ ApiToken : has
+  User ||--o{ AuditLog : acts_in
+  Printer ||--o{ PrinterCapability : has
+  Printer ||--o{ PrinterMaterialProfile : supports
+  Printer ||--o{ PrintJob : target_of
+  Printer ||--o{ MaintenanceTicket : has
+  Printer ||--o{ PrinterUsageCounter : updates
+  Material ||--o{ PrinterMaterialProfile : profile_for
+  Material ||--o{ PrintJob : used_by
+  User ||--o{ ModelFile : owns
+  ModelFile ||--o{ SliceTask : input_to
+  SlicerProfile ||--o{ SliceTask : used_by
+  SliceTask ||--o| ModelFile : produces_gcode
+  User ||--o{ PrintJob : requests
+  PrintJob ||--o{ PrintEvent : timeline
+  MaintenanceTicket }o--|| User : opened_by
+  MaintenanceTicket }o--o| User : assigned_to
+  AirtableSync }o--|| User : mirrors
+  AirtableSync }o--|| Printer : mirrors
+  AirtableSync }o--|| PrintJob : mirrors
+  AirtableSync }o--|| MaintenanceTicket : mirrors
+  AirtableSync }o--|| Material : mirrors
+  User {
+    uuid id
+    text name
+    text email
+    text password_hash
+    uuid role_id
+    bool is_active
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  Role {
+    uuid id
+    text name
+    text description
+  }
+  ApiToken {
+    uuid id
+    uuid user_id
+    text token_hash
+    jsonb scopes
+    timestamptz expires_at
+    timestamptz created_at
+  }
+  Printer {
+    uuid id
+    text name
+    text make
+    text model
+    text serial_no
+    text connection_uri
+    text location
+    enum status
+    timestamptz last_seen_at
+  }
+  PrinterCapability {
+    uuid id
+    uuid printer_id
+    int build_volume_x_mm
+    int build_volume_y_mm
+    int build_volume_z_mm
+    jsonb nozzle_diameters
+    int max_temp_nozzle_c
+    int max_temp_bed_c
+    jsonb supported_materials
+  }
+  Material {
+    uuid id
+    text name
+    text color
+    text vendor
+    int nozzle_temp_min_c
+    int nozzle_temp_max_c
+    int bed_temp_min_c
+    int bed_temp_max_c
+    text notes
+  }
+  PrinterMaterialProfile {
+    uuid id
+    uuid printer_id
+    uuid material_id
+    int preferred_nozzle_temp_c
+    int preferred_bed_temp_c
+    int max_print_speed_mm_s
+  }
+  ModelFile {
+    uuid id
+    uuid owner_user_id
+    text filename
+    text content_type
+    bigint size_bytes
+    text storage_url
+    text checksum
+    timestamptz uploaded_at
+  }
+  SlicerProfile {
+    uuid id
+    text name
+    uuid owner_user_id
+    text slicer_name
+    text version
+    jsonb settings_json
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  SliceTask {
+    uuid id
+    uuid model_file_id
+    uuid slicer_profile_id
+    uuid requested_by_user_id
+    enum status
+    uuid gcode_file_id
+    text log_url
+    timestamptz started_at
+    timestamptz finished_at
+    timestamptz created_at
+  }
+  PrintJob {
+    uuid id
+    uuid requested_by_user_id
+    uuid approved_by_user_id
+    uuid model_file_id
+    uuid slice_task_id
+    uuid gcode_file_id
+    uuid target_printer_id
+    uuid material_id
+    int quantity
+    enum status
+    int priority
+    date due_date
+    text notes
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  PrintEvent {
+    uuid id
+    uuid print_job_id
+    text event_type
+    jsonb payload
+    timestamptz created_at
+  }
+  MaintenanceTicket {
+    uuid id
+    uuid printer_id
+    uuid opened_by_user_id
+    uuid assigned_to_user_id
+    text title
+    text description
+    enum severity
+    enum status
+    timestamptz opened_at
+    timestamptz closed_at
+  }
+  MaintenanceSchedule {
+    uuid id
+    uuid printer_id
+    text task_name
+    int cadence_hours
+    int cadence_prints
+    timestamptz last_performed_at
+    text notes
+  }
+  PrinterUsageCounter {
+    uuid id
+    uuid printer_id
+    double printed_hours_total
+    int prints_completed_total
+    timestamptz last_reset_at
+  }
+  AirtableSync {
+    uuid id
+    text entity_type
+    uuid entity_id
+    text airtable_record_id
+    timestamptz last_synced_at
+    jsonb last_result
+  }
+  AuditLog {
+    uuid id
+    uuid actor_user_id
+    text action
+    text entity_type
+    uuid entity_id
+    jsonb before
+    jsonb after
+    timestamptz created_at
+  }
