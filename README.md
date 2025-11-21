@@ -1,32 +1,17 @@
-# Project PrintNet (Starter)
+Team Name: PrintNet
 
-This bundle includes the starter backend (Spring Boot + Kotlin), worker service (Kotlin), infra docker-compose, and VS Code configs.
+Team Members
 
-## Run
+Mitchell Koski – Computer Science, University of Cincinnati- Koskima@mai.uc.edu
 
-**Infra**
-```bash
-docker compose -f infra/docker-compose.dev.yml up
-```
+Muhanad Al-Khasawneh – Computer Science, University of Cincinnati - alkhasmr@mail.uc.edu
 
-**Backend**
-```bash
-cd backend
-./gradlew bootRun
-# health check: http://localhost:8080/api/health
-```
+Muneer Al-Khasawneh – Computer Science, University of Cincinnati - alkhasme@mail.uc.edu
 
-**Worker**
-```bash
-cd worker
-./gradlew run
-```
+Project Topic Area
 
-**Frontend**
-Create a Vite React app in the `frontend/` folder:
-```bash
-npm create vite@latest frontend -- --template react-ts
-cd frontend
-npm install
-npm run dev
-```
+Development of a web-based platform for the 3D Print Lab, with server integration for cloud-based print management. The system will allow students to submit print jobs online, lab managers to approve/monitor jobs, and admins to manage printer resources, maintenance, and user access.
+
+Advisor
+
+Jeremy Hill

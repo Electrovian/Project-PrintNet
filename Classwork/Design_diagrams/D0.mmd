@@ -1,0 +1,32 @@
+---
+config:
+  layout: elk
+  theme: neo-dark
+---
+flowchart LR
+  %% Shapes:
+  %% - ([text]) rounded actor
+  %% - [[text]] system
+  %% - [text] rectangle
+  %% Arrows show data/control flow.
+
+  subgraph Actors [External Actors]
+    U([General User])
+    S([Staff])
+    M([Manager])
+    A([Admin])
+    D([Dev])
+  end
+
+  P["PrintNet System - Single UI, Maintenance, Slic3r, Airtable"]
+
+  U -->|Submit job STLs, view status| P
+  S -->|Queue jobs, run prints, update status| P
+  M -->|Approve or deny jobs, prioritize| P
+  A -->|Manage users, roles, printers, policies| P
+  D -->|Service or API access, tokens, hooks| P
+
+  P -->|Status notifications, receipts, logs| U
+  P -->|Printer dashboards, alerts| S
+  P -->|Reports, approvals, KPIs| M
+  P -->|Audits, role management, maintenance KPIs| A
