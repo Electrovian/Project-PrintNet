@@ -1,7 +1,3 @@
-mo_research_user_personas_and_use_cases.md
-
-Add user personas and use cases research for PrintNet (alkhasmr)
-[message (3).txt](https://github.com/user-attachments/files/23746560/message.3.txt)
 # User Personas and Use Cases for PrintNet
 Author: Mo Al-Khasawneh (alkhasmr)  
 Course: CS 5001 – Senior Design
