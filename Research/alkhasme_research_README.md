@@ -13,4 +13,7 @@ This folder contains my individual research contributions for the PrintNet senio
 - `alkhasme_research_3d_print_lab_platforms_and_requirements.md`  
   Summary of existing 3D printing management platforms and an early requirements list for PrintNet based on those examples.
 
+- `alkhasme_research_hardware_integration.md`
+  Overview of printer hardware connectivity and how PrintNet communicates with physical devices.
+
 These documents are meant to show my understanding of the technologies we are building on, and to define the data and integration layer that I am responsible for on the team.
