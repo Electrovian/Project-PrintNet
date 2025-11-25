@@ -11,7 +11,7 @@ PrintNet is intended to be a centralized platform for:
 - Lab staff oversight  
 - Analytics and reporting  
 
-Current labs rely on SD cards, email, or scattered systems. PrintNet solves that.
+Many 3D printing labs rely on SD cards, email, or scattered tools to manage prints. PrintNet is designed to provide a more centralized and streamlined workflow.
 
 ## 2. Survey of Existing Systems
 
