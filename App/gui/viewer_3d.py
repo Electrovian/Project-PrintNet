@@ -105,10 +105,6 @@ class Viewer3D(gl.GLViewWidget):
         self._sync_view_cube()
         return super().paintGL(*args, **kwargs)
 
-    def resizeEvent(self, ev: QtGui.QResizeEvent):
-        super().resizeEvent(ev)
-        self._position_selection_info()
-
     # -------------------- public helpers --------------------
 
     def set_selected_model(self, model_id: int | None):
@@ -1049,6 +1045,7 @@ class Viewer3D(gl.GLViewWidget):
 
     def resizeEvent(self, e: QtGui.QResizeEvent):
         super().resizeEvent(e)
+        self._position_selection_info()
         self._position_view_cube()
 
     # -------------------- gizmo --------------------
