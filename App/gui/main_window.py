@@ -10,8 +10,8 @@ from .settings_panel import SettingsPanel
 from .job_queue_panel import JobQueuePanel
 from .controls import TransformToolbar
 from .model_panel import ModelPanel
-from .transform_panel import TransformPanel
 from .workers import Worker
+from .popups import MovePopup, RotatePopup, ScalePopup, AutoOrientPopup, ArrangePopup
 
 from slicer.slicer import slice_file
 from slicer.gcode import SliceSettings
@@ -58,13 +58,6 @@ class MainWindow(QtWidgets.QMainWindow):
         model_dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
         self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, model_dock)
 
-        # Transform dock (left)
-        self.transform_panel = TransformPanel(self)
-        transform_dock = QtWidgets.QDockWidget("Transform", self)
-        transform_dock.setWidget(self.transform_panel)
-        transform_dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
-        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, transform_dock)
-
         # Job queue dock (right)
         self.job_queue_panel = JobQueuePanel(self)
         job_dock = QtWidgets.QDockWidget("Job Queue", self)
@@ -77,14 +70,32 @@ class MainWindow(QtWidgets.QMainWindow):
         self._build_menubar()
         self._build_toolbar()
 
+        self._popup_move = MovePopup(self)
+        self._popup_rotate = RotatePopup(self)
+        self._popup_scale = ScalePopup(self)
+        self._popup_auto_orient = AutoOrientPopup(self)
+        self._popup_arrange = ArrangePopup(self)
+        for popup in (
+            self._popup_move,
+            self._popup_rotate,
+            self._popup_scale,
+            self._popup_auto_orient,
+            self._popup_arrange,
+        ):
+            popup.hide()
+
+        self._popup_move.position_changed.connect(self._on_transform_position_changed)
+        self._popup_move.center_requested.connect(self._on_transform_center_requested)
+        self._popup_scale.scale_changed.connect(self._on_transform_scale_changed)
+        self._popup_auto_orient.orient_requested.connect(self._on_auto_orient_requested)
+        self._popup_auto_orient.reset_requested.connect(self._on_auto_orient_reset)
+        self._popup_arrange.arrange_requested.connect(self._on_arrange_requested)
+        self._popup_arrange.arrange_selected_requested.connect(self._on_arrange_selected_requested)
+        self._popup_arrange.reset_requested.connect(self._on_arrange_reset)
+
         # Connect signals (panels)
         self.model_panel.model_selected.connect(self._on_model_selected)
         self.model_panel.request_remove.connect(self._on_model_remove)
-
-        # TransformPanel: live position + apply scale + snap
-        self.transform_panel.scale_applied.connect(self._on_apply_scale)
-        self.transform_panel.position_changed.connect(self._on_position_changed)
-        self.transform_panel.snap_changed.connect(self._on_snap_changed)
 
         self.job_queue_panel.add_btn.clicked.connect(self._add_current_model_to_queue)
 
@@ -92,9 +103,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.viewer.modelPicked.connect(self._on_viewer_model_picked)
         self.viewer.modelMoved.connect(self._on_viewer_model_moved)
 
-        # Initialize snap settings into viewer
-        snap_enabled, snap_step = self.transform_panel.get_snap()
-        self.viewer.set_snap(snap_enabled, snap_step)
+        # Initialize snap settings into viewer (defaults for now)
+        self.viewer.set_snap(False, 1.0)
 
         self.statusBar().showMessage("Ready")
 
@@ -135,9 +145,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.transform_toolbar = TransformToolbar(self)
         self.addToolBar(QtCore.Qt.TopToolBarArea, self.transform_toolbar)
-        self.transform_toolbar.lay_flat_action.triggered.connect(self._lay_flat)
-        self.transform_toolbar.center_action.triggered.connect(self._center_model)
-        self.transform_toolbar.reset_action.triggered.connect(self._reset_view)
+        self.transform_toolbar.addRequested.connect(self.open_stl_dialog)
+        self.transform_toolbar.moveRequested.connect(self._on_move_tool)
+        self.transform_toolbar.rotateRequested.connect(self._on_rotate_tool)
+        self.transform_toolbar.scaleRequested.connect(self._on_scale_tool)
+        self.transform_toolbar.autoOrientRequested.connect(self._on_auto_orient_tool)
+        self.transform_toolbar.autoArrangeRequested.connect(self._on_arrange_tool)
+        self.transform_toolbar.layOnFaceRequested.connect(self._lay_on_face)
 
     # -------------------------------------------------------- drag & drop
     def dragEnterEvent(self, a0: QtGui.QDragEnterEvent):
@@ -172,10 +186,8 @@ class MainWindow(QtWidgets.QMainWindow):
         name = self.viewer.get_model_name(model_id) or "Model"
         self.statusBar().showMessage(f"Selected {name}")
 
-        # Sync transform panel with model's current offset if known
-        m = self.viewer.models.get(model_id)
-        if m is not None:
-            self.transform_panel.set_position(float(m["offset"][0]), float(m["offset"][1]))
+        self.viewer.set_gizmo_mode("move")
+        self._sync_popups()
 
     def _on_model_remove(self, model_id: int):
         self.viewer.remove_model(model_id)
@@ -187,6 +199,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.viewer.set_selected_model(self.current_model_id)
 
         self.statusBar().showMessage("Model removed")
+        self._sync_popups()
 
     def _clear_all_models(self):
         self.viewer.clear_all_models()
@@ -194,42 +207,41 @@ class MainWindow(QtWidgets.QMainWindow):
         self.current_model_id = None
         self.viewer.set_selected_model(None)
         self.statusBar().showMessage("Cleared all models")
+        self._sync_popups()
 
-    # ------------------------------------------------------------ transforms (panel -> viewer)
-    def _on_apply_scale(self, scale_factor: float):
+    # ------------------------------------------------------------ transforms (toolbar -> viewer)
+    def _enable_move_gizmo(self):
+        self.viewer.set_gizmo_mode("move")
+
+    def _enable_rotate_gizmo(self):
+        self.viewer.set_gizmo_mode("rotate")
+        QtWidgets.QMessageBox.information(self, "Rotate", "Rotate gizmo is not implemented yet.")
+
+    def _prompt_scale_model(self):
         if self.current_model_id is None:
-            QtWidgets.QMessageBox.warning(self, "No model selected", "Select a model in the Models panel first.")
+            QtWidgets.QMessageBox.warning(self, "No model selected", "Select a model first.")
             return
-        x = float(self.transform_panel.pos_x_spin.value())
-        y = float(self.transform_panel.pos_y_spin.value())
-        self.viewer.set_model_transform(self.current_model_id, scale=scale_factor, offset_xy=(x, y))
-        self.statusBar().showMessage(f"Scale applied: {scale_factor:.3f}")
-
-    def _on_position_changed(self, x: float, y: float):
-        # live position (typing/spinbox) -> updates viewer immediately
-        if self.current_model_id is None:
+        m = self.viewer.models.get(self.current_model_id)
+        if m is None:
             return
-        scale_factor = float(self.transform_panel.scale_spin.value()) / 100.0
-        self.viewer.set_model_transform(self.current_model_id, scale=scale_factor, offset_xy=(x, y))
-
-    def _on_snap_changed(self, enabled: bool, step_mm: float):
-        self.viewer.set_snap(enabled, step_mm)
-
-    def _center_model(self):
-        if self.current_model_id is None:
+        current_pct = float(m["scale"]) * 100.0
+        val, ok = QtWidgets.QInputDialog.getDouble(
+            self,
+            "Scale Model",
+            "Scale (%)",
+            value=current_pct,
+            min=1.0,
+            max=500.0,
+            decimals=2,
+        )
+        if not ok:
             return
-        self.transform_panel.set_position(0.0, 0.0)
-        scale_factor = float(self.transform_panel.scale_spin.value()) / 100.0
-        self.viewer.set_model_transform(self.current_model_id, scale=scale_factor, offset_xy=(0.0, 0.0))
+        new_scale = float(val) / 100.0
+        self.viewer.set_model_transform(self.current_model_id, scale=new_scale, offset_xyz=m["offset"])
+        self.statusBar().showMessage(f"Scale applied: {new_scale:.3f}")
 
-    def _lay_flat(self):
-        QtWidgets.QMessageBox.information(self, "Lay Flat", "Not implemented yet (orientation work comes next).")
-
-    def _reset_view(self):
-        self.viewer.opts["distance"] = 300.0 # pyright: ignore[reportArgumentType]
-        self.viewer.opts["elevation"] = 30.0 # pyright: ignore[reportArgumentType]
-        self.viewer.opts["azimuth"] = -45.0 # pyright: ignore[reportArgumentType]
-        self.viewer.update()
+    def _lay_on_face(self):
+        QtWidgets.QMessageBox.information(self, "Lay on Face", "Not implemented yet.")
 
     # ------------------------------------------------------------ transforms (viewer -> panel)
     def _on_viewer_model_picked(self, model_id: int):
@@ -251,21 +263,15 @@ class MainWindow(QtWidgets.QMainWindow):
         finally:
             lw.blockSignals(block)
 
-        # Sync transform panel from viewer model
-        m = self.viewer.models.get(model_id)
-        if m is not None:
-            self.transform_panel.set_position(float(m["offset"][0]), float(m["offset"][1]))
+        self.viewer.set_gizmo_mode("move")
 
     def _on_viewer_model_moved(self, model_id: int, x: float, y: float):
         if self.current_model_id != model_id:
             self.current_model_id = model_id
             self.viewer.set_selected_model(model_id)
 
-        # Update transform panel live (no feedback loop)
-        self.transform_panel.set_position(x, y, block_signals=True)
-
-        # viewer already updated its transform during drag, but keep this for consistency
-        self.viewer.set_model_transform(model_id, offset_xy=(x, y))
+        self.statusBar().showMessage(f"Moved model {model_id}: x={x:.2f} y={y:.2f}")
+        self._sync_popups()
 
     # ------------------------------------------------------------- async load
     def _add_model_from_path_async(self, path: str):
@@ -292,11 +298,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
             self.current_model_id = model_id
             self.viewer.set_selected_model(model_id)
-
-            # Initialize UI position from model offset
-            m = self.viewer.models.get(model_id)
-            if m is not None:
-                self.transform_panel.set_position(float(m["offset"][0]), float(m["offset"][1]))
 
             self.statusBar().showMessage(f"Loaded {payload['name']}")
 
@@ -379,6 +380,110 @@ class MainWindow(QtWidgets.QMainWindow):
         payload = {"stl_path": stl_path}
         self.job_queue_panel.add_job(desc, payload)
 
+    # ------------------------------------------------------ toolbar popups
+    def _on_move_tool(self):
+        self._enable_move_gizmo()
+        self._toggle_popup(self._popup_move)
+
+    def _on_rotate_tool(self):
+        self._enable_rotate_gizmo()
+        self._toggle_popup(self._popup_rotate)
+
+    def _on_scale_tool(self):
+        self._toggle_popup(self._popup_scale)
+
+    def _on_auto_orient_tool(self):
+        self._toggle_popup(self._popup_auto_orient)
+
+    def _on_arrange_tool(self):
+        self._toggle_popup(self._popup_arrange)
+
+    def _toggle_popup(self, popup):
+        if popup.isVisible():
+            popup.hide()
+            return
+        self._hide_all_popups(except_popup=popup)
+        self._position_popup(popup)
+        self._sync_popups()
+        popup.show()
+        popup.raise_()
+
+    def _hide_all_popups(self, except_popup=None):
+        for popup in (
+            self._popup_move,
+            self._popup_rotate,
+            self._popup_scale,
+            self._popup_auto_orient,
+            self._popup_arrange,
+        ):
+            if popup is not except_popup:
+                popup.hide()
+
+    def _position_popup(self, popup):
+        if not hasattr(self, "transform_toolbar"):
+            return
+        toolbar = self.transform_toolbar
+        pos = toolbar.mapTo(self, QtCore.QPoint(8, toolbar.height() + 6))
+        popup.move(pos)
+
+    def _sync_popups(self):
+        if self.current_model_id is None:
+            self._popup_move.set_position(0.0, 0.0, 0.0)
+            self._popup_scale.set_scale(100.0, 100.0, 100.0)
+            self._popup_scale.set_size(0.0, 0.0, 0.0)
+            return
+
+        transform = self.viewer.get_model_transform(self.current_model_id)
+        if transform is None:
+            return
+        scale, offset = transform
+        self._popup_move.set_position(float(offset[0]), float(offset[1]), float(offset[2]))
+        scale_pct = float(scale) * 100.0
+        self._popup_scale.set_scale(scale_pct, scale_pct, scale_pct)
+
+        bounds = self.viewer.get_model_bounds(self.current_model_id)
+        if bounds is not None:
+            mn, mx = bounds
+            size = (float(mx[0] - mn[0]), float(mx[1] - mn[1]), float(mx[2] - mn[2]))
+            self._popup_scale.set_size(size[0], size[1], size[2])
+
+    def _on_transform_position_changed(self, x: float, y: float, z: float):
+        if self.current_model_id is None:
+            return
+        self.viewer.set_model_transform(self.current_model_id, offset_xyz=(x, y, z))
+
+    def _on_transform_center_requested(self):
+        if self.current_model_id is None:
+            return
+        self.viewer.set_model_transform(self.current_model_id, offset_xyz=(0.0, 0.0, 0.0))
+        self._sync_popups()
+
+    def _on_transform_scale_changed(self, x: float, y: float, z: float):
+        if self.current_model_id is None:
+            return
+        scale = max(0.01, float(x) / 100.0)
+        m = self.viewer.models.get(self.current_model_id)
+        if m is None:
+            return
+        self.viewer.set_model_transform(self.current_model_id, scale=scale, offset_xyz=m["offset"])
+        self._sync_popups()
+
+    def _on_auto_orient_requested(self, mode: str):
+        _ = mode
+        QtWidgets.QMessageBox.information(self, "Auto Orient", "Auto orient is not implemented yet.")
+
+    def _on_auto_orient_reset(self):
+        QtWidgets.QMessageBox.information(self, "Auto Orient", "Auto orient is not implemented yet.")
+
+    def _on_arrange_requested(self):
+        QtWidgets.QMessageBox.information(self, "Arrange", "Arrange is not implemented yet.")
+
+    def _on_arrange_selected_requested(self):
+        QtWidgets.QMessageBox.information(self, "Arrange", "Arrange selected is not implemented yet.")
+
+    def _on_arrange_reset(self):
+        QtWidgets.QMessageBox.information(self, "Arrange", "Arrange is not implemented yet.")
+
     # -------------------------------------------------------------- helpers
     def _busy_dialog(self, title: str, label: str):
         dlg = QtWidgets.QProgressDialog(label, "", 0, 0, self)
@@ -388,3 +493,15 @@ class MainWindow(QtWidgets.QMainWindow):
         dlg.setAutoReset(True)
         dlg.setRange(0, 0)
         return dlg
+
+    def resizeEvent(self, a0: QtGui.QResizeEvent):
+        super().resizeEvent(a0)
+        for popup in (
+            self._popup_move,
+            self._popup_rotate,
+            self._popup_scale,
+            self._popup_auto_orient,
+            self._popup_arrange,
+        ):
+            if popup.isVisible():
+                self._position_popup(popup)

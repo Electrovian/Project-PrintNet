@@ -3,6 +3,7 @@ from PyQt5 import QtWidgets, QtCore
 
 class ModelPanel(QtWidgets.QWidget):
     """Panel listing all loaded models with ability to remove/select."""
+    MAX_DISPLAY_NAME = 28
 
     model_selected = QtCore.pyqtSignal(int)  # model_id
     request_remove = QtCore.pyqtSignal(int)  # model_id
@@ -28,7 +29,12 @@ class ModelPanel(QtWidgets.QWidget):
         self.remove_btn.clicked.connect(self._on_remove_clicked)
 
     def add_model(self, name: str, model_id: int):
-        item = QtWidgets.QListWidgetItem(name)
+        full_name = (name or "").strip()
+        if not full_name:
+            full_name = f"Model {model_id}"
+        display_name = self._truncate_name(full_name)
+        item = QtWidgets.QListWidgetItem(display_name)
+        item.setToolTip(full_name)
         item.setData(QtCore.Qt.UserRole, model_id)
         self.list_widget.addItem(item)
         self.list_widget.setCurrentItem(item)
@@ -57,3 +63,8 @@ class ModelPanel(QtWidgets.QWidget):
         mid = self.current_model_id()
         if mid is not None:
             self.request_remove.emit(mid)
+
+    def _truncate_name(self, name: str) -> str:
+        if len(name) <= self.MAX_DISPLAY_NAME:
+            return name
+        return name[: self.MAX_DISPLAY_NAME - 3] + "..."

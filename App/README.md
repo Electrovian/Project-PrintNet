@@ -45,9 +45,15 @@ production slicer.
 3. **Open the folder in VS Code**
 
    - Start **Visual Studio Code**.
-   - `File -> Open Folder...` and select the `OpenSlicer` folder.
+   - `File -> Open Folder...` and select the `Project-PrintNet` folder.
 
-4. **Create a virtual environment (recommended)**
+4. **Open a terminal and move into the app folder**
+
+   ```bash
+   cd App
+   ```
+
+5. **Create a virtual environment (recommended)**
 
    In VS Code, open a terminal (``Ctrl+` ``) and run:
 
@@ -65,7 +71,7 @@ production slicer.
 
    VS Code should then detect the `.venv` interpreter.
 
-5. **Install dependencies**
+6. **Install dependencies**
 
    In the same terminal:
 
@@ -73,14 +79,14 @@ production slicer.
    pip install -r requirements.txt
    ```
 
-6. **(Optional) Add `Printer Information.xlsx`**
+7. **(Optional) Add `Printer Information.xlsx`**
 
-   Place your `Printer Information.xlsx` file in the **root** of this
-   project (next to `main.py`).  
+   Place your `Printer Information.xlsx` file in the `App` folder
+   (next to `main.py`).  
    The loader is tolerant; if the file is missing it will just create a
    dummy printer configuration.
 
-7. **Run the app**
+8. **Run the app**
 
    In VS Code:
 
