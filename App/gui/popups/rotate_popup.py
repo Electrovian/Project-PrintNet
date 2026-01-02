@@ -3,6 +3,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 
 from .base_popup import BasePopup
 from ..theme import theme_css, theme_qcolor
+from config.defaults import DEFAULTS
 
 
 class RotatePopup(BasePopup):
@@ -11,7 +12,7 @@ class RotatePopup(BasePopup):
 
     def __init__(self, parent=None):
         super().__init__("Rotate", parent=parent)
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(DEFAULTS["popups"]["min_width"])
         self._syncing = False
         self._build_ui()
 
@@ -34,12 +35,14 @@ class RotatePopup(BasePopup):
         row.setSpacing(8)
         row.addWidget(QtWidgets.QLabel("Rotation"))
         self._rot_spins = []
+        popup_cfg = DEFAULTS["popups"]
+        rot_cfg = popup_cfg["rotate"]
         for _ in range(3):
             spin = QtWidgets.QDoubleSpinBox()
-            spin.setDecimals(2)
-            spin.setRange(-360.0, 360.0)
-            spin.setSingleStep(1.0)
-            spin.setFixedWidth(86)
+            spin.setDecimals(rot_cfg["decimals"])
+            spin.setRange(rot_cfg["min"], rot_cfg["max"])
+            spin.setSingleStep(rot_cfg["step"])
+            spin.setFixedWidth(popup_cfg["spin_width"])
             spin.valueChanged.connect(self._emit_rotation)
             row.addWidget(spin)
             self._rot_spins.append(spin)

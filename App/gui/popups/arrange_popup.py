@@ -1,6 +1,7 @@
 from PyQt5 import QtWidgets, QtCore
 
 from .base_popup import BasePopup
+from config.defaults import DEFAULTS
 
 
 class ArrangePopup(BasePopup):
@@ -10,7 +11,7 @@ class ArrangePopup(BasePopup):
 
     def __init__(self, parent=None):
         super().__init__("Arrange options", parent=parent)
-        self.setMinimumWidth(340)
+        self.setMinimumWidth(DEFAULTS["popups"]["arrange_min_width"])
         self._build_ui()
 
     def _build_ui(self):
@@ -19,16 +20,18 @@ class ArrangePopup(BasePopup):
         spacing_row = QtWidgets.QHBoxLayout()
         spacing_row.addWidget(QtWidgets.QLabel("Spacing"))
         self.spacing_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.spacing_slider.setRange(0, 20)
+        arrange_cfg = DEFAULTS["popups"]["arrange"]
+        popup_cfg = DEFAULTS["popups"]
+        self.spacing_slider.setRange(arrange_cfg["spacing_min"], arrange_cfg["spacing_max"])
         self.spacing_slider.setSingleStep(1)
-        self.spacing_slider.setValue(0)
+        self.spacing_slider.setValue(arrange_cfg["spacing_default"])
         spacing_row.addWidget(self.spacing_slider, stretch=1)
 
         self.spacing_spin = QtWidgets.QDoubleSpinBox()
-        self.spacing_spin.setRange(0.0, 20.0)
+        self.spacing_spin.setRange(arrange_cfg["spacing_min"], arrange_cfg["spacing_max"])
         self.spacing_spin.setDecimals(2)
         self.spacing_spin.setSingleStep(0.5)
-        self.spacing_spin.setFixedWidth(86)
+        self.spacing_spin.setFixedWidth(popup_cfg["spin_width"])
         spacing_row.addWidget(self.spacing_spin)
         layout.addLayout(spacing_row)
 
@@ -65,6 +68,14 @@ class ArrangePopup(BasePopup):
         self.spacing_slider.valueChanged.connect(self._sync_spacing_from_slider)
         self.spacing_spin.valueChanged.connect(self._sync_spacing_from_spin)
 
+    def get_options(self):
+        return {
+            "spacing": float(self.spacing_spin.value()),
+            "auto_rotate": self.auto_rotate.isChecked(),
+            "allow_multiple": self.multi_filament.isChecked(),
+            "align_y": self.align_y.isChecked(),
+        }
+
     def _sync_spacing_from_slider(self, value: int):
         self.spacing_spin.blockSignals(True)
         try:
@@ -80,7 +91,7 @@ class ArrangePopup(BasePopup):
             self.spacing_slider.blockSignals(False)
 
     def _emit_reset(self):
-        self.spacing_slider.setValue(0)
+        self.spacing_slider.setValue(DEFAULTS["popups"]["arrange"]["spacing_default"])
         self.auto_rotate.setChecked(False)
         self.multi_filament.setChecked(False)
         self.align_y.setChecked(False)

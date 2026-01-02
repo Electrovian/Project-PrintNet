@@ -2,6 +2,7 @@ from PyQt5 import QtWidgets, QtCore
 
 from .base_popup import BasePopup
 from ..theme import theme_css
+from config.defaults import DEFAULTS
 
 
 class ScalePopup(BasePopup):
@@ -9,7 +10,7 @@ class ScalePopup(BasePopup):
 
     def __init__(self, parent=None):
         super().__init__("Scale", parent=parent)
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(DEFAULTS["popups"]["min_width"])
         self._syncing = False
         self._build_ui()
 
@@ -30,13 +31,16 @@ class ScalePopup(BasePopup):
         scale_row.setSpacing(8)
         scale_row.addWidget(QtWidgets.QLabel("Scale"))
         self._scale_spins = []
+        popup_cfg = DEFAULTS["popups"]
+        scale_cfg = popup_cfg["scale"]
+        size_cfg = popup_cfg["size"]
         for _ in range(3):
             spin = QtWidgets.QDoubleSpinBox()
-            spin.setDecimals(2)
-            spin.setRange(1.0, 500.0)
-            spin.setSingleStep(1.0)
-            spin.setValue(100.0)
-            spin.setFixedWidth(86)
+            spin.setDecimals(scale_cfg["decimals"])
+            spin.setRange(scale_cfg["min"], scale_cfg["max"])
+            spin.setSingleStep(scale_cfg["step"])
+            spin.setValue(scale_cfg["default"])
+            spin.setFixedWidth(popup_cfg["spin_width"])
             spin.valueChanged.connect(self._emit_scale)
             scale_row.addWidget(spin)
             self._scale_spins.append(spin)
@@ -50,10 +54,10 @@ class ScalePopup(BasePopup):
         self._size_spins = []
         for _ in range(3):
             spin = QtWidgets.QDoubleSpinBox()
-            spin.setDecimals(2)
-            spin.setRange(0.0, 99999.0)
-            spin.setSingleStep(1.0)
-            spin.setFixedWidth(86)
+            spin.setDecimals(size_cfg["decimals"])
+            spin.setRange(size_cfg["min"], size_cfg["max"])
+            spin.setSingleStep(size_cfg["step"])
+            spin.setFixedWidth(popup_cfg["spin_width"])
             spin.setReadOnly(True)
             spin.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
             size_row.addWidget(spin)

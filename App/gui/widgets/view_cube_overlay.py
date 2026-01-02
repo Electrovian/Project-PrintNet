@@ -54,7 +54,7 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         self._elevation = float(elevation)
         self.update()
 
-    def paintEvent(self, ev: QtGui.QPaintEvent):
+    def paintEvent(self, a0: QtGui.QPaintEvent):
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.Antialiasing, True)
         p.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
@@ -187,13 +187,13 @@ class ViewCubeOverlay(QtWidgets.QWidget):
             p.drawPolygon(poly)
             self._edge_regions.append((poly, name, edge["depth"]))
 
-    def mousePressEvent(self, ev: QtGui.QMouseEvent):
-        if self._home_rect.contains(ev.pos()):
+    def mousePressEvent(self, a0: QtGui.QMouseEvent):
+        if self._home_rect.contains(a0.pos()):
             self.homeRequested.emit()
-            ev.accept()
+            a0.accept()
             return
 
-        pos = QtCore.QPointF(ev.pos())
+        pos = QtCore.QPointF(a0.pos())
         name = self._hit_test_regions(self._corner_regions, pos)
         if name is None:
             name = self._hit_test_regions(self._edge_regions, pos)
@@ -203,14 +203,14 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         if name is not None:
             self._active_name = name
             self.viewRequested.emit(name)
-            ev.accept()
+            a0.accept()
             self.update()
             return
 
-        super().mousePressEvent(ev)
+        super().mousePressEvent(a0)
 
-    def mouseMoveEvent(self, ev: QtGui.QMouseEvent):
-        pos = QtCore.QPointF(ev.pos())
+    def mouseMoveEvent(self, a0: QtGui.QMouseEvent):
+        pos = QtCore.QPointF(a0.pos())
         hover = self._hit_test_regions(self._corner_regions, pos)
         if hover is None:
             hover = self._hit_test_regions(self._edge_regions, pos)
@@ -220,13 +220,13 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         if hover != self._hover_name:
             self._hover_name = hover
             self.update()
-        super().mouseMoveEvent(ev)
+        super().mouseMoveEvent(a0)
 
-    def leaveEvent(self, ev: QtCore.QEvent):
+    def leaveEvent(self, a0: QtCore.QEvent):
         if self._hover_name is not None:
             self._hover_name = None
             self.update()
-        super().leaveEvent(ev)
+        super().leaveEvent(a0)
 
     def _project_faces(self):
         right, up, forward = self._camera_basis()
@@ -291,7 +291,10 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         for axis, sign, idxs, normal in faces:
             pos_name, neg_name = self._axis_names(axis)
             name = pos_name if sign > 0 else neg_name
-            label = name.upper()
+            if axis == "z":
+                label = "TOP" if sign > 0 else "BOTTOM"
+            else:
+                label = name.upper()
             n_cam = np.array([np.dot(normal, right), np.dot(normal, up), np.dot(normal, forward)], dtype=float)
             if n_cam[2] <= 0:
                 continue

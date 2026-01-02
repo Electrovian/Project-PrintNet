@@ -1,6 +1,7 @@
 from PyQt5 import QtWidgets, QtCore
 
 from slicer.gcode import SliceSettings
+from config.defaults import DEFAULTS
 
 class SettingsPanel(QtWidgets.QWidget):
     """Basic print settings panel (layer height, infill, etc.)."""
@@ -10,18 +11,23 @@ class SettingsPanel(QtWidgets.QWidget):
 
     def _build_ui(self):
         layout = QtWidgets.QFormLayout(self)
+        defaults = DEFAULTS["settings_panel"]
+        layer = defaults["layer_height"]
+        infill = defaults["infill"]
+        speed = defaults["speed"]
+
         self.layer_height_spin = QtWidgets.QDoubleSpinBox()
-        self.layer_height_spin.setRange(0.05, 1.0)
-        self.layer_height_spin.setSingleStep(0.05)
-        self.layer_height_spin.setValue(0.2)
+        self.layer_height_spin.setRange(layer["min"], layer["max"])
+        self.layer_height_spin.setSingleStep(layer["step"])
+        self.layer_height_spin.setValue(layer["default"])
 
         self.infill_spin = QtWidgets.QSpinBox()
-        self.infill_spin.setRange(0, 100)
-        self.infill_spin.setValue(15)
+        self.infill_spin.setRange(infill["min"], infill["max"])
+        self.infill_spin.setValue(infill["default"])
 
         self.speed_spin = QtWidgets.QDoubleSpinBox()
-        self.speed_spin.setRange(10, 200)
-        self.speed_spin.setValue(60.0)
+        self.speed_spin.setRange(speed["min"], speed["max"])
+        self.speed_spin.setValue(speed["default"])
 
         layout.addRow("Layer height (mm)", self.layer_height_spin)
         layout.addRow("Infill (%)", self.infill_spin)

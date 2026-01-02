@@ -2,6 +2,7 @@ from PyQt5 import QtWidgets, QtCore
 
 from .base_popup import BasePopup
 from ..theme import theme_css
+from config.defaults import DEFAULTS
 
 
 class MovePopup(BasePopup):
@@ -10,7 +11,7 @@ class MovePopup(BasePopup):
 
     def __init__(self, parent=None):
         super().__init__("Move", parent=parent)
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(DEFAULTS["popups"]["min_width"])
         self._syncing = False
         self._build_ui()
 
@@ -33,12 +34,14 @@ class MovePopup(BasePopup):
         row.setSpacing(8)
         row.addWidget(QtWidgets.QLabel("Position"))
         self._pos_spins = []
+        popup_cfg = DEFAULTS["popups"]
+        move_cfg = popup_cfg["move"]
         for _ in range(3):
             spin = QtWidgets.QDoubleSpinBox()
-            spin.setDecimals(2)
-            spin.setRange(-9999.0, 9999.0)
-            spin.setSingleStep(0.5)
-            spin.setFixedWidth(86)
+            spin.setDecimals(move_cfg["decimals"])
+            spin.setRange(move_cfg["min"], move_cfg["max"])
+            spin.setSingleStep(move_cfg["step"])
+            spin.setFixedWidth(popup_cfg["spin_width"])
             spin.valueChanged.connect(self._emit_position)
             row.addWidget(spin)
             self._pos_spins.append(spin)

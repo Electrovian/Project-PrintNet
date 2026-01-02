@@ -13,6 +13,7 @@ from .model_panel import ModelPanel
 from .workers import Worker
 from .popups import MovePopup, RotatePopup, ScalePopup, AutoOrientPopup, ArrangePopup
 from .theme import set_theme, THEMES, theme_css, theme_qcolor
+from config.defaults import DEFAULTS
 
 from slicer.slicer import slice_file
 from slicer.gcode import SliceSettings
@@ -25,8 +26,9 @@ ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, printers, airtable_cfg, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("OpenSlicer")
-        self.resize(1280, 720)
+        self.setWindowTitle(DEFAULTS["app"]["title"])
+        size = DEFAULTS["app"]["size"]
+        self.resize(size[0], size[1])
         self.setAcceptDrops(True)
 
         icon_path = os.path.join(ASSETS_DIR, "icons", "app_icon.png")
@@ -49,24 +51,24 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Settings dock (right)
         self.settings_panel = SettingsPanel(self)
-        settings_dock = QtWidgets.QDockWidget("Settings", self)
-        settings_dock.setWidget(self.settings_panel)
-        settings_dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
-        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, settings_dock)
+        self._settings_dock = QtWidgets.QDockWidget("Printer", self)
+        self._settings_dock.setWidget(self.settings_panel)
+        self._settings_dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
+        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self._settings_dock)
 
         # Models dock (left)
         self.model_panel = ModelPanel(self)
-        model_dock = QtWidgets.QDockWidget("Models", self)
-        model_dock.setWidget(self.model_panel)
-        model_dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
-        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, model_dock)
+        self._model_dock = QtWidgets.QDockWidget("Models", self)
+        self._model_dock.setWidget(self.model_panel)
+        self._model_dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self._model_dock)
 
         # Job queue dock (right)
         self.job_queue_panel = JobQueuePanel(self)
-        job_dock = QtWidgets.QDockWidget("Job Queue", self)
-        job_dock.setWidget(self.job_queue_panel)
-        job_dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
-        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, job_dock)
+        self._job_dock = QtWidgets.QDockWidget("Job Queue", self)
+        self._job_dock.setWidget(self.job_queue_panel)
+        self._job_dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
+        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self._job_dock)
 
         self.setCentralWidget(self.viewer)
 
@@ -114,39 +116,52 @@ class MainWindow(QtWidgets.QMainWindow):
         self.viewer.modelRotated.connect(self._on_viewer_model_rotated)
 
         # Initialize snap settings into viewer (defaults for now)
-        self.viewer.set_snap(False, 1.0)
+        self.viewer.set_snap(
+            DEFAULTS["viewer"]["snap_enabled"],
+            DEFAULTS["viewer"]["snap_step"],
+        )
 
-        self.statusBar().showMessage("Ready")
+        self.statusBar().showMessage(DEFAULTS["app"]["status_ready"])
 
     def _build_menubar(self):
         menubar = self.menuBar()
         menubar.setVisible(False)
 
         self._file_menu = QtWidgets.QMenu("File", self)
+        self._edit_menu = QtWidgets.QMenu("Edit", self)
         self._view_menu = QtWidgets.QMenu("View", self)
+        self._prefs_menu = QtWidgets.QMenu("Preferences", self)
+        self._calib_menu = QtWidgets.QMenu("Calibration", self)
+        self._help_menu = QtWidgets.QMenu("Help", self)
+        self._main_menu = QtWidgets.QMenu(self)
 
         new_action = QtWidgets.QAction("New Project", self)
+        new_action.setIcon(self._maybe_icon("menu_new.png"))
         new_action.setShortcut("Ctrl+N")
         new_action.triggered.connect(self._new_project)
         self._file_menu.addAction(new_action)
 
         self.open_action = QtWidgets.QAction("Open Project...", self)
+        self.open_action.setIcon(self._maybe_icon("menu_open.png"))
         self.open_action.setShortcut("Ctrl+O")
         self.open_action.triggered.connect(self.open_stl_dialog)
         self._file_menu.addAction(self.open_action)
 
         recent_menu = QtWidgets.QMenu("Recent Projects", self._file_menu)
+        recent_menu.setIcon(self._maybe_icon("menu_recent.png"))
         recent_menu.setEnabled(False)
         self._file_menu.addMenu(recent_menu)
 
         self._file_menu.addSeparator()
 
         save_action = QtWidgets.QAction("Save Project", self)
+        save_action.setIcon(self._maybe_icon("menu_save.png"))
         save_action.setShortcut("Ctrl+S")
-        save_action.setEnabled(False)
+        save_action.triggered.connect(self._not_implemented)
         self._file_menu.addAction(save_action)
 
         save_as_action = QtWidgets.QAction("Save Project as...", self)
+        save_as_action.setIcon(self._maybe_icon("menu_save_as.png"))
         save_as_action.setShortcut("Ctrl+Shift+S")
         save_as_action.triggered.connect(self._not_implemented)
         self._file_menu.addAction(save_as_action)
@@ -154,26 +169,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self._file_menu.addSeparator()
 
         import_menu = QtWidgets.QMenu("Import", self._file_menu)
+        import_menu.setIcon(self._maybe_icon("menu_import.png"))
         import_stl_action = QtWidgets.QAction("Import STL(s)...", self)
+        import_stl_action.setIcon(self._maybe_icon("menu_import_stl.png"))
         import_stl_action.triggered.connect(self.open_stl_dialog)
         import_menu.addAction(import_stl_action)
         self._file_menu.addMenu(import_menu)
 
         export_menu = QtWidgets.QMenu("Export", self._file_menu)
+        export_menu.setIcon(self._maybe_icon("menu_export.png"))
         export_action = QtWidgets.QAction("Export G-code...", self)
-        export_action.triggered.connect(self._not_implemented)
+        export_action.setIcon(self._maybe_icon("menu_export_gcode.png"))
+        export_action.triggered.connect(self.export_gcode)
         export_menu.addAction(export_action)
         self._file_menu.addMenu(export_menu)
-
-        upload_action = QtWidgets.QAction("Upload (3mf) to CrealityCloud", self)
-        upload_action.setEnabled(False)
-        self._file_menu.addAction(upload_action)
 
         self._file_menu.addSeparator()
 
         quit_action = QtWidgets.QAction("Quit", self)
+        quit_action.setIcon(self._maybe_icon("menu_quit.png"))
         quit_action.triggered.connect(self.close)
         self._file_menu.addAction(quit_action)
+
+        self._build_edit_menu()
+        self._build_view_menu()
+        self._build_prefs_menu()
+        self._build_calib_menu()
+        self._build_help_menu()
 
         theme_menu = self._view_menu.addMenu("Theme")
         self._theme_group = QtWidgets.QActionGroup(self)
@@ -190,9 +212,28 @@ class MainWindow(QtWidgets.QMainWindow):
             theme_menu.addAction(action)
 
         menubar.addMenu(self._file_menu)
+        menubar.addMenu(self._edit_menu)
         menubar.addMenu(self._view_menu)
-        for action in self._file_menu.actions() + self._view_menu.actions():
-            self.addAction(action)
+        menubar.addMenu(self._prefs_menu)
+        menubar.addMenu(self._calib_menu)
+        menubar.addMenu(self._help_menu)
+
+        for menu in (
+            self._file_menu,
+            self._edit_menu,
+            self._view_menu,
+            self._prefs_menu,
+            self._calib_menu,
+            self._help_menu,
+        ):
+            for action in menu.actions():
+                self.addAction(action)
+
+        self._main_menu.addMenu(self._edit_menu)
+        self._main_menu.addMenu(self._view_menu)
+        self._main_menu.addMenu(self._prefs_menu)
+        self._main_menu.addMenu(self._calib_menu)
+        self._main_menu.addMenu(self._help_menu)
 
     def _build_toolbar(self):
         self.transform_toolbar = TransformToolbar(self)
@@ -210,8 +251,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._topbar = QtWidgets.QFrame(self)
         self._topbar.setObjectName("TopBar")
         layout = QtWidgets.QHBoxLayout(self._topbar)
-        layout.setContentsMargins(8, 4, 8, 4)
-        layout.setSpacing(6)
+        margins = DEFAULTS["ui"]["topbar_margins"]
+        layout.setContentsMargins(margins[0], margins[1], margins[2], margins[3])
+        layout.setSpacing(DEFAULTS["ui"]["topbar_spacing"])
 
         self._logo_btn = QtWidgets.QToolButton(self._topbar)
         self._logo_btn.setIcon(self._triangle_icon())
@@ -235,7 +277,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._file_caret_btn.setIcon(self._caret_icon())
         self._file_caret_btn.setIconSize(QtCore.QSize(12, 12))
         self._file_caret_btn.setPopupMode(QtWidgets.QToolButton.InstantPopup)
-        self._file_caret_btn.setMenu(self._file_menu)
+        self._file_caret_btn.setMenu(self._main_menu)
         self._file_caret_btn.setAutoRaise(True)
         layout.addWidget(self._file_caret_btn)
 
@@ -252,7 +294,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._mode_tabs = []
         self._mode_group = QtWidgets.QButtonGroup(self)
-        for label in ("Online Models", "Prepare", "Preview", "Device"):
+        for label in ("Prepare", "Preview", "Device"):
             btn = QtWidgets.QToolButton(self._topbar)
             btn.setText(label)
             btn.setCheckable(True)
@@ -263,7 +305,12 @@ class MainWindow(QtWidgets.QMainWindow):
             layout.addWidget(btn)
             self._mode_tabs.append(btn)
         if self._mode_tabs:
-            self._mode_tabs[1].setChecked(True)
+            self._mode_tabs[0].setChecked(True)
+        if len(self._mode_tabs) >= 3:
+            self._mode_tabs[1].setEnabled(False)
+            self._mode_tabs[1].setToolTip("Preview is not implemented yet.")
+            self._mode_tabs[2].setEnabled(False)
+            self._mode_tabs[2].setToolTip("Device is not implemented yet.")
 
         self.setMenuWidget(self._topbar)
         self._apply_topbar_theme()
@@ -272,8 +319,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._action_panel = QtWidgets.QFrame(self.viewer)
         self._action_panel.setObjectName("ActionPanel")
         panel_layout = QtWidgets.QVBoxLayout(self._action_panel)
-        panel_layout.setContentsMargins(10, 8, 10, 8)
-        panel_layout.setSpacing(6)
+        panel_margins = DEFAULTS["ui"]["action_panel_margins"]
+        panel_layout.setContentsMargins(panel_margins[0], panel_margins[1], panel_margins[2], panel_margins[3])
+        panel_layout.setSpacing(DEFAULTS["ui"]["action_panel_spacing"])
 
         self._slice_btn = QtWidgets.QPushButton("Slice plate", self._action_panel)
         self._slice_btn.clicked.connect(self.slice_current_model)
@@ -285,6 +333,170 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._position_action_panel()
         self._apply_action_panel_theme()
+
+    def _build_edit_menu(self):
+        undo_action = QtWidgets.QAction("Undo", self)
+        undo_action.setShortcut("Ctrl+Z")
+        undo_action.triggered.connect(self._not_implemented)
+        self._edit_menu.addAction(undo_action)
+
+        redo_action = QtWidgets.QAction("Redo", self)
+        redo_action.setShortcut("Ctrl+Y")
+        redo_action.triggered.connect(self._not_implemented)
+        self._edit_menu.addAction(redo_action)
+
+        self._edit_menu.addSeparator()
+
+        cut_action = QtWidgets.QAction("Cut", self)
+        cut_action.setShortcut("Ctrl+X")
+        cut_action.triggered.connect(self._not_implemented)
+        self._edit_menu.addAction(cut_action)
+
+        copy_action = QtWidgets.QAction("Copy", self)
+        copy_action.setShortcut("Ctrl+C")
+        copy_action.triggered.connect(self._not_implemented)
+        self._edit_menu.addAction(copy_action)
+
+        paste_action = QtWidgets.QAction("Paste", self)
+        paste_action.setShortcut("Ctrl+V")
+        paste_action.triggered.connect(self._not_implemented)
+        self._edit_menu.addAction(paste_action)
+
+        delete_selected_action = QtWidgets.QAction("Delete Selected", self)
+        delete_selected_action.setShortcut("Del")
+        delete_selected_action.triggered.connect(self._delete_selected_model)
+        self._edit_menu.addAction(delete_selected_action)
+
+        delete_all_action = QtWidgets.QAction("Delete All", self)
+        delete_all_action.setShortcut("Ctrl+D")
+        delete_all_action.triggered.connect(self._clear_all_models)
+        self._edit_menu.addAction(delete_all_action)
+
+        clone_action = QtWidgets.QAction("Clone Selected", self)
+        clone_action.setShortcut("Ctrl+K")
+        clone_action.triggered.connect(self._not_implemented)
+        self._edit_menu.addAction(clone_action)
+
+        self._edit_menu.addSeparator()
+
+        select_all_action = QtWidgets.QAction("Select All", self)
+        select_all_action.setShortcut("Ctrl+A")
+        select_all_action.triggered.connect(self._not_implemented)
+        self._edit_menu.addAction(select_all_action)
+
+        deselect_action = QtWidgets.QAction("Deselect All", self)
+        deselect_action.setShortcut("Esc")
+        deselect_action.triggered.connect(self._deselect_all_models)
+        self._edit_menu.addAction(deselect_action)
+
+    def _build_view_menu(self):
+        default_view = QtWidgets.QAction("Default View", self)
+        default_view.setShortcut("Ctrl+0")
+        default_view.triggered.connect(self.viewer.reset_view)
+        self._view_menu.addAction(default_view)
+
+        view_actions = [
+            ("Top", "Ctrl+1", (0.0, 90.0)),
+            ("Bottom", "Ctrl+2", (0.0, -90.0)),
+            ("Front", "Ctrl+3", (90.0, 0.0)),
+            ("Rear", "Ctrl+4", (-90.0, 0.0)),
+            ("Left", "Ctrl+5", (180.0, 0.0)),
+            ("Right", "Ctrl+6", (0.0, 0.0)),
+        ]
+        for label, shortcut, (az, el) in view_actions:
+            action = QtWidgets.QAction(label, self)
+            action.setShortcut(shortcut)
+            action.triggered.connect(lambda _=False, a=az, e=el: self._set_view_preset(a, e))
+            self._view_menu.addAction(action)
+
+        self._view_menu.addSeparator()
+
+        self._projection_group = QtWidgets.QActionGroup(self)
+        perspective_action = QtWidgets.QAction("Use Perspective View", self)
+        perspective_action.setCheckable(True)
+        ortho_action = QtWidgets.QAction("Use Orthogonal View", self)
+        ortho_action.setCheckable(True)
+        self._projection_group.addAction(perspective_action)
+        self._projection_group.addAction(ortho_action)
+        perspective_action.setChecked(True)
+        perspective_action.triggered.connect(lambda: self._set_projection_mode("perspective"))
+        ortho_action.triggered.connect(lambda: self._set_projection_mode("ortho"))
+        self._view_menu.addAction(perspective_action)
+        self._view_menu.addAction(ortho_action)
+
+        self._view_menu.addSeparator()
+
+        wireframe_action = QtWidgets.QAction("Show Wireframe", self)
+        wireframe_action.triggered.connect(self._not_implemented)
+        self._view_menu.addAction(wireframe_action)
+
+        gcode_action = QtWidgets.QAction("Show G-code Window", self)
+        gcode_action.setEnabled(False)
+        self._view_menu.addAction(gcode_action)
+
+        navigator_action = QtWidgets.QAction("Show 3D Navigator", self)
+        navigator_action.setCheckable(True)
+        navigator_action.setChecked(True)
+        navigator_action.triggered.connect(self._toggle_view_cube)
+        self._view_menu.addAction(navigator_action)
+
+        reset_layout_action = QtWidgets.QAction("Reset Window Layout", self)
+        reset_layout_action.triggered.connect(self._reset_window_layout)
+        self._view_menu.addAction(reset_layout_action)
+
+        self._view_menu.addSeparator()
+
+        labels_action = QtWidgets.QAction("Show Labels", self)
+        labels_action.setShortcut("Ctrl+E")
+        labels_action.triggered.connect(self._not_implemented)
+        self._view_menu.addAction(labels_action)
+
+        overhang_action = QtWidgets.QAction("Show Overhang", self)
+        overhang_action.triggered.connect(self._not_implemented)
+        self._view_menu.addAction(overhang_action)
+
+    def _build_prefs_menu(self):
+        prefs_action = QtWidgets.QAction("Printer Preferences", self)
+        prefs_action.setShortcut("Ctrl+P")
+        prefs_action.triggered.connect(self._show_settings_panel)
+        self._prefs_menu.addAction(prefs_action)
+
+    def _build_calib_menu(self):
+        for label in (
+            "Temperature",
+            "Flow rate",
+            "Pressure advance",
+            "Retraction test",
+            "Tolerance Test",
+            "Max flowrate",
+            "Tutorial",
+        ):
+            action = QtWidgets.QAction(label, self)
+            action.triggered.connect(self._not_implemented)
+            self._calib_menu.addAction(action)
+
+    def _build_help_menu(self):
+        for label in (
+            "Keyboard Shortcuts",
+            "Show Configuration Folder",
+            "Check for Updates",
+        ):
+            action = QtWidgets.QAction(label, self)
+            action.triggered.connect(self._not_implemented)
+            self._help_menu.addAction(action)
+
+        self._help_menu.addSeparator()
+
+        for label in (
+            "User Course",
+            "About Us",
+            "User Feedback",
+            "Log View",
+            "User Guide",
+        ):
+            action = QtWidgets.QAction(label, self)
+            action.triggered.connect(self._not_implemented)
+            self._help_menu.addAction(action)
 
     # -------------------------------------------------------- drag & drop
     def dragEnterEvent(self, a0: QtGui.QDragEnterEvent):
@@ -381,7 +593,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.statusBar().showMessage(f"Scale applied: {new_scale:.3f}")
 
     def _lay_on_face(self):
-        QtWidgets.QMessageBox.information(self, "Lay on Face", "Not implemented yet.")
+        if self.current_model_id is None:
+            QtWidgets.QMessageBox.warning(self, "No model", "Select a model first.")
+            return
+        ok = self.viewer.lay_on_face(self.current_model_id)
+        if not ok:
+            QtWidgets.QMessageBox.warning(self, "Lay on Face", "Unable to orient model.")
+            return
+        self._sync_popups()
 
     # ------------------------------------------------------------ transforms (viewer -> panel)
     def _on_viewer_model_picked(self, model_id: int):
@@ -472,7 +691,7 @@ class MainWindow(QtWidgets.QMainWindow):
         dlg = self._busy_dialog("Slicing", "Slicing model...\nPlease wait.")
         dlg.show()
 
-        worker = Worker(slice_file, stl_path, settings)
+        worker = Worker(slice_file, stl_path, settings=settings)
 
         def on_done(gcode_path):
             dlg.close()
@@ -512,6 +731,45 @@ class MainWindow(QtWidgets.QMainWindow):
             dlg.close()
             self.statusBar().showMessage("Print failed")
             QtWidgets.QMessageBox.critical(self, "Print error", msg)
+
+        worker.signals.finished.connect(on_done)
+        worker.signals.error.connect(on_err)
+        self.pool.start(worker)
+
+    def export_gcode(self):
+        stl_path = self._get_current_stl_path()
+        if not stl_path:
+            QtWidgets.QMessageBox.warning(self, "No model", "Load and select a model first.")
+            return
+
+        base = os.path.splitext(os.path.basename(stl_path))[0]
+        suggested = os.path.join(os.path.dirname(stl_path), f"{base}.gcode")
+        out_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Export G-code",
+            suggested,
+            "G-code files (*.gcode);;All files (*.*)",
+        )
+        if not out_path:
+            return
+        if not out_path.lower().endswith(".gcode"):
+            out_path = f"{out_path}.gcode"
+
+        settings = self.settings_panel.to_settings()
+        dlg = self._busy_dialog("Export", "Exporting G-code...\nPlease wait.")
+        dlg.show()
+
+        worker = Worker(slice_file, stl_path, output_gcode_path=out_path, settings=settings)
+
+        def on_done(gcode_path):
+            dlg.close()
+            self.statusBar().showMessage(f"Exported G-code to {gcode_path}")
+            QtWidgets.QMessageBox.information(self, "Export complete", f"G-code written to:\n{gcode_path}")
+
+        def on_err(msg):
+            dlg.close()
+            self.statusBar().showMessage("Export failed")
+            QtWidgets.QMessageBox.critical(self, "Export error", msg)
 
         worker.signals.finished.connect(on_done)
         worker.signals.error.connect(on_err)
@@ -679,19 +937,87 @@ class MainWindow(QtWidgets.QMainWindow):
         QtWidgets.QMessageBox.information(self, "Auto Orient", "Auto orient is not implemented yet.")
 
     def _on_arrange_requested(self):
-        QtWidgets.QMessageBox.information(self, "Arrange", "Arrange is not implemented yet.")
+        opts = self._popup_arrange.get_options()
+        model_ids = self.viewer.get_model_ids()
+        if not model_ids:
+            QtWidgets.QMessageBox.warning(self, "Arrange", "Load models first.")
+            return
+        ok = self.viewer.arrange_models(
+            model_ids,
+            spacing=opts["spacing"],
+            auto_rotate=opts["auto_rotate"],
+            align_y=opts["align_y"],
+        )
+        if not ok:
+            QtWidgets.QMessageBox.warning(self, "Arrange", "Unable to arrange models.")
+            return
+        self._sync_popups()
 
     def _on_arrange_selected_requested(self):
-        QtWidgets.QMessageBox.information(self, "Arrange", "Arrange selected is not implemented yet.")
+        if self.current_model_id is None:
+            QtWidgets.QMessageBox.warning(self, "Arrange", "Select a model first.")
+            return
+        opts = self._popup_arrange.get_options()
+        ok = self.viewer.arrange_models(
+            [self.current_model_id],
+            spacing=opts["spacing"],
+            auto_rotate=opts["auto_rotate"],
+            align_y=opts["align_y"],
+        )
+        if not ok:
+            QtWidgets.QMessageBox.warning(self, "Arrange", "Unable to arrange model.")
+            return
+        self._sync_popups()
 
     def _on_arrange_reset(self):
-        QtWidgets.QMessageBox.information(self, "Arrange", "Arrange is not implemented yet.")
+        self._sync_popups()
 
     def _new_project(self):
         self._clear_all_models()
 
     def _not_implemented(self):
         QtWidgets.QMessageBox.information(self, "Not implemented", "This feature is not implemented yet.")
+
+    def _delete_selected_model(self):
+        if self.current_model_id is None:
+            return
+        self._on_model_remove(self.current_model_id)
+
+    def _deselect_all_models(self):
+        self.current_model_id = None
+        self.viewer.set_selected_model(None)
+        self.model_panel.list_widget.clearSelection()
+        self._sync_popups()
+
+    def _show_settings_panel(self):
+        if hasattr(self, "_settings_dock"):
+            self._settings_dock.show()
+            self._settings_dock.raise_()
+            self.settings_panel.setFocus(QtCore.Qt.OtherFocusReason)
+
+    def _set_view_preset(self, azimuth: float, elevation: float):
+        self.viewer.set_view(float(azimuth), float(elevation))
+
+    def _set_projection_mode(self, mode: str):
+        if mode == "ortho":
+            self.viewer.opts["fov"] = 0  # pyright: ignore[reportArgumentType]
+        else:
+            self.viewer.opts["fov"] = 60  # pyright: ignore[reportArgumentType]
+        self.viewer.update()
+
+    def _toggle_view_cube(self, checked: bool):
+        self.viewer.set_view_cube_visible(bool(checked))
+
+    def _reset_window_layout(self):
+        if hasattr(self, "_model_dock"):
+            self._model_dock.show()
+            self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self._model_dock)
+        if hasattr(self, "_settings_dock"):
+            self._settings_dock.show()
+            self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self._settings_dock)
+        if hasattr(self, "_job_dock"):
+            self._job_dock.show()
+            self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self._job_dock)
 
     def _apply_topbar_theme(self):
         if not hasattr(self, "_topbar"):
@@ -709,6 +1035,9 @@ class MainWindow(QtWidgets.QMainWindow):
             "}"
             "QToolButton:hover {"
             f"  background: {theme_css('menu_hover_bg')};"
+            "}"
+            "QToolButton:disabled {"
+            f"  color: {theme_css('menu_disabled_text')};"
             "}"
             "QToolButton#FileButton {"
             f"  border: 1px solid {theme_css('topbar_accent')};"
@@ -759,8 +1088,16 @@ class MainWindow(QtWidgets.QMainWindow):
             f"  color: {theme_css('menu_disabled_text')};"
             "}"
         )
-        self._file_menu.setStyleSheet(menu_style)
-        self._view_menu.setStyleSheet(menu_style)
+        for menu in (
+            self._file_menu,
+            self._edit_menu,
+            self._view_menu,
+            self._prefs_menu,
+            self._calib_menu,
+            self._help_menu,
+            self._main_menu,
+        ):
+            menu.setStyleSheet(menu_style)
 
     def _apply_action_panel_theme(self):
         if not hasattr(self, "_action_panel"):
@@ -789,7 +1126,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _position_action_panel(self):
         if not hasattr(self, "_action_panel"):
             return
-        margin = 16
+        margin = DEFAULTS["ui"]["action_panel_margin"]
         self._action_panel.adjustSize()
         x = max(0, self.viewer.width() - self._action_panel.width() - margin)
         y = max(0, self.viewer.height() - self._action_panel.height() - margin)
@@ -813,22 +1150,46 @@ class MainWindow(QtWidgets.QMainWindow):
         btn.clicked.connect(slot)
         return btn
 
+    def _maybe_icon(self, filename: str):
+        path = os.path.join(ASSETS_DIR, "icons", filename)
+        if os.path.exists(path):
+            return QtGui.QIcon(path)
+        return QtGui.QIcon()
+
     def _hamburger_icon(self):
+        icon = self._maybe_icon("top_hamburger.png")
+        if not icon.isNull():
+            return icon
         return QtGui.QIcon(self._paint_icon("hamburger"))
 
     def _caret_icon(self):
+        icon = self._maybe_icon("top_caret.png")
+        if not icon.isNull():
+            return icon
         return QtGui.QIcon(self._paint_icon("caret"))
 
     def _triangle_icon(self):
+        icon = self._maybe_icon("top_logo.png")
+        if not icon.isNull():
+            return icon
         return QtGui.QIcon(self._paint_icon("triangle"))
 
     def _save_icon(self):
+        icon = self._maybe_icon("top_save.png")
+        if not icon.isNull():
+            return icon
         return QtGui.QIcon(self._paint_icon("save"))
 
     def _undo_icon(self):
+        icon = self._maybe_icon("top_undo.png")
+        if not icon.isNull():
+            return icon
         return QtGui.QIcon(self._paint_icon("undo"))
 
     def _redo_icon(self):
+        icon = self._maybe_icon("top_redo.png")
+        if not icon.isNull():
+            return icon
         return QtGui.QIcon(self._paint_icon("redo"))
 
     def _paint_icon(self, kind: str):

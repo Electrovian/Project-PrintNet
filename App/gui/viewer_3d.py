@@ -8,6 +8,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from .widgets.view_cube_overlay import ViewCubeOverlay
 from .theme import theme_value, theme_qcolor
+from config.defaults import DEFAULTS
 
 
 class Viewer3D(gl.GLViewWidget):
@@ -20,7 +21,7 @@ class Viewer3D(gl.GLViewWidget):
         self.setBackgroundColor(theme_value("view_bg", (20, 22, 26)))
 
         # pyqtgraph expects a scalar here; guard it
-        self._default_view = {"distance": 300.0, "elevation": 30.0, "azimuth": -45.0}
+        self._default_view = dict(DEFAULTS["viewer"]["default_view"])
         self.opts["distance"] = self._default_view["distance"] # pyright: ignore[reportArgumentType]
         if "elevation" not in self.opts:
             self.opts["elevation"] = float(self._default_view["elevation"]) # pyright: ignore[reportArgumentType]
@@ -57,8 +58,10 @@ class Viewer3D(gl.GLViewWidget):
         self._gizmo_ring_points = {}
 
         g = gl.GLGridItem()
-        g.setSize(200, 200, 0)
-        g.setSpacing(10, 10, 1)
+        grid_size = DEFAULTS["viewer"]["grid_size"]
+        grid_spacing = DEFAULTS["viewer"]["grid_spacing"]
+        g.setSize(grid_size[0], grid_size[1], grid_size[2])
+        g.setSpacing(grid_spacing[0], grid_spacing[1], grid_spacing[2])
         g.translate(0, 0, 0)
         g.setColor(theme_value("grid_color", (80, 80, 80, 255)))
         self._grid_item = g
@@ -82,6 +85,16 @@ class Viewer3D(gl.GLViewWidget):
             return
         except Exception:
             self.opts["distance"] = 300.0 # pyright: ignore[reportArgumentType]
+
+    def _coerce_float(self, value, default: float) -> float:
+        try:
+            if isinstance(value, (int, float, np.floating)):
+                return float(value)
+            if isinstance(value, (list, tuple)) and value:
+                return float(value[0])
+        except Exception:
+            return float(default)
+        return float(default)
 
     def paintGL(self, *args, **kwargs):
         self._coerce_distance()
@@ -643,6 +656,165 @@ class Viewer3D(gl.GLViewWidget):
         self._position_view_cube()
         self._sync_view_cube()
 
+    def set_view_cube_visible(self, visible: bool):
+        if hasattr(self, "_view_cube") and self._view_cube is not None:
+            self._view_cube.setVisible(bool(visible))
+            if visible:
+                self._position_view_cube()
+
+    # -------------------- arrange / lay on face --------------------
+
+    def arrange_models(
+        self,
+        model_ids: list[int],
+        spacing: float,
+        auto_rotate: bool = False,
+        align_y: bool = False,
+    ) -> bool:
+        ids = [mid for mid in model_ids if mid in self.models]
+        if not ids:
+            return False
+
+        spacing_val = max(0.0, float(spacing))
+        if spacing_val <= 0.0:
+            spacing_val = float(DEFAULTS["popups"]["arrange"]["auto_spacing"])
+
+        model_info = []
+        for mid in ids:
+            m = self.models.get(mid)
+            if m is None:
+                continue
+            bounds = m.get("bounds")
+            if bounds is None:
+                continue
+            mn, mx = bounds
+            width = float(mx[0] - mn[0])
+            depth = float(mx[1] - mn[1])
+
+            if auto_rotate and width > depth:
+                rot = np.array(m.get("rotation", [0.0, 0.0, 0.0]), dtype=float)
+                rot[2] = (rot[2] + 90.0) % 360.0
+                self.set_model_transform(mid, rotation_xyz=rot, offset_xyz=m.get("offset", [0.0, 0.0, 0.0]))
+                m = self.models.get(mid)
+                bounds = m.get("bounds") if m is not None else None
+                if bounds is None:
+                    continue
+                mn, mx = bounds
+                width = float(mx[0] - mn[0])
+                depth = float(mx[1] - mn[1])
+
+            if m is None:
+                continue
+            center = (mn + mx) / 2.0
+            offset = np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+            center_offset = np.array([center[0] - offset[0], center[1] - offset[1]], dtype=float)
+            model_info.append((mid, width, depth, center_offset, float(offset[2])))
+
+        if not model_info:
+            return False
+
+        sizes = [(mid, w, d) for mid, w, d, _center_offset, _z in model_info]
+        positions = {}
+        if align_y:
+            total_depth = sum(d for _mid, _w, d in sizes) + spacing_val * (len(sizes) - 1)
+            y_cursor = -total_depth / 2.0
+            for mid, _w, d in sizes:
+                y = y_cursor + d / 2.0
+                positions[mid] = (0.0, y)
+                y_cursor += d + spacing_val
+        else:
+            total_area = sum(w * d for _mid, w, d in sizes)
+            target_width = math.sqrt(total_area) if total_area > 0.0 else 0.0
+            x_cursor = 0.0
+            y_cursor = 0.0
+            row_depth = 0.0
+
+            for mid, w, d in sizes:
+                if x_cursor > 0.0 and target_width > 0.0 and (x_cursor + w) > target_width:
+                    x_cursor = 0.0
+                    y_cursor += row_depth + spacing_val
+                    row_depth = 0.0
+                x = x_cursor + w / 2.0
+                y = y_cursor + d / 2.0
+                positions[mid] = (x, y)
+                x_cursor += w + spacing_val
+                row_depth = max(row_depth, d)
+
+            min_x = float("inf")
+            max_x = float("-inf")
+            min_y = float("inf")
+            max_y = float("-inf")
+            for mid, w, d in sizes:
+                x, y = positions[mid]
+                min_x = min(min_x, x - w / 2.0)
+                max_x = max(max_x, x + w / 2.0)
+                min_y = min(min_y, y - d / 2.0)
+                max_y = max(max_y, y + d / 2.0)
+            cx = (min_x + max_x) / 2.0
+            cy = (min_y + max_y) / 2.0
+            for mid in positions:
+                x, y = positions[mid]
+                positions[mid] = (x - cx, y - cy)
+
+        info_map = {mid: (center_offset, z) for mid, _w, _d, center_offset, z in model_info}
+        for mid, (x, y) in positions.items():
+            m = self.models.get(mid)
+            if m is None:
+                continue
+            center_offset, z = info_map.get(mid, (np.zeros(2, dtype=float), 0.0))
+            new_x = float(x - center_offset[0])
+            new_y = float(y - center_offset[1])
+            self.set_model_transform(mid, offset_xyz=(new_x, new_y, z))
+
+        return True
+
+    def lay_on_face(self, model_id: int) -> bool:
+        m = self.models.get(model_id)
+        if m is None:
+            return False
+        v0 = m.get("base_vertices")
+        faces = m.get("faces")
+        if v0 is None or faces is None or len(faces) == 0:
+            return False
+
+        scale = self._normalize_scale(m.get("scale", 1.0))
+        rot = np.array(m.get("rotation", [0.0, 0.0, 0.0]), dtype=float)
+        pivot = m.get("pivot", np.zeros(3, dtype=float))
+        R_current = self._rotation_matrix(float(rot[0]), float(rot[1]), float(rot[2]))
+
+        verts = (v0 - pivot) * scale
+        verts = verts @ R_current.T
+
+        best_area = 0.0
+        best_normal = None
+        for tri in faces:
+            a = verts[tri[0]]
+            b = verts[tri[1]]
+            c = verts[tri[2]]
+            normal = np.cross(b - a, c - a)
+            area = float(np.linalg.norm(normal) * 0.5)
+            if area > best_area:
+                best_area = area
+                best_normal = normal
+
+        if best_normal is None or best_area <= 1e-6:
+            return False
+
+        n = best_normal / max(1e-9, float(np.linalg.norm(best_normal)))
+        target = np.array([0.0, 0.0, -1.0], dtype=float)
+        R_align = self._rotation_from_to(n, target)
+        R_new = R_align @ R_current
+        rx, ry, rz = self._euler_from_matrix(R_new)
+        self.set_model_transform(model_id, rotation_xyz=(rx, ry, rz))
+        bounds = self.get_model_bounds(model_id)
+        if bounds is not None:
+            mn, _mx = bounds
+            if abs(float(mn[2])) > 1e-6:
+                off = np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+                off[2] = float(off[2]) - float(mn[2])
+                self.set_model_transform(model_id, offset_xyz=off)
+        return True
+
     def _build_rotate_hud(self):
         self._rotate_hud = QtWidgets.QLabel(self)
         self._rotate_hud.setVisible(False)
@@ -662,8 +834,8 @@ class Viewer3D(gl.GLViewWidget):
     def _sync_view_cube(self):
         if not hasattr(self, "_view_cube") or self._view_cube is None:
             return
-        az = float(self.opts.get("azimuth", self._default_view["azimuth"]))
-        el = float(self.opts.get("elevation", self._default_view["elevation"]))
+        az = self._coerce_float(self.opts.get("azimuth"), float(self._default_view["azimuth"]))
+        el = self._coerce_float(self.opts.get("elevation"), float(self._default_view["elevation"]))
         self._view_cube.set_camera(az, el)
 
     def _set_view_from_cube(self, face: str):
@@ -1153,6 +1325,62 @@ class Viewer3D(gl.GLViewWidget):
             ],
             dtype=float,
         )
+
+    def _rotation_from_to(self, source: np.ndarray, target: np.ndarray):
+        a = np.array(source, dtype=float)
+        b = np.array(target, dtype=float)
+        a_norm = float(np.linalg.norm(a))
+        b_norm = float(np.linalg.norm(b))
+        if a_norm < 1e-9 or b_norm < 1e-9:
+            return np.eye(3, dtype=float)
+        a = a / a_norm
+        b = b / b_norm
+        c = float(np.dot(a, b))
+        if c > 0.9999:
+            return np.eye(3, dtype=float)
+        if c < -0.9999:
+            axis = np.array([1.0, 0.0, 0.0], dtype=float)
+            if abs(a[0]) > 0.9:
+                axis = np.array([0.0, 1.0, 0.0], dtype=float)
+            axis = axis - a * float(np.dot(axis, a))
+            axis_norm = float(np.linalg.norm(axis))
+            if axis_norm < 1e-9:
+                return np.eye(3, dtype=float)
+            axis = axis / axis_norm
+            return self._rotation_axis_angle(axis, math.pi)
+
+        v = np.cross(a, b)
+        s = float(np.linalg.norm(v))
+        axis = v / max(1e-9, s)
+        angle = math.atan2(s, c)
+        return self._rotation_axis_angle(axis, angle)
+
+    def _rotation_axis_angle(self, axis: np.ndarray, angle: float):
+        kx, ky, kz = axis
+        c = float(math.cos(angle))
+        s = float(math.sin(angle))
+        v1 = 1.0 - c
+        return np.array(
+            [
+                [kx * kx * v1 + c, kx * ky * v1 - kz * s, kx * kz * v1 + ky * s],
+                [ky * kx * v1 + kz * s, ky * ky * v1 + c, ky * kz * v1 - kx * s],
+                [kz * kx * v1 - ky * s, kz * ky * v1 + kx * s, kz * kz * v1 + c],
+            ],
+            dtype=float,
+        )
+
+    def _euler_from_matrix(self, R: np.ndarray):
+        r20 = float(R[2, 0])
+        if abs(r20) < 0.999999:
+            ry = math.asin(-r20)
+            cy = math.cos(ry)
+            rx = math.atan2(float(R[2, 1]) / cy, float(R[2, 2]) / cy)
+            rz = math.atan2(float(R[1, 0]) / cy, float(R[0, 0]) / cy)
+        else:
+            ry = math.pi / 2 if r20 <= -0.999999 else -math.pi / 2
+            rx = 0.0
+            rz = math.atan2(-float(R[0, 1]), float(R[1, 1]))
+        return math.degrees(rx), math.degrees(ry), math.degrees(rz)
 
     # -------------------- matrices / unproject --------------------
 
