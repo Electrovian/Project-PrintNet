@@ -9,6 +9,7 @@ class AutoOrientPopup(BasePopup):
 
     def __init__(self, parent=None):
         super().__init__("Auto orientation options", parent=parent)
+        self.setMinimumWidth(300)
         self._build_ui()
 
     def _build_ui(self):
@@ -27,6 +28,11 @@ class AutoOrientPopup(BasePopup):
         layout.addWidget(self.default_radio)
         layout.addWidget(self.support_radio)
         layout.addWidget(self.time_radio)
+
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        layout.addWidget(line)
 
         btn_row = QtWidgets.QHBoxLayout()
         self.orient_btn = QtWidgets.QPushButton("Orient")

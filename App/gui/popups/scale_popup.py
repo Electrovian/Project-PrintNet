@@ -9,19 +9,21 @@ class ScalePopup(BasePopup):
 
     def __init__(self, parent=None):
         super().__init__("Scale", parent=parent)
+        self.setMinimumWidth(420)
         self._syncing = False
         self._build_ui()
 
     def _build_ui(self):
         layout = self.content_layout()
 
+        self._axis_labels = {}
         header = QtWidgets.QHBoxLayout()
         header.setSpacing(12)
         header.addWidget(QtWidgets.QLabel("Scale"))
         header.addStretch(1)
-        header.addWidget(self._axis_label("X", theme_css("axis_x")))
-        header.addWidget(self._axis_label("Y", theme_css("axis_y")))
-        header.addWidget(self._axis_label("Z", theme_css("axis_z")))
+        header.addWidget(self._axis_label("X", "axis_x"))
+        header.addWidget(self._axis_label("Y", "axis_y"))
+        header.addWidget(self._axis_label("Z", "axis_z"))
         layout.addLayout(header)
 
         scale_row = QtWidgets.QHBoxLayout()
@@ -67,7 +69,8 @@ class ScalePopup(BasePopup):
 
     def _axis_label(self, text: str, color: str):
         lbl = QtWidgets.QLabel(text)
-        lbl.setStyleSheet(f"color: {color}; font-weight: 600;")
+        self._axis_labels[text.lower()] = lbl
+        lbl.setStyleSheet(f"color: {theme_css(color)}; font-weight: 600;")
         return lbl
 
     def set_scale(self, x: float, y: float, z: float):
@@ -93,7 +96,14 @@ class ScalePopup(BasePopup):
             return
         values = [float(s.value()) for s in self._scale_spins]
         if self.uniform_check.isChecked():
-            v = values[0]
+            sender = self.sender()
+            v = None
+            for spin in self._scale_spins:
+                if spin is sender:
+                    v = float(spin.value())
+                    break
+            if v is None:
+                v = values[0]
             self._syncing = True
             try:
                 for spin in self._scale_spins:
@@ -102,3 +112,10 @@ class ScalePopup(BasePopup):
                 self._syncing = False
             values = [v, v, v]
         self.scale_changed.emit(values[0], values[1], values[2])
+
+    def apply_theme(self):
+        super().apply_theme()
+        for axis, key in (("x", "axis_x"), ("y", "axis_y"), ("z", "axis_z")):
+            lbl = self._axis_labels.get(axis)
+            if lbl is not None:
+                lbl.setStyleSheet(f"color: {theme_css(key)}; font-weight: 600;")

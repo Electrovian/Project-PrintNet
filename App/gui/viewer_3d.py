@@ -1,17 +1,19 @@
 import os
 import math
+from numbers import Real
 import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from .widgets.view_cube_overlay import ViewCubeOverlay
-from .theme import theme_value
+from .theme import theme_value, theme_qcolor
 
 
 class Viewer3D(gl.GLViewWidget):
     modelPicked = QtCore.pyqtSignal(int)
     modelMoved = QtCore.pyqtSignal(int, float, float)
+    modelRotated = QtCore.pyqtSignal(int, float, float, float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -38,22 +40,33 @@ class Viewer3D(gl.GLViewWidget):
         self._snap_step = 1.0
 
         self._gizmo_mode = "move"
-        self._gizmo_items = {}
+        self._gizmo_move_lines = {}
+        self._gizmo_move_cones = {}
+        self._gizmo_rotate_rings = {}
+        self._gizmo_rotate_ticks = {}
+        self._gizmo_rotate_arrows = {}
         self._gizmo_origin = None
         self._gizmo_size = 20.0
+        self._gizmo_model_extent = None
         self._gizmo_drag_axis = None
         self._gizmo_drag_start_param = None
         self._gizmo_drag_start_offset = None
+        self._gizmo_rotate_axis = None
+        self._gizmo_rotate_start_angle = None
+        self._gizmo_rotate_start_rotation = None
+        self._gizmo_ring_points = {}
 
         g = gl.GLGridItem()
         g.setSize(200, 200, 0)
         g.setSpacing(10, 10, 1)
         g.translate(0, 0, 0)
         g.setColor(theme_value("grid_color", (80, 80, 80, 255)))
+        self._grid_item = g
         self.addItem(g)
 
         self._build_gizmo()
         self._build_view_cube()
+        self._build_rotate_hud()
 
     # -------------------- hardening --------------------
 
@@ -83,7 +96,102 @@ class Viewer3D(gl.GLViewWidget):
 
     def set_gizmo_mode(self, mode: str):
         self._gizmo_mode = mode
+        self._gizmo_drag_axis = None
+        self._gizmo_rotate_axis = None
+        if mode != "rotate":
+            self._hide_rotate_hud()
         self._update_gizmo()
+
+    def apply_theme(self):
+        self.setBackgroundColor(theme_value("view_bg", (20, 22, 26)))
+        if getattr(self, "_grid_item", None) is not None:
+            self._grid_item.setColor(theme_value("grid_color", (80, 80, 80, 255)))
+
+        for axis, key in (("x", "gizmo_x"), ("y", "gizmo_y"), ("z", "gizmo_z")):
+            line = self._gizmo_move_lines.get(axis)
+            if line is not None:
+                try:
+                    line.setData(pos=line.pos, color=theme_value(key), width=line.width)
+                except Exception:
+                    pass
+            cone = self._gizmo_move_cones.get(axis)
+            if cone is not None:
+                try:
+                    cone.setColor(theme_value(key))
+                except Exception:
+                    pass
+
+            ring = self._gizmo_rotate_rings.get(axis)
+            if ring is not None:
+                try:
+                    ring.setData(pos=ring.pos, color=theme_value(key), width=ring.width)
+                except Exception:
+                    pass
+            ticks = self._gizmo_rotate_ticks.get(axis)
+            if ticks is not None:
+                try:
+                    ticks.setData(pos=ticks.pos, color=theme_value("gizmo_tick"), width=ticks.width)
+                except Exception:
+                    pass
+            arrows = self._gizmo_rotate_arrows.get(axis)
+            if arrows is not None:
+                try:
+                    arrows.setColor(theme_value(key))
+                except Exception:
+                    pass
+
+        mesh_color = theme_value("mesh_color", (0.0, 0.9, 0.4, 0.9))
+        for m in self.models.values():
+            item = m.get("item")
+            if item is not None:
+                try:
+                    item.setColor(mesh_color)
+                except Exception:
+                    pass
+
+        if hasattr(self, "_view_cube") and self._view_cube is not None:
+            self._view_cube.apply_theme()
+        self._update_rotate_hud_style()
+        self._update_gizmo()
+
+    def _rgba_css(self, color: QtGui.QColor, alpha: int | None = None):
+        c = QtGui.QColor(color)
+        if alpha is not None:
+            c.setAlpha(int(alpha))
+        return f"rgba({c.red()}, {c.green()}, {c.blue()}, {c.alpha()})"
+
+    def _update_rotate_hud_style(self):
+        if not hasattr(self, "_rotate_hud") or self._rotate_hud is None:
+            return
+        bg = theme_qcolor("popup_bg")
+        text = theme_qcolor("popup_text")
+        bg_css = self._rgba_css(bg, 220)
+        text_css = self._rgba_css(text, 255)
+        self._rotate_hud.setStyleSheet(
+            "QLabel {"
+            f"background-color: {bg_css};"
+            f"color: {text_css};"
+            "padding: 2px 6px;"
+            "border-radius: 4px;"
+            "font-weight: 600;"
+            "}"
+        )
+
+    def _show_rotate_hud(self, pos: QtCore.QPoint, axis: str, value: float):
+        if not hasattr(self, "_rotate_hud") or self._rotate_hud is None:
+            return
+        self._rotate_hud.setText(f"{axis}: {value:.2f}")
+        self._rotate_hud.adjustSize()
+        offset = QtCore.QPoint(12, -28)
+        target = pos + offset
+        x = min(max(0, target.x()), max(0, self.width() - self._rotate_hud.width()))
+        y = min(max(0, target.y()), max(0, self.height() - self._rotate_hud.height()))
+        self._rotate_hud.move(x, y)
+        self._rotate_hud.setVisible(True)
+
+    def _hide_rotate_hud(self):
+        if hasattr(self, "_rotate_hud") and self._rotate_hud is not None:
+            self._rotate_hud.setVisible(False)
 
     def reset_view(self):
         self.opts["distance"] = self._default_view["distance"] # pyright: ignore[reportArgumentType]
@@ -118,8 +226,12 @@ class Viewer3D(gl.GLViewWidget):
         if not safe_name:
             safe_name = f"Model {model_id}"
 
-        v = np.array(vertices, dtype=float)
-        f = np.array(faces, dtype=int)
+        v = np.asarray(vertices, dtype=float)
+        f = np.asarray(faces, dtype=int)
+
+        base_mn = v.min(axis=0)
+        base_mx = v.max(axis=0)
+        pivot = (base_mn + base_mx) / 2.0
 
         self.models[model_id] = {
             "id": model_id,
@@ -129,7 +241,9 @@ class Viewer3D(gl.GLViewWidget):
             "faces": f,
             "item": None,
             "scale": 1.0,
+            "rotation": np.array([0.0, 0.0, 0.0], dtype=float),
             "offset": np.array([0.0, 0.0, 0.0], dtype=float),
+            "pivot": np.array(pivot, dtype=float),
             "bounds": None,
         }
 
@@ -177,7 +291,8 @@ class Viewer3D(gl.GLViewWidget):
         m = self.models.get(model_id)
         if not m:
             return None
-        return float(m.get("scale", 1.0)), np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+        scale_vec = self._normalize_scale(m.get("scale", 1.0))
+        return scale_vec, np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
 
     def get_model_bounds(self, model_id: int):
         m = self.models.get(model_id)
@@ -185,23 +300,104 @@ class Viewer3D(gl.GLViewWidget):
             return None
         return m.get("bounds")
 
+    def get_model_rotation(self, model_id: int):
+        m = self.models.get(model_id)
+        if not m:
+            return None
+        rot = m.get("rotation")
+        if rot is None:
+            return np.array([0.0, 0.0, 0.0], dtype=float)
+        return np.array(rot, dtype=float)
+
     # -------------------- transforms --------------------
 
-    def set_model_transform(self, model_id: int, scale: float | None = None, offset_xy=None, offset_xyz=None):
+    def _normalize_scale(self, scale) -> np.ndarray:
+        if isinstance(scale, np.ndarray):
+            vec = scale.astype(float)
+            if vec.shape == (3,):
+                return vec
+            if vec.size == 1:
+                s = float(vec.reshape(-1)[0])
+                return np.array([s, s, s], dtype=float)
+        if isinstance(scale, (list, tuple)) and len(scale) == 3:
+            return np.array([float(scale[0]), float(scale[1]), float(scale[2])], dtype=float)
+        if isinstance(scale, Real):
+            s = float(scale)
+            return np.array([s, s, s], dtype=float)
+        return np.array([1.0, 1.0, 1.0], dtype=float)
+
+    def _normalize_vec3(self, value, default=None):
+        if value is None:
+            return default
+        try:
+            arr = np.asarray(value, dtype=float).reshape(-1)
+        except Exception:
+            return default
+        if arr.size != 3:
+            return default
+        return arr.astype(float)
+
+    def _normalize_vec2(self, value, default=None):
+        if value is None:
+            return default
+        try:
+            arr = np.asarray(value, dtype=float).reshape(-1)
+        except Exception:
+            return default
+        if arr.size != 2:
+            return default
+        return arr.astype(float)
+
+    def set_model_transform(
+        self,
+        model_id: int,
+        scale: float | tuple[float, float, float] | list[float] | np.ndarray | None = None,
+        offset_xy: tuple[float, float] | list[float] | np.ndarray | None = None,
+        offset_xyz: tuple[float, float, float] | list[float] | np.ndarray | None = None,
+        rotation_xyz: tuple[float, float, float] | list[float] | np.ndarray | None = None,
+    ):
         m = self.models.get(model_id)
         if not m:
             return
 
+        changed = False
+
         if scale is not None:
-            m["scale"] = float(scale)
+            new_scale = self._normalize_scale(scale)
+            cur_vec = self._normalize_scale(m.get("scale", 1.0))
+            if not np.allclose(cur_vec, new_scale):
+                m["scale"] = new_scale
+                changed = True
+
+        if rotation_xyz is not None:
+            cur_rot = np.array(m.get("rotation", [0.0, 0.0, 0.0]), dtype=float)
+            new_rot = self._normalize_vec3(rotation_xyz, default=cur_rot)
+            if new_rot is None:
+                new_rot = cur_rot
+            if not np.allclose(cur_rot, new_rot):
+                m["rotation"] = new_rot
+                changed = True
 
         if offset_xyz is not None:
-            x, y, z = offset_xyz
-            m["offset"] = np.array([float(x), float(y), float(z)], dtype=float)
+            new_offset = self._normalize_vec3(offset_xyz)
         elif offset_xy is not None:
-            x, y = offset_xy
-            z = float(m["offset"][2]) if m.get("offset") is not None else 0.0
-            m["offset"] = np.array([float(x), float(y), z], dtype=float)
+            xy = self._normalize_vec2(offset_xy)
+            if xy is not None:
+                z = float(m["offset"][2]) if m.get("offset") is not None else 0.0
+                new_offset = np.array([xy[0], xy[1], z], dtype=float)
+            else:
+                new_offset = None
+        else:
+            new_offset = None
+
+        if new_offset is not None:
+            cur_offset = np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+            if not np.allclose(cur_offset, new_offset):
+                m["offset"] = new_offset
+                changed = True
+
+        if not changed:
+            return
 
         self._create_or_update_mesh_item(model_id)
         if self._selected_model_id == model_id:
@@ -212,11 +408,18 @@ class Viewer3D(gl.GLViewWidget):
 
     def mousePressEvent(self, ev: QtGui.QMouseEvent):
         if ev.button() == QtCore.Qt.LeftButton:
-            axis = self._pick_gizmo_axis(ev.pos())
-            if axis is not None:
-                if self._begin_gizmo_drag(axis, ev.pos()):
-                    ev.accept()
-                    return
+            if self._gizmo_mode == "move":
+                axis = self._pick_gizmo_axis(ev.pos())
+                if axis is not None:
+                    if self._begin_gizmo_drag(axis, ev.pos()):
+                        ev.accept()
+                        return
+            elif self._gizmo_mode == "rotate":
+                axis = self._pick_rotate_axis(ev.pos())
+                if axis is not None:
+                    if self._begin_rotate_drag(axis, ev.pos()):
+                        ev.accept()
+                        return
 
             # 1) Try to pick a model under cursor
             picked = self._pick_model_at(ev.pos())
@@ -244,6 +447,26 @@ class Viewer3D(gl.GLViewWidget):
         super().mousePressEvent(ev)
 
     def mouseMoveEvent(self, ev: QtGui.QMouseEvent):
+        if self._gizmo_rotate_axis is not None and bool(ev.buttons() & QtCore.Qt.LeftButton):
+            if self._selected_model_id is None:
+                ev.accept()
+                return
+            angle = self._rotate_angle_from_mouse(ev.pos(), self._gizmo_rotate_axis)
+            if angle is None or self._gizmo_rotate_start_angle is None or self._gizmo_rotate_start_rotation is None:
+                ev.accept()
+                return
+            delta = float(angle - self._gizmo_rotate_start_angle)
+            delta_deg = math.degrees(delta)
+            rot = np.array(self._gizmo_rotate_start_rotation, dtype=float)
+            axis_idx = {"x": 0, "y": 1, "z": 2}[self._gizmo_rotate_axis]
+            rot[axis_idx] = rot[axis_idx] + delta_deg
+            self.set_model_transform(self._selected_model_id, rotation_xyz=rot)
+            self.modelRotated.emit(self._selected_model_id, float(rot[0]), float(rot[1]), float(rot[2]))
+            axis_label = self._gizmo_rotate_axis.upper()
+            self._show_rotate_hud(ev.pos(), axis_label, float(rot[axis_idx]))
+            ev.accept()
+            return
+
         if self._gizmo_drag_axis is not None and bool(ev.buttons() & QtCore.Qt.LeftButton):
             if self._selected_model_id is None:
                 ev.accept()
@@ -312,6 +535,14 @@ class Viewer3D(gl.GLViewWidget):
             self._drag_start_offset = None
             ev.accept()
             return
+        if ev.button() == QtCore.Qt.LeftButton and self._gizmo_rotate_axis is not None:
+            self._gizmo_rotate_axis = None
+            self._gizmo_rotate_start_angle = None
+            self._gizmo_rotate_start_rotation = None
+            self._hide_rotate_hud()
+            self._update_gizmo()
+            ev.accept()
+            return
         if ev.button() == QtCore.Qt.LeftButton and self._gizmo_drag_axis is not None:
             self._gizmo_drag_axis = None
             self._gizmo_drag_start_param = None
@@ -326,24 +557,82 @@ class Viewer3D(gl.GLViewWidget):
         m = self.models[model_id]
         v0 = m["base_vertices"]
         f = m["faces"]
-        s = m["scale"]
-        off = m["offset"]
+        s = self._normalize_scale(m.get("scale", 1.0))
+        off = np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+        rot = np.array(m.get("rotation", [0.0, 0.0, 0.0]), dtype=float)
+        pivot = m.get("pivot", np.zeros(3, dtype=float))
 
-        v = v0 * s + off
+        v = (v0 - pivot) * s
+        if rot is not None:
+            R = self._rotation_matrix(float(rot[0]), float(rot[1]), float(rot[2]))
+            v = v @ R.T
+        v = v + pivot + off
 
         mn = v.min(axis=0)
+        if float(mn[2]) < 0.0:
+            # Safety: keep the model above the build plate.
+            lift = -float(mn[2])
+            off = np.array([float(off[0]), float(off[1]), float(off[2]) + lift], dtype=float)
+            m["offset"] = off
+            v = (v0 - pivot) * s
+            if rot is not None:
+                R = self._rotation_matrix(float(rot[0]), float(rot[1]), float(rot[2]))
+                v = v @ R.T
+            v = v + pivot + off
+            mn = v.min(axis=0)
         mx = v.max(axis=0)
         m["bounds"] = (mn, mx)
 
         md = gl.MeshData(vertexes=v, faces=f)
         color = theme_value("mesh_color", (0.0, 0.9, 0.4, 0.9))
 
-        if m["item"] is not None:
-            self.removeItem(m["item"])
+        item = m.get("item")
+        if item is None:
+            item = gl.GLMeshItem(meshdata=md, smooth=False, color=color, shader="shaded")
+            self.addItem(item)
+            m["item"] = item
+        else:
+            item.setMeshData(meshdata=md)
+            try:
+                item.setColor(color)
+            except Exception:
+                pass
 
-        item = gl.GLMeshItem(meshdata=md, smooth=False, color=color, shader="shaded")
-        self.addItem(item)
-        m["item"] = item
+    def _rotation_matrix(self, rx_deg: float, ry_deg: float, rz_deg: float):
+        rx = np.deg2rad(rx_deg)
+        ry = np.deg2rad(ry_deg)
+        rz = np.deg2rad(rz_deg)
+
+        cx, sx = float(np.cos(rx)), float(np.sin(rx))
+        cy, sy = float(np.cos(ry)), float(np.sin(ry))
+        cz, sz = float(np.cos(rz)), float(np.sin(rz))
+
+        Rx = np.array(
+            [
+                [1.0, 0.0, 0.0],
+                [0.0, cx, -sx],
+                [0.0, sx, cx],
+            ],
+            dtype=float,
+        )
+        Ry = np.array(
+            [
+                [cy, 0.0, sy],
+                [0.0, 1.0, 0.0],
+                [-sy, 0.0, cy],
+            ],
+            dtype=float,
+        )
+        Rz = np.array(
+            [
+                [cz, -sz, 0.0],
+                [sz, cz, 0.0],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=float,
+        )
+
+        return Rz @ Ry @ Rx
 
     # -------------------- view cube --------------------
 
@@ -353,6 +642,13 @@ class Viewer3D(gl.GLViewWidget):
         self._view_cube.homeRequested.connect(self.reset_view)
         self._position_view_cube()
         self._sync_view_cube()
+
+    def _build_rotate_hud(self):
+        self._rotate_hud = QtWidgets.QLabel(self)
+        self._rotate_hud.setVisible(False)
+        self._rotate_hud.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+        self._rotate_hud.setAlignment(QtCore.Qt.AlignCenter)
+        self._update_rotate_hud_style()
 
     def _position_view_cube(self):
         if not hasattr(self, "_view_cube") or self._view_cube is None:
@@ -375,6 +671,13 @@ class Viewer3D(gl.GLViewWidget):
         invert_y = getattr(self._view_cube, "invert_y", False)
         invert_z = getattr(self._view_cube, "invert_z", False)
 
+        def invert_view(azimuth: float, elevation: float):
+            az = float(azimuth) + 180.0
+            el = -float(elevation)
+            if az > 180.0:
+                az -= 360.0
+            return az, el
+
         if face.startswith("iso:"):
             parts = face.split(":")
             if len(parts) == 4:
@@ -386,6 +689,7 @@ class Viewer3D(gl.GLViewWidget):
                     return
                 az = math.degrees(math.atan2(y_sign, x_sign))
                 el = math.degrees(math.atan2(z_sign, math.hypot(x_sign, y_sign)))
+                az, el = invert_view(az, el)
                 self.set_view(az, el)
             return
 
@@ -413,6 +717,7 @@ class Viewer3D(gl.GLViewWidget):
                     return
                 az = math.degrees(math.atan2(y_sign, x_sign))
                 el = math.degrees(math.atan2(z_sign, math.hypot(x_sign, y_sign)))
+                az, el = invert_view(az, el)
                 self.set_view(az, el)
             return
 
@@ -433,7 +738,8 @@ class Viewer3D(gl.GLViewWidget):
         view = views.get(face)
         if view is None:
             return
-        self.set_view(view[0], view[1])
+        az, el = invert_view(view[0], view[1])
+        self.set_view(az, el)
 
     def resizeEvent(self, e: QtGui.QResizeEvent):
         super().resizeEvent(e)
@@ -442,14 +748,53 @@ class Viewer3D(gl.GLViewWidget):
     # -------------------- gizmo --------------------
 
     def _build_gizmo(self):
-        self._gizmo_items = {
-            "x": gl.GLLinePlotItem(color=theme_value("gizmo_x", (1.0, 0.1, 0.1, 1.0)), width=2.5, antialias=True),
-            "y": gl.GLLinePlotItem(color=theme_value("gizmo_y", (0.1, 1.0, 0.1, 1.0)), width=2.5, antialias=True),
-            "z": gl.GLLinePlotItem(color=theme_value("gizmo_z", (0.1, 0.4, 1.0, 1.0)), width=2.5, antialias=True),
-        }
-        for item in self._gizmo_items.values():
-            item.setVisible(False)
-            self.addItem(item)
+        for axis, key in (("x", "gizmo_x"), ("y", "gizmo_y"), ("z", "gizmo_z")):
+            line = gl.GLLinePlotItem(
+                color=theme_value(key, (1.0, 0.1, 0.1, 1.0)),
+                width=2.5,
+                antialias=True,
+            )
+            line.setVisible(False)
+            self._gizmo_move_lines[axis] = line
+            self.addItem(line)
+
+            cone = gl.GLMeshItem(
+                meshdata=gl.MeshData(),
+                smooth=False,
+                color=theme_value(key, (1.0, 0.1, 0.1, 1.0)),
+                shader="shaded",
+            )
+            cone.setVisible(False)
+            self._gizmo_move_cones[axis] = cone
+            self.addItem(cone)
+
+            ring = gl.GLLinePlotItem(
+                color=theme_value(key, (1.0, 0.1, 0.1, 1.0)),
+                width=2.0,
+                antialias=True,
+            )
+            ring.setVisible(False)
+            self._gizmo_rotate_rings[axis] = ring
+            self.addItem(ring)
+
+            ticks = gl.GLLinePlotItem(
+                color=theme_value("gizmo_tick", (1.0, 1.0, 1.0, 1.0)),
+                width=1.0,
+                antialias=True,
+            )
+            ticks.setVisible(False)
+            self._gizmo_rotate_ticks[axis] = ticks
+            self.addItem(ticks)
+
+            arrows = gl.GLMeshItem(
+                meshdata=gl.MeshData(),
+                smooth=False,
+                color=theme_value(key, (1.0, 0.1, 0.1, 1.0)),
+                shader="shaded",
+            )
+            arrows.setVisible(False)
+            self._gizmo_rotate_arrows[axis] = arrows
+            self.addItem(arrows)
 
     def _update_gizmo(self):
         if self._selected_model_id is None or self._gizmo_mode not in {"move", "rotate", "scale"}:
@@ -463,22 +808,36 @@ class Viewer3D(gl.GLViewWidget):
 
         mn, mx = m["bounds"]
         center = (mn + mx) / 2.0
-        size = float(np.max(mx - mn))
-        size = max(10.0, min(80.0, size * 0.25))
+        model_extent = float(np.max(mx - mn))
+        size = max(10.0, min(80.0, model_extent * 0.25))
 
         self._gizmo_origin = np.array(center, dtype=float)
         self._gizmo_size = size
+        self._gizmo_model_extent = model_extent
 
-        for axis, direction in self._gizmo_axes().items():
-            p0 = self._gizmo_origin
-            p1 = self._gizmo_origin + direction * self._gizmo_size
-            self._gizmo_items[axis].setData(pos=np.array([p0, p1], dtype=float))
+        if self._gizmo_mode == "move":
+            self._update_move_gizmo()
+            self._set_gizmo_visible(True, mode="move")
+        elif self._gizmo_mode == "rotate":
+            self._update_rotate_gizmo()
+            self._set_gizmo_visible(True, mode="rotate")
+        else:
+            self._set_gizmo_visible(False)
 
-        self._set_gizmo_visible(True)
-
-    def _set_gizmo_visible(self, visible: bool):
-        for item in self._gizmo_items.values():
-            item.setVisible(bool(visible))
+    def _set_gizmo_visible(self, visible: bool, mode: str | None = None):
+        show_move = bool(visible and mode == "move")
+        show_rotate = bool(visible and mode == "rotate")
+        rotate_axis = self._gizmo_rotate_axis if show_rotate else None
+        for item in self._gizmo_move_lines.values():
+            item.setVisible(show_move)
+        for item in self._gizmo_move_cones.values():
+            item.setVisible(show_move)
+        for axis, item in self._gizmo_rotate_rings.items():
+            item.setVisible(show_rotate and (rotate_axis is None or axis == rotate_axis))
+        for axis, item in self._gizmo_rotate_ticks.items():
+            item.setVisible(show_rotate and (rotate_axis is None or axis == rotate_axis))
+        for axis, item in self._gizmo_rotate_arrows.items():
+            item.setVisible(show_rotate and (rotate_axis is None or axis == rotate_axis))
 
     def _gizmo_axes(self):
         return {
@@ -495,6 +854,7 @@ class Viewer3D(gl.GLViewWidget):
             return None
         if self._gizmo_mode != "move":
             return None
+        origin = self._gizmo_origin
 
         click_x = float(pos.x())
         click_y = float(pos.y())
@@ -504,8 +864,9 @@ class Viewer3D(gl.GLViewWidget):
         best_dist = None
 
         for axis, direction in self._gizmo_axes().items():
-            p0 = self._gizmo_origin
-            p1 = self._gizmo_origin + direction * self._gizmo_size
+            p0 = origin
+            line_length = getattr(self, "_gizmo_move_line_length", self._gizmo_size)
+            p1 = origin + direction * float(line_length)
             s0 = self._project_world_to_screen(p0)
             s1 = self._project_world_to_screen(p1)
             if s0 is None or s1 is None:
@@ -516,6 +877,35 @@ class Viewer3D(gl.GLViewWidget):
             if dist <= threshold and (best_dist is None or dist < best_dist):
                 best_dist = dist
                 best_axis = axis
+
+        return best_axis
+
+    def _pick_rotate_axis(self, pos: QtCore.QPoint):
+        if self._selected_model_id is None or self._gizmo_origin is None:
+            return None
+        if self._gizmo_mode != "rotate":
+            return None
+
+        click_x = float(pos.x())
+        click_y = float(pos.y())
+        threshold = 10.0
+        best_axis = None
+        best_dist = None
+
+        for axis, points in self._gizmo_ring_points.items():
+            proj = [self._project_world_to_screen(p) for p in points]
+            proj = [p for p in proj if p is not None]
+            if len(proj) < 2:
+                continue
+            for i in range(len(proj) - 1):
+                s0 = proj[i]
+                s1 = proj[i + 1]
+                dist = self._distance_point_to_segment(
+                    click_x, click_y, s0[0], s0[1], s1[0], s1[1]
+                )
+                if dist <= threshold and (best_dist is None or dist < best_dist):
+                    best_dist = dist
+                    best_axis = axis
 
         return best_axis
 
@@ -537,6 +927,21 @@ class Viewer3D(gl.GLViewWidget):
         self._gizmo_drag_start_offset = np.array(m["offset"], dtype=float)
         return True
 
+    def _begin_rotate_drag(self, axis: str, pos: QtCore.QPoint):
+        if self._selected_model_id is None or self._gizmo_origin is None:
+            return False
+        angle = self._rotate_angle_from_mouse(pos, axis)
+        if angle is None:
+            return False
+        m = self.models.get(self._selected_model_id)
+        if m is None:
+            return False
+        self._gizmo_rotate_axis = axis
+        self._gizmo_rotate_start_angle = float(angle)
+        self._gizmo_rotate_start_rotation = np.array(m.get("rotation", [0.0, 0.0, 0.0]), dtype=float)
+        self._update_gizmo()
+        return True
+
     def _axis_param_from_mouse(self, pos: QtCore.QPoint, origin: np.ndarray, axis_dir: np.ndarray):
         o, d = self._mouse_ray(pos)
         if o is None or d is None:
@@ -549,6 +954,67 @@ class Viewer3D(gl.GLViewWidget):
         except np.linalg.LinAlgError:
             return None
         return float(sol[0])
+
+    def _rotate_angle_from_mouse(self, pos: QtCore.QPoint, axis: str):
+        o, d = self._mouse_ray(pos)
+        if o is None or d is None:
+            return None
+        axis_dir = self._gizmo_axis_direction(axis)
+        if axis_dir is None:
+            return None
+        origin = self._gizmo_origin
+        if origin is None:
+            return None
+
+        denom = float(np.dot(axis_dir, d))
+        if abs(denom) < 1e-6:
+            return None
+        t = float(np.dot(axis_dir, (origin - o)) / denom)
+        if t < 0:
+            return None
+        hit = o + d * t
+        v = hit - origin
+
+        basis1, basis2 = self._ring_basis(axis)
+        x = float(np.dot(v, basis1))
+        y = float(np.dot(v, basis2))
+        if abs(x) < 1e-6 and abs(y) < 1e-6:
+            return None
+        return math.atan2(y, x)
+
+    def _ring_basis(self, axis: str):
+        if axis == "x":
+            return np.array([0.0, 1.0, 0.0], dtype=float), np.array([0.0, 0.0, 1.0], dtype=float)
+        if axis == "y":
+            return np.array([1.0, 0.0, 0.0], dtype=float), np.array([0.0, 0.0, 1.0], dtype=float)
+        return np.array([1.0, 0.0, 0.0], dtype=float), np.array([0.0, 1.0, 0.0], dtype=float)
+
+    def _ring_points_for_axis(self, axis: str, radius: float, segments: int = 64):
+        origin = self._gizmo_origin
+        if origin is None:
+            return np.zeros((0, 3), dtype=float)
+        basis1, basis2 = self._ring_basis(axis)
+        theta = np.linspace(0.0, 2.0 * math.pi, segments, endpoint=True)
+        points = []
+        for t in theta:
+            points.append(origin + basis1 * (radius * math.cos(t)) + basis2 * (radius * math.sin(t)))
+        return np.array(points, dtype=float)
+
+    def _tick_points_for_axis(self, axis: str, radius: float, tick_count: int = 60):
+        origin = self._gizmo_origin
+        if origin is None:
+            return np.zeros((0, 3), dtype=float)
+        basis1, basis2 = self._ring_basis(axis)
+        points = []
+        tick_len = radius * 0.08
+        for i in range(tick_count):
+            t = (2.0 * math.pi * i) / tick_count
+            dir_vec = basis1 * math.cos(t) + basis2 * math.sin(t)
+            p0 = origin + dir_vec * radius
+            p1 = origin + dir_vec * (radius + tick_len)
+            points.append(p0)
+            points.append(p1)
+        return np.array(points, dtype=float)
 
     def _distance_point_to_segment(self, px, py, x0, y0, x1, y1):
         vx = x1 - x0
@@ -563,11 +1029,136 @@ class Viewer3D(gl.GLViewWidget):
         cy = y0 + t * vy
         return float(np.hypot(px - cx, py - cy))
 
+    def _update_move_gizmo(self):
+        origin = self._gizmo_origin
+        if origin is None:
+            return
+        line_length = max(12.0, self._gizmo_size * 1.0)
+        self._gizmo_move_line_length = line_length
+        cone_height = max(4.0, line_length * 0.25)
+        cone_radius = cone_height * 0.35
+        for axis, direction in self._gizmo_axes().items():
+            color = theme_value(f"gizmo_{axis}", (1.0, 0.1, 0.1, 1.0))
+            p0 = origin
+            p1 = origin + direction * (line_length - cone_height * 0.2)
+            self._gizmo_move_lines[axis].setData(pos=np.array([p0, p1], dtype=float), color=color)
+
+            base = origin + direction * (line_length - cone_height)
+            verts, faces = self._make_cone_mesh(cone_height, cone_radius, 18)
+            R = self._axis_rotation_matrix(axis)
+            verts = verts @ R.T
+            verts = verts + base
+            md = gl.MeshData(vertexes=verts, faces=faces)
+            self._gizmo_move_cones[axis].setMeshData(meshdata=md)
+            try:
+                self._gizmo_move_cones[axis].setColor(color)
+            except Exception:
+                pass
+
+    def _update_rotate_gizmo(self):
+        self._gizmo_ring_points = {}
+        model_extent = float(self._gizmo_model_extent or (self._gizmo_size * 4.0))
+        radius = max(16.0, model_extent * 0.6)
+        tick_color = theme_value("gizmo_tick", (1.0, 1.0, 1.0, 1.0))
+        arrow_len = max(6.0, radius * 0.12)
+        arrow_radius = arrow_len * 0.35
+        for axis in ("x", "y", "z"):
+            color = theme_value(f"gizmo_{axis}", (1.0, 0.1, 0.1, 1.0))
+            ring_points = self._ring_points_for_axis(axis, radius, 96)
+            self._gizmo_rotate_rings[axis].setData(pos=ring_points, mode="line_strip", color=color)
+            self._gizmo_ring_points[axis] = ring_points
+
+            tick_points = self._tick_points_for_axis(axis, radius, 60)
+            self._gizmo_rotate_ticks[axis].setData(pos=tick_points, mode="lines", color=tick_color)
+            self._update_rotate_arrows(axis, radius, arrow_len, arrow_radius, color)
+
+    def _update_rotate_arrows(self, axis: str, radius: float, height: float, cone_radius: float, color):
+        arrows = self._gizmo_rotate_arrows.get(axis)
+        if arrows is None:
+            return
+        origin = self._gizmo_origin
+        if origin is None:
+            return
+        basis1, basis2 = self._ring_basis(axis)
+        direction = basis2 / max(1e-6, float(np.linalg.norm(basis2)))
+        ring_point = origin + basis1 * radius
+        verts, faces = self._make_cone_mesh(height, cone_radius, 18)
+        rot = self._rotation_from_z(direction)
+
+        tip0 = ring_point
+        base0 = tip0 - direction * height
+        verts0 = (verts @ rot.T) + base0
+
+        tip1 = ring_point - direction * (height * 1.2)
+        base1 = tip1 - direction * height
+        verts1 = (verts @ rot.T) + base1
+
+        all_verts = np.vstack([verts0, verts1])
+        faces_1 = faces + len(verts0)
+        all_faces = np.vstack([faces, faces_1])
+        arrows.setMeshData(meshdata=gl.MeshData(vertexes=all_verts, faces=all_faces))
+        try:
+            arrows.setColor(color)
+        except Exception:
+            pass
+
+    def _make_cone_mesh(self, height: float, radius: float, segments: int):
+        verts = []
+        faces = []
+        verts.append([0.0, 0.0, height])
+        for i in range(segments):
+            ang = (2.0 * math.pi * i) / segments
+            verts.append([radius * math.cos(ang), radius * math.sin(ang), 0.0])
+        tip_index = 0
+        for i in range(segments):
+            i0 = 1 + i
+            i1 = 1 + ((i + 1) % segments)
+            faces.append([tip_index, i0, i1])
+        return np.array(verts, dtype=float), np.array(faces, dtype=int)
+
+    def _axis_rotation_matrix(self, axis: str):
+        if axis == "x":
+            return self._rotation_matrix(0.0, 90.0, 0.0)
+        if axis == "y":
+            return self._rotation_matrix(-90.0, 0.0, 0.0)
+        return np.eye(3, dtype=float)
+
+    def _rotation_from_z(self, direction: np.ndarray):
+        z_axis = np.array([0.0, 0.0, 1.0], dtype=float)
+        v = np.array(direction, dtype=float)
+        norm = float(np.linalg.norm(v))
+        if norm < 1e-6:
+            return np.eye(3, dtype=float)
+        v = v / norm
+        dot = float(np.dot(z_axis, v))
+        if abs(dot - 1.0) < 1e-6:
+            return np.eye(3, dtype=float)
+        if abs(dot + 1.0) < 1e-6:
+            return self._rotation_matrix(180.0, 0.0, 0.0)
+        axis = np.cross(z_axis, v)
+        axis_norm = float(np.linalg.norm(axis))
+        if axis_norm < 1e-6:
+            return np.eye(3, dtype=float)
+        axis = axis / axis_norm
+        angle = math.acos(max(-1.0, min(1.0, dot)))
+        kx, ky, kz = axis
+        c = float(math.cos(angle))
+        s = float(math.sin(angle))
+        v1 = 1.0 - c
+        return np.array(
+            [
+                [kx * kx * v1 + c, kx * ky * v1 - kz * s, kx * kz * v1 + ky * s],
+                [ky * kx * v1 + kz * s, ky * ky * v1 + c, ky * kz * v1 - kx * s],
+                [kz * kx * v1 - ky * s, kz * ky * v1 + kx * s, kz * kz * v1 + c],
+            ],
+            dtype=float,
+        )
+
     # -------------------- matrices / unproject --------------------
 
     def _view_projection_matrix(self):
         """
-        Your pyqtgraph version indexes `region` and `viewport` like sequences:
+        pyqtgraph version indexes `region` and `viewport` like sequences:
           region[0], region[1], region[2], region[3]
         so BOTH must be 4-tuples (x0, y0, w, h).
         """
@@ -707,5 +1298,3 @@ class Viewer3D(gl.GLViewWidget):
                     best_id = mid
 
         return best_id
-
-

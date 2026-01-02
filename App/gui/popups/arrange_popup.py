@@ -10,6 +10,7 @@ class ArrangePopup(BasePopup):
 
     def __init__(self, parent=None):
         super().__init__("Arrange options", parent=parent)
+        self.setMinimumWidth(340)
         self._build_ui()
 
     def _build_ui(self):
@@ -37,10 +38,16 @@ class ArrangePopup(BasePopup):
 
         self.auto_rotate = QtWidgets.QCheckBox("Auto rotate for arrangement")
         self.multi_filament = QtWidgets.QCheckBox("Allow multiple filaments on same plate")
+        self.multi_filament.setChecked(True)
         self.align_y = QtWidgets.QCheckBox("Align to Y axis")
         layout.addWidget(self.auto_rotate)
         layout.addWidget(self.multi_filament)
         layout.addWidget(self.align_y)
+
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        layout.addWidget(line)
 
         btn_row = QtWidgets.QHBoxLayout()
         self.reset_btn = QtWidgets.QPushButton("Reset")

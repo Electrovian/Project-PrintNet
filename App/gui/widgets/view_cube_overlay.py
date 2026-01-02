@@ -21,9 +21,9 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         self._corner_regions = []
         self._home_rect = QtCore.QRect()
         self._corner_radius = 6
-        self.invert_x = True
-        self.invert_y = False
-        self.invert_z = True
+        self.invert_x = False
+        self.invert_y = True
+        self.invert_z = False
         self._hover_name = None
         self._active_name = None
         self._apply_theme()
@@ -39,6 +39,10 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         self._accent_color = theme_qcolor("cube_accent")
         self._hover_color = theme_qcolor("cube_hover")
         self._active_color = theme_qcolor("cube_active")
+
+    def apply_theme(self):
+        self._apply_theme()
+        self.update()
 
     def sizeHint(self):
         return QtCore.QSize(self._cube_size, self._cube_size + self._home_size + self._padding * 2)
@@ -189,54 +193,29 @@ class ViewCubeOverlay(QtWidgets.QWidget):
             ev.accept()
             return
 
-        hits = sorted(self._corner_regions, key=lambda f: f[2], reverse=True)
-        for poly, name, _depth in hits:
-            if poly.containsPoint(QtCore.QPointF(ev.pos()), QtCore.Qt.WindingFill):
-                self._active_name = name
-                self.viewRequested.emit(name)
-                ev.accept()
-                self.update()
-                return
+        pos = QtCore.QPointF(ev.pos())
+        name = self._hit_test_regions(self._corner_regions, pos)
+        if name is None:
+            name = self._hit_test_regions(self._edge_regions, pos)
+        if name is None:
+            name = self._hit_test_regions(self._face_regions, pos)
 
-        hits = sorted(self._edge_regions, key=lambda f: f[2], reverse=True)
-        for poly, name, _depth in hits:
-            if poly.containsPoint(QtCore.QPointF(ev.pos()), QtCore.Qt.WindingFill):
-                self._active_name = name
-                self.viewRequested.emit(name)
-                ev.accept()
-                self.update()
-                return
+        if name is not None:
+            self._active_name = name
+            self.viewRequested.emit(name)
+            ev.accept()
+            self.update()
+            return
 
-        hits = sorted(self._face_regions, key=lambda f: f[2], reverse=True)
-        for poly, name, _depth in hits:
-            if poly.containsPoint(QtCore.QPointF(ev.pos()), QtCore.Qt.WindingFill):
-                self._active_name = name
-                self.viewRequested.emit(name)
-                ev.accept()
-                self.update()
-                return
         super().mousePressEvent(ev)
 
     def mouseMoveEvent(self, ev: QtGui.QMouseEvent):
         pos = QtCore.QPointF(ev.pos())
-        hover = None
-        hits = sorted(self._corner_regions, key=lambda f: f[2], reverse=True)
-        for poly, name, _depth in hits:
-            if poly.containsPoint(pos, QtCore.Qt.WindingFill):
-                hover = name
-                break
+        hover = self._hit_test_regions(self._corner_regions, pos)
         if hover is None:
-            hits = sorted(self._edge_regions, key=lambda f: f[2], reverse=True)
-            for poly, name, _depth in hits:
-                if poly.containsPoint(pos, QtCore.Qt.WindingFill):
-                    hover = name
-                    break
+            hover = self._hit_test_regions(self._edge_regions, pos)
         if hover is None:
-            hits = sorted(self._face_regions, key=lambda f: f[2], reverse=True)
-            for poly, name, _depth in hits:
-                if poly.containsPoint(pos, QtCore.Qt.WindingFill):
-                    hover = name
-                    break
+            hover = self._hit_test_regions(self._face_regions, pos)
 
         if hover != self._hover_name:
             self._hover_name = hover
@@ -396,6 +375,13 @@ class ViewCubeOverlay(QtWidgets.QWidget):
             return 1.0
         if name == neg_name:
             return -1.0
+        return None
+
+    def _hit_test_regions(self, regions, pos: QtCore.QPointF):
+        hits = sorted(regions, key=lambda f: f[2], reverse=True)
+        for poly, name, _depth in hits:
+            if poly.containsPoint(pos, QtCore.Qt.WindingFill):
+                return name
         return None
 
     def _corner_view_name(self, vx: float, vy: float, vz: float):

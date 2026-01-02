@@ -47,11 +47,13 @@ class BasePopup(QtWidgets.QFrame):
             "}"
             "QFrame#PopupHeader {"
             f"  background: {theme_css('popup_header_bg')};"
+            f"  border-bottom: 1px solid {theme_css('popup_border')};"
             "  border-top-left-radius: 6px;"
             "  border-top-right-radius: 6px;"
             "}"
             "QLabel {"
             f"  color: {theme_css('popup_text')};"
+            "  font-size: 9pt;"
             "}"
             "QLabel#Muted {"
             f"  color: {theme_css('popup_muted_text')};"
@@ -100,3 +102,6 @@ class BasePopup(QtWidgets.QFrame):
 
     def header_layout(self):
         return self._header_layout
+
+    def apply_theme(self):
+        self._apply_theme()

@@ -10,21 +10,23 @@ class MovePopup(BasePopup):
 
     def __init__(self, parent=None):
         super().__init__("Move", parent=parent)
+        self.setMinimumWidth(420)
         self._syncing = False
         self._build_ui()
 
     def _build_ui(self):
         layout = self.content_layout()
 
+        self._axis_labels = {}
         header = QtWidgets.QHBoxLayout()
         header.setSpacing(12)
         world_label = QtWidgets.QLabel("World coordinates")
         world_label.setObjectName("Muted")
         header.addWidget(world_label)
         header.addStretch(1)
-        header.addWidget(self._axis_label("X", theme_css("axis_x")))
-        header.addWidget(self._axis_label("Y", theme_css("axis_y")))
-        header.addWidget(self._axis_label("Z", theme_css("axis_z")))
+        header.addWidget(self._axis_label("X", "axis_x"))
+        header.addWidget(self._axis_label("Y", "axis_y"))
+        header.addWidget(self._axis_label("Z", "axis_z"))
         layout.addLayout(header)
 
         row = QtWidgets.QHBoxLayout()
@@ -54,7 +56,8 @@ class MovePopup(BasePopup):
 
     def _axis_label(self, text: str, color: str):
         lbl = QtWidgets.QLabel(text)
-        lbl.setStyleSheet(f"color: {color}; font-weight: 600;")
+        self._axis_labels[text.lower()] = lbl
+        lbl.setStyleSheet(f"color: {theme_css(color)}; font-weight: 600;")
         return lbl
 
     def set_position(self, x: float, y: float, z: float):
@@ -71,3 +74,10 @@ class MovePopup(BasePopup):
             return
         x, y, z = [float(s.value()) for s in self._pos_spins]
         self.position_changed.emit(x, y, z)
+
+    def apply_theme(self):
+        super().apply_theme()
+        for axis, key in (("x", "axis_x"), ("y", "axis_y"), ("z", "axis_z")):
+            lbl = self._axis_labels.get(axis)
+            if lbl is not None:
+                lbl.setStyleSheet(f"color: {theme_css(key)}; font-weight: 600;")
