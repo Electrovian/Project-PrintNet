@@ -21,9 +21,9 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         self._corner_regions = []
         self._home_rect = QtCore.QRect()
         self._corner_radius = 6
-        self.invert_x = False
+        self.invert_x = True
         self.invert_y = True
-        self.invert_z = False
+        self.invert_z = True
         self._hover_name = None
         self._active_name = None
         self._apply_theme()
@@ -291,10 +291,7 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         for axis, sign, idxs, normal in faces:
             pos_name, neg_name = self._axis_names(axis)
             name = pos_name if sign > 0 else neg_name
-            if axis == "z":
-                label = "TOP" if sign > 0 else "BOTTOM"
-            else:
-                label = name.upper()
+            label = name.upper()
             n_cam = np.array([np.dot(normal, right), np.dot(normal, up), np.dot(normal, forward)], dtype=float)
             if n_cam[2] <= 0:
                 continue
@@ -370,7 +367,7 @@ class ViewCubeOverlay(QtWidgets.QWidget):
             return ("left", "right") if self.invert_x else ("right", "left")
         if axis == "y":
             return ("back", "front") if self.invert_y else ("front", "back")
-        return ("bottom", "top") if self.invert_z else ("top", "bottom")
+        return ("Bottom", "top") if self.invert_z else ("Bottom", "top")
 
     def _face_sign(self, axis: str, name: str):
         pos_name, neg_name = self._axis_names(axis)

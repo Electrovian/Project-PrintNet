@@ -1,5 +1,7 @@
 # gui/main_window.py
+import json
 import os
+from dataclasses import asdict
 import numpy as np
 import trimesh
 
@@ -12,7 +14,16 @@ from .controls import TransformToolbar
 from .model_panel import ModelPanel
 from .workers import Worker
 from .popups import MovePopup, RotatePopup, ScalePopup, AutoOrientPopup, ArrangePopup
-from .theme import set_theme, THEMES, theme_css, theme_qcolor
+from .theme import (
+    export_theme,
+    get_theme_name,
+    register_theme,
+    set_theme,
+    THEMES,
+    theme_css,
+    theme_qcolor,
+)
+from .shortcuts import shortcut_key, shortcut_label, shortcuts_by_category
 from config.defaults import DEFAULTS
 
 from slicer.slicer import slice_file
@@ -76,6 +87,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._build_topbar()
         self._build_toolbar()
         self._build_action_panel()
+        self._build_shortcut_actions()
 
         self._popup_move = MovePopup(self)
         self._popup_rotate = RotatePopup(self)
@@ -121,6 +133,22 @@ class MainWindow(QtWidgets.QMainWindow):
             DEFAULTS["viewer"]["snap_step"],
         )
 
+        self._current_project_path = None
+        self._labels_visible = True
+        self._model_clipboard = []
+        self._undo_stack = []
+        self._redo_stack = []
+        self._undo_stack_limit = 50
+        self._undo_in_progress = False
+        self._undo_timer = QtCore.QTimer(self)
+        self._undo_timer.setSingleShot(True)
+        self._undo_timer.timeout.connect(self._finalize_undo_snapshot)
+        self._pending_undo_snapshot = False
+        self._push_undo_state()
+        self.viewer.set_labels_visible(self._labels_visible)
+        if hasattr(self, "_labels_action"):
+            self._labels_action.setChecked(self._labels_visible)
+
         self.statusBar().showMessage(DEFAULTS["app"]["status_ready"])
 
     def _build_menubar(self):
@@ -135,61 +163,60 @@ class MainWindow(QtWidgets.QMainWindow):
         self._help_menu = QtWidgets.QMenu("Help", self)
         self._main_menu = QtWidgets.QMenu(self)
 
-        new_action = QtWidgets.QAction("New Project", self)
+        new_action = QtWidgets.QAction(shortcut_label("new_project"), self)
         new_action.setIcon(self._maybe_icon("menu_new.png"))
-        new_action.setShortcut("Ctrl+N")
+        new_action.setShortcut(shortcut_key("new_project"))
         new_action.triggered.connect(self._new_project)
-        self._file_menu.addAction(new_action)
 
-        self.open_action = QtWidgets.QAction("Open Project...", self)
+        self.open_action = QtWidgets.QAction(shortcut_label("open_project"), self)
         self.open_action.setIcon(self._maybe_icon("menu_open.png"))
-        self.open_action.setShortcut("Ctrl+O")
-        self.open_action.triggered.connect(self.open_stl_dialog)
-        self._file_menu.addAction(self.open_action)
+        self.open_action.setShortcut(shortcut_key("open_project"))
+        self.open_action.triggered.connect(self._open_project)
 
         recent_menu = QtWidgets.QMenu("Recent Projects", self._file_menu)
         recent_menu.setIcon(self._maybe_icon("menu_recent.png"))
         recent_menu.setEnabled(False)
-        self._file_menu.addMenu(recent_menu)
 
-        self._file_menu.addSeparator()
-
-        save_action = QtWidgets.QAction("Save Project", self)
+        save_action = QtWidgets.QAction(shortcut_label("save_project"), self)
         save_action.setIcon(self._maybe_icon("menu_save.png"))
-        save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self._not_implemented)
-        self._file_menu.addAction(save_action)
+        save_action.setShortcut(shortcut_key("save_project"))
+        save_action.triggered.connect(self._save_project)
+        self._save_action = save_action
 
-        save_as_action = QtWidgets.QAction("Save Project as...", self)
+        save_as_action = QtWidgets.QAction(shortcut_label("save_project_as"), self)
         save_as_action.setIcon(self._maybe_icon("menu_save_as.png"))
-        save_as_action.setShortcut("Ctrl+Shift+S")
-        save_as_action.triggered.connect(self._not_implemented)
-        self._file_menu.addAction(save_as_action)
-
-        self._file_menu.addSeparator()
+        save_as_action.setShortcut(shortcut_key("save_project_as"))
+        save_as_action.triggered.connect(self._save_project_as)
+        self._save_as_action = save_as_action
 
         import_menu = QtWidgets.QMenu("Import", self._file_menu)
         import_menu.setIcon(self._maybe_icon("menu_import.png"))
         import_stl_action = QtWidgets.QAction("Import STL(s)...", self)
         import_stl_action.setIcon(self._maybe_icon("menu_import_stl.png"))
+        import_stl_action.setShortcut(shortcut_key("import_geometry"))
         import_stl_action.triggered.connect(self.open_stl_dialog)
         import_menu.addAction(import_stl_action)
-        self._file_menu.addMenu(import_menu)
 
         export_menu = QtWidgets.QMenu("Export", self._file_menu)
         export_menu.setIcon(self._maybe_icon("menu_export.png"))
         export_action = QtWidgets.QAction("Export G-code...", self)
         export_action.setIcon(self._maybe_icon("menu_export_gcode.png"))
+        export_action.setShortcut(shortcut_key("export_gcode"))
         export_action.triggered.connect(self.export_gcode)
         export_menu.addAction(export_action)
-        self._file_menu.addMenu(export_menu)
-
-        self._file_menu.addSeparator()
 
         quit_action = QtWidgets.QAction("Quit", self)
         quit_action.setIcon(self._maybe_icon("menu_quit.png"))
         quit_action.triggered.connect(self.close)
-        self._file_menu.addAction(quit_action)
+        self._file_menu.addActions([new_action, self.open_action])
+        self._file_menu.addMenu(recent_menu)
+        self._file_menu.addSeparator()
+        self._file_menu.addActions([save_action, save_as_action])
+        self._file_menu.addSeparator()
+        self._file_menu.addMenu(import_menu)
+        self._file_menu.addMenu(export_menu)
+        self._file_menu.addSeparator()
+        self._file_menu.addActions([quit_action])
 
         self._build_edit_menu()
         self._build_view_menu()
@@ -198,25 +225,34 @@ class MainWindow(QtWidgets.QMainWindow):
         self._build_help_menu()
 
         theme_menu = self._view_menu.addMenu("Theme")
+        self._theme_menu = theme_menu
         self._theme_group = QtWidgets.QActionGroup(self)
         self._theme_group.setExclusive(True)
+        current_theme = get_theme_name()
         for name in THEMES.keys():
             label = name.capitalize()
             action = QtWidgets.QAction(label, self)
             action.setCheckable(True)
             action.setData(name)
-            if name == "current":
+            if name == current_theme:
                 action.setChecked(True)
             action.triggered.connect(self._on_theme_selected)
             self._theme_group.addAction(action)
             theme_menu.addAction(action)
 
-        menubar.addMenu(self._file_menu)
-        menubar.addMenu(self._edit_menu)
-        menubar.addMenu(self._view_menu)
-        menubar.addMenu(self._prefs_menu)
-        menubar.addMenu(self._calib_menu)
-        menubar.addMenu(self._help_menu)
+        self._theme_menu_separator = theme_menu.addSeparator()
+
+        customize_action = QtWidgets.QAction("Customize Theme...", self)
+        customize_action.triggered.connect(self._open_theme_editor)
+        theme_menu.addAction(customize_action)
+
+        load_action = QtWidgets.QAction("Load Theme...", self)
+        load_action.triggered.connect(self._load_theme_from_file)
+        theme_menu.addAction(load_action)
+
+        save_action = QtWidgets.QAction("Save Current Theme...", self)
+        save_action.triggered.connect(self._save_theme_to_file)
+        theme_menu.addAction(save_action)
 
         for menu in (
             self._file_menu,
@@ -226,6 +262,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._calib_menu,
             self._help_menu,
         ):
+            menubar.addMenu(menu)
             for action in menu.actions():
                 self.addAction(action)
 
@@ -283,9 +320,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         layout.addWidget(self._topbar_separator())
 
-        self._save_btn = self._top_icon_btn(self._save_icon(), "Save", self._not_implemented)
-        self._undo_btn = self._top_icon_btn(self._undo_icon(), "Undo", self._not_implemented)
-        self._redo_btn = self._top_icon_btn(self._redo_icon(), "Redo", self._not_implemented)
+        self._save_btn = self._top_icon_btn(self._save_icon(), "Save", self._save_project)
+        self._undo_btn = self._top_icon_btn(self._undo_icon(), "Undo", self._undo)
+        self._redo_btn = self._top_icon_btn(self._redo_icon(), "Redo", self._redo)
         layout.addWidget(self._save_btn)
         layout.addWidget(self._undo_btn)
         layout.addWidget(self._redo_btn)
@@ -331,81 +368,104 @@ class MainWindow(QtWidgets.QMainWindow):
         self._print_btn.clicked.connect(self.print_current_model)
         panel_layout.addWidget(self._print_btn)
 
+    def _build_shortcut_actions(self):
+        self._slice_action = QtWidgets.QAction(self)
+        self._slice_action.setShortcut(shortcut_key("slice_plate"))
+        self._slice_action.triggered.connect(self.slice_current_model)
+        self.addAction(self._slice_action)
+
+        self._print_action = QtWidgets.QAction(self)
+        self._print_action.setShortcut(shortcut_key("print_plate"))
+        self._print_action.triggered.connect(self.print_current_model)
+        self.addAction(self._print_action)
+
+        self._switch_tab_action = QtWidgets.QAction(self)
+        self._switch_tab_action.setShortcut(shortcut_key("switch_table_page"))
+        self._switch_tab_action.triggered.connect(self._switch_mode_tab)
+        self.addAction(self._switch_tab_action)
+
+        self._3dconnexion_action = QtWidgets.QAction(self)
+        self._3dconnexion_action.setShortcut(shortcut_key("show_3dconnexion"))
+        self._3dconnexion_action.triggered.connect(self._not_implemented)
+        self.addAction(self._3dconnexion_action)
+
         self._position_action_panel()
         self._apply_action_panel_theme()
 
     def _build_edit_menu(self):
-        undo_action = QtWidgets.QAction("Undo", self)
-        undo_action.setShortcut("Ctrl+Z")
-        undo_action.triggered.connect(self._not_implemented)
+        undo_action = QtWidgets.QAction(shortcut_label("undo"), self)
+        undo_action.setShortcut(shortcut_key("undo"))
+        undo_action.triggered.connect(self._undo)
         self._edit_menu.addAction(undo_action)
+        self._undo_action = undo_action
 
-        redo_action = QtWidgets.QAction("Redo", self)
-        redo_action.setShortcut("Ctrl+Y")
-        redo_action.triggered.connect(self._not_implemented)
+        redo_action = QtWidgets.QAction(shortcut_label("redo"), self)
+        redo_action.setShortcut(shortcut_key("redo"))
+        redo_action.triggered.connect(self._redo)
         self._edit_menu.addAction(redo_action)
+        self._redo_action = redo_action
 
         self._edit_menu.addSeparator()
 
-        cut_action = QtWidgets.QAction("Cut", self)
-        cut_action.setShortcut("Ctrl+X")
-        cut_action.triggered.connect(self._not_implemented)
+        cut_action = QtWidgets.QAction(shortcut_label("cut"), self)
+        cut_action.setShortcut(shortcut_key("cut"))
+        cut_action.triggered.connect(self._cut_selected)
         self._edit_menu.addAction(cut_action)
 
-        copy_action = QtWidgets.QAction("Copy", self)
-        copy_action.setShortcut("Ctrl+C")
-        copy_action.triggered.connect(self._not_implemented)
+        copy_action = QtWidgets.QAction(shortcut_label("copy"), self)
+        copy_action.setShortcut(shortcut_key("copy"))
+        copy_action.triggered.connect(self._copy_selected)
         self._edit_menu.addAction(copy_action)
 
-        paste_action = QtWidgets.QAction("Paste", self)
-        paste_action.setShortcut("Ctrl+V")
-        paste_action.triggered.connect(self._not_implemented)
+        paste_action = QtWidgets.QAction(shortcut_label("paste"), self)
+        paste_action.setShortcut(shortcut_key("paste"))
+        paste_action.triggered.connect(self._paste_clipboard)
         self._edit_menu.addAction(paste_action)
 
-        delete_selected_action = QtWidgets.QAction("Delete Selected", self)
-        delete_selected_action.setShortcut("Del")
+        delete_selected_action = QtWidgets.QAction(shortcut_label("delete_selected"), self)
+        delete_selected_action.setShortcut(shortcut_key("delete_selected"))
         delete_selected_action.triggered.connect(self._delete_selected_model)
         self._edit_menu.addAction(delete_selected_action)
 
-        delete_all_action = QtWidgets.QAction("Delete All", self)
-        delete_all_action.setShortcut("Ctrl+D")
+        delete_all_action = QtWidgets.QAction(shortcut_label("delete_all"), self)
+        delete_all_action.setShortcut(shortcut_key("delete_all"))
         delete_all_action.triggered.connect(self._clear_all_models)
         self._edit_menu.addAction(delete_all_action)
 
-        clone_action = QtWidgets.QAction("Clone Selected", self)
-        clone_action.setShortcut("Ctrl+K")
-        clone_action.triggered.connect(self._not_implemented)
+        clone_action = QtWidgets.QAction(shortcut_label("clone_selected"), self)
+        clone_action.setShortcut(shortcut_key("clone_selected"))
+        clone_action.triggered.connect(self._clone_selected)
         self._edit_menu.addAction(clone_action)
 
         self._edit_menu.addSeparator()
 
-        select_all_action = QtWidgets.QAction("Select All", self)
-        select_all_action.setShortcut("Ctrl+A")
-        select_all_action.triggered.connect(self._not_implemented)
+        select_all_action = QtWidgets.QAction(shortcut_label("select_all"), self)
+        select_all_action.setShortcut(shortcut_key("select_all"))
+        select_all_action.triggered.connect(self._select_all_models)
         self._edit_menu.addAction(select_all_action)
 
-        deselect_action = QtWidgets.QAction("Deselect All", self)
-        deselect_action.setShortcut("Esc")
+        deselect_action = QtWidgets.QAction(shortcut_label("deselect_all"), self)
+        deselect_action.setShortcut(shortcut_key("deselect_all"))
         deselect_action.triggered.connect(self._deselect_all_models)
         self._edit_menu.addAction(deselect_action)
 
     def _build_view_menu(self):
-        default_view = QtWidgets.QAction("Default View", self)
-        default_view.setShortcut("Ctrl+0")
+        default_view = QtWidgets.QAction(shortcut_label("view_default"), self)
+        default_view.setShortcut(shortcut_key("view_default"))
         default_view.triggered.connect(self.viewer.reset_view)
         self._view_menu.addAction(default_view)
 
         view_actions = [
-            ("Top", "Ctrl+1", (0.0, 90.0)),
-            ("Bottom", "Ctrl+2", (0.0, -90.0)),
-            ("Front", "Ctrl+3", (90.0, 0.0)),
-            ("Rear", "Ctrl+4", (-90.0, 0.0)),
-            ("Left", "Ctrl+5", (180.0, 0.0)),
-            ("Right", "Ctrl+6", (0.0, 0.0)),
+            ("view_top", (0.0, 90.0)),
+            ("view_bottom", (0.0, -90.0)),
+            ("view_front", (90.0, 0.0)),
+            ("view_rear", (-90.0, 0.0)),
+            ("view_left", (180.0, 0.0)),
+            ("view_right", (0.0, 0.0)),
         ]
-        for label, shortcut, (az, el) in view_actions:
-            action = QtWidgets.QAction(label, self)
-            action.setShortcut(shortcut)
+        for action_id, (az, el) in view_actions:
+            action = QtWidgets.QAction(shortcut_label(action_id), self)
+            action.setShortcut(shortcut_key(action_id))
             action.triggered.connect(lambda _=False, a=az, e=el: self._set_view_preset(a, e))
             self._view_menu.addAction(action)
 
@@ -446,18 +506,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._view_menu.addSeparator()
 
-        labels_action = QtWidgets.QAction("Show Labels", self)
-        labels_action.setShortcut("Ctrl+E")
-        labels_action.triggered.connect(self._not_implemented)
+        labels_action = QtWidgets.QAction(shortcut_label("show_labels"), self)
+        labels_action.setShortcut(shortcut_key("show_labels"))
+        labels_action.setCheckable(True)
+        labels_action.setChecked(False)
+        labels_action.toggled.connect(self._set_labels_visible)
         self._view_menu.addAction(labels_action)
+        self._labels_action = labels_action
 
         overhang_action = QtWidgets.QAction("Show Overhang", self)
         overhang_action.triggered.connect(self._not_implemented)
         self._view_menu.addAction(overhang_action)
 
     def _build_prefs_menu(self):
-        prefs_action = QtWidgets.QAction("Printer Preferences", self)
-        prefs_action.setShortcut("Ctrl+P")
+        prefs_action = QtWidgets.QAction(shortcut_label("preferences"), self)
+        prefs_action.setShortcut(shortcut_key("preferences"))
         prefs_action.triggered.connect(self._show_settings_panel)
         self._prefs_menu.addAction(prefs_action)
 
@@ -482,7 +545,11 @@ class MainWindow(QtWidgets.QMainWindow):
             "Check for Updates",
         ):
             action = QtWidgets.QAction(label, self)
-            action.triggered.connect(self._not_implemented)
+            if label == "Keyboard Shortcuts":
+                action.setShortcut(shortcut_key("show_shortcuts"))
+                action.triggered.connect(self._show_shortcuts_dialog)
+            else:
+                action.triggered.connect(self._not_implemented)
             self._help_menu.addAction(action)
 
         self._help_menu.addSeparator()
@@ -535,24 +602,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sync_popups()
 
     def _on_model_remove(self, model_id: int):
-        self.viewer.remove_model(model_id)
-        self.model_panel.remove_model(model_id)
-
-        if self.current_model_id == model_id:
-            remaining = self.viewer.get_model_ids()
-            self.current_model_id = remaining[0] if remaining else None
-            self.viewer.set_selected_model(self.current_model_id)
-
-        self.statusBar().showMessage("Model removed")
-        self._sync_popups()
+        self._remove_models([model_id])
 
     def _clear_all_models(self):
-        self.viewer.clear_all_models()
-        self.model_panel.list_widget.clear()
-        self.current_model_id = None
-        self.viewer.set_selected_model(None)
+        model_ids = self.viewer.get_model_ids()
+        if not model_ids:
+            self.current_model_id = None
+            self.viewer.set_selected_model(None)
+            self.model_panel.list_widget.clearSelection()
+            self._sync_popups()
+            return
+        self._remove_models(model_ids)
         self.statusBar().showMessage("Cleared all models")
-        self._sync_popups()
 
     # ------------------------------------------------------------ transforms (toolbar -> viewer)
     def _enable_move_gizmo(self):
@@ -591,6 +652,7 @@ class MainWindow(QtWidgets.QMainWindow):
             offset_xyz=m["offset"],
         )
         self.statusBar().showMessage(f"Scale applied: {new_scale:.3f}")
+        self._schedule_undo_snapshot()
 
     def _lay_on_face(self):
         if self.current_model_id is None:
@@ -601,6 +663,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "Lay on Face", "Unable to orient model.")
             return
         self._sync_popups()
+        self._schedule_undo_snapshot()
 
     # ------------------------------------------------------------ transforms (viewer -> panel)
     def _on_viewer_model_picked(self, model_id: int):
@@ -631,6 +694,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.statusBar().showMessage(f"Moved model {model_id}: x={x:.2f} y={y:.2f}")
         self._sync_popups()
+        self._schedule_undo_snapshot()
 
     def _on_viewer_model_rotated(self, model_id: int, x: float, y: float, z: float):
         if self.current_model_id != model_id:
@@ -638,6 +702,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.viewer.set_selected_model(model_id)
         self.statusBar().showMessage(f"Rotated model {model_id}: x={x:.2f} y={y:.2f} z={z:.2f}")
         self._sync_popups()
+        self._schedule_undo_snapshot()
 
     # ------------------------------------------------------------- async load
     def _add_model_from_path_async(self, path: str):
@@ -666,6 +731,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.viewer.set_selected_model(model_id)
 
             self.statusBar().showMessage(f"Loaded {payload['name']}")
+            self._push_undo_state()
 
         def on_err(msg):
             dlg.close()
@@ -894,29 +960,164 @@ class MainWindow(QtWidgets.QMainWindow):
         if name:
             set_theme(str(name))
             self._apply_theme()
+            self._set_theme_checked(str(name))
+
+    def _set_theme_checked(self, name: str):
+        if not hasattr(self, "_theme_group"):
+            return
+        for action in self._theme_group.actions():
+            if action.data() == name:
+                action.setChecked(True)
+                break
+
+    def _ensure_theme_action(self, name: str):
+        if not hasattr(self, "_theme_group"):
+            return None
+        for action in self._theme_group.actions():
+            if action.data() == name:
+                return action
+        if not hasattr(self, "_theme_menu"):
+            return None
+        label = name.capitalize()
+        action = QtWidgets.QAction(label, self)
+        action.setCheckable(True)
+        action.setData(name)
+        action.triggered.connect(self._on_theme_selected)
+        self._theme_group.addAction(action)
+        if hasattr(self, "_theme_menu_separator") and self._theme_menu_separator is not None:
+            self._theme_menu.insertAction(self._theme_menu_separator, action)
+        else:
+            self._theme_menu.addAction(action)
+        return action
+
+    def _open_theme_editor(self):
+        theme = export_theme()
+        if theme is None:
+            QtWidgets.QMessageBox.warning(self, "Theme", "No theme data available.")
+            return
+
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Customize Theme")
+        dlg.setModal(True)
+
+        layout = QtWidgets.QVBoxLayout(dlg)
+        editor = QtWidgets.QTextEdit(dlg)
+        editor.setPlainText(json.dumps(theme, indent=2, ensure_ascii=True))
+        layout.addWidget(editor)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Apply | QtWidgets.QDialogButtonBox.Close,
+            parent=dlg,
+        )
+        layout.addWidget(buttons)
+
+        def apply_changes():
+            try:
+                data = json.loads(editor.toPlainText())
+            except json.JSONDecodeError as exc:
+                QtWidgets.QMessageBox.warning(self, "Theme", f"Invalid JSON: {exc}")
+                return
+            theme_data = register_theme("custom", data)
+            if theme_data is None:
+                QtWidgets.QMessageBox.warning(self, "Theme", "Theme data must be a JSON object.")
+                return
+            set_theme("custom")
+            self._apply_theme()
+            self._ensure_theme_action("custom")
+            self._set_theme_checked("custom")
+            self.statusBar().showMessage("Custom theme applied")
+
+        buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(apply_changes)
+        buttons.rejected.connect(dlg.close)
+
+        dlg.resize(720, 560)
+        dlg.exec_()
+
+    def _load_theme_from_file(self):
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Load Theme",
+            "",
+            "Theme JSON (*.json);;All files (*.*)",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "Theme", str(exc))
+            return
+
+        theme_name = os.path.splitext(os.path.basename(path))[0]
+        theme_payload = data
+        if isinstance(data, dict) and "theme" in data:
+            theme_payload = data.get("theme")
+            name_value = data.get("name")
+            if isinstance(name_value, str) and name_value:
+                theme_name = name_value
+
+        theme_data = register_theme(theme_name, theme_payload)
+        if theme_data is None:
+            QtWidgets.QMessageBox.warning(self, "Theme", "Theme data must be a JSON object.")
+            return
+        set_theme(theme_name)
+        self._apply_theme()
+        self._ensure_theme_action(theme_name)
+        self._set_theme_checked(theme_name)
+        self.statusBar().showMessage(f"Loaded theme: {theme_name}")
+
+    def _save_theme_to_file(self):
+        theme = export_theme()
+        if theme is None:
+            QtWidgets.QMessageBox.warning(self, "Theme", "No theme data available.")
+            return
+        default_name = f"{get_theme_name()}.json"
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save Theme",
+            default_name,
+            "Theme JSON (*.json);;All files (*.*)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path = f"{path}.json"
+        payload = {"name": get_theme_name(), "theme": theme}
+        try:
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, indent=2, ensure_ascii=True)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "Theme", str(exc))
+            return
+        self.statusBar().showMessage(f"Saved theme to {path}")
 
     def _on_transform_position_changed(self, x: float, y: float, z: float):
         if self.current_model_id is None:
             return
         self.viewer.set_model_transform(self.current_model_id, offset_xyz=(x, y, z))
+        self._schedule_undo_snapshot()
 
     def _on_transform_rotation_changed(self, x: float, y: float, z: float):
         if self.current_model_id is None:
             return
         self.viewer.set_model_transform(self.current_model_id, rotation_xyz=(x, y, z))
         self._sync_popups()
+        self._schedule_undo_snapshot()
 
     def _on_transform_rotation_reset(self):
         if self.current_model_id is None:
             return
         self.viewer.set_model_transform(self.current_model_id, rotation_xyz=(0.0, 0.0, 0.0))
         self._sync_popups()
+        self._schedule_undo_snapshot()
 
     def _on_transform_center_requested(self):
         if self.current_model_id is None:
             return
         self.viewer.set_model_transform(self.current_model_id, offset_xyz=(0.0, 0.0, 0.0))
         self._sync_popups()
+        self._schedule_undo_snapshot()
 
     def _on_transform_scale_changed(self, x: float, y: float, z: float):
         if self.current_model_id is None:
@@ -928,6 +1129,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.viewer.set_model_transform(self.current_model_id, scale=scale, offset_xyz=m["offset"])
         self._sync_popups()
+        self._schedule_undo_snapshot()
 
     def _on_auto_orient_requested(self, mode: str):
         _ = mode
@@ -952,6 +1154,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "Arrange", "Unable to arrange models.")
             return
         self._sync_popups()
+        self._push_undo_state()
 
     def _on_arrange_selected_requested(self):
         if self.current_model_id is None:
@@ -968,20 +1171,580 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "Arrange", "Unable to arrange model.")
             return
         self._sync_popups()
+        self._push_undo_state()
 
     def _on_arrange_reset(self):
         self._sync_popups()
 
     def _new_project(self):
+        self._current_project_path = None
         self._clear_all_models()
 
     def _not_implemented(self):
         QtWidgets.QMessageBox.information(self, "Not implemented", "This feature is not implemented yet.")
 
-    def _delete_selected_model(self):
-        if self.current_model_id is None:
+    def _save_project(self):
+        if self._current_project_path:
+            self._write_project_file(self._current_project_path)
             return
-        self._on_model_remove(self.current_model_id)
+        self._save_project_as()
+
+    def _save_project_as(self):
+        suggested = self._current_project_path or ""
+        if not suggested:
+            stl_path = self._get_current_stl_path()
+            if stl_path:
+                base = os.path.splitext(os.path.basename(stl_path))[0]
+                suggested = os.path.join(os.path.dirname(stl_path), f"{base}.osproj")
+        out_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save Project",
+            suggested,
+            "OpenSlicer Project (*.osproj);;All files (*.*)",
+        )
+        if not out_path:
+            return
+        if not out_path.lower().endswith(".osproj"):
+            out_path = f"{out_path}.osproj"
+        self._write_project_file(out_path)
+
+    def _open_project(self):
+        start_dir = ""
+        if self._current_project_path:
+            start_dir = os.path.dirname(self._current_project_path)
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Open Project",
+            start_dir,
+            "OpenSlicer Project (*.osproj);;All files (*.*)",
+        )
+        if not path:
+            return
+        self._load_project_file(path)
+
+    def _write_project_file(self, path: str):
+        payload = self._serialize_project()
+        try:
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, indent=2, ensure_ascii=True)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Save error", str(exc))
+            return
+        self._current_project_path = path
+        self.statusBar().showMessage(f"Saved project to {path}")
+
+    def _load_project_file(self, path: str):
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Open error", str(exc))
+            return
+        self._current_project_path = path
+        base_dir = os.path.dirname(path)
+        self._load_project_data(data, base_dir)
+        self.statusBar().showMessage(f"Loaded project from {path}")
+
+    def _load_project_data(self, data: dict, base_dir: str):
+        if not isinstance(data, dict):
+            QtWidgets.QMessageBox.warning(self, "Open error", "Invalid project file.")
+            return
+
+        if "settings" in data:
+            self.settings_panel.apply_settings(data.get("settings") or {})
+
+        models = data.get("models", [])
+        if not isinstance(models, list):
+            QtWidgets.QMessageBox.warning(self, "Open error", "Project models list is invalid.")
+            return
+
+        missing = []
+        new_ids = []
+
+        self._undo_in_progress = True
+        try:
+            lw = self.model_panel.list_widget
+            block = lw.blockSignals(True)
+            try:
+                self.viewer.clear_all_models()
+                self.model_panel.list_widget.clear()
+                for entry in models:
+                    if not isinstance(entry, dict):
+                        continue
+                    name = entry.get("name", "")
+                    model_path = entry.get("path", "")
+                    vertices = entry.get("vertices")
+                    faces = entry.get("faces")
+
+                    resolved_path = model_path
+                    if model_path and base_dir and not os.path.isabs(model_path):
+                        resolved_path = os.path.join(base_dir, model_path)
+
+                    use_path = bool(resolved_path and os.path.exists(resolved_path))
+                    if use_path:
+                        try:
+                            mesh = trimesh.load(resolved_path, force="mesh")
+                            if isinstance(mesh, trimesh.Scene):
+                                mesh = trimesh.util.concatenate(mesh.dump())
+                            elif not isinstance(mesh, trimesh.Trimesh):
+                                mesh = trimesh.util.concatenate(mesh)  # type: ignore[arg-type]
+                            vertices = np.array(mesh.vertices, dtype=float)
+                            faces = np.array(mesh.faces, dtype=int)
+                        except Exception:
+                            use_path = False
+
+                    if not use_path:
+                        if vertices is None or faces is None:
+                            missing.append(model_path or name or "Unnamed model")
+                            continue
+                    model_id = self.viewer.add_model_from_data(
+                        name,
+                        resolved_path if use_path else model_path,
+                        vertices,
+                        faces,
+                    )
+                    self.model_panel.add_model(name, model_id)
+
+                    self.viewer.set_model_transform(
+                        model_id,
+                        scale=entry.get("scale"),
+                        rotation_xyz=entry.get("rotation"),
+                        offset_xyz=entry.get("offset"),
+                    )
+                    new_ids.append(model_id)
+            finally:
+                lw.blockSignals(block)
+        finally:
+            self._undo_in_progress = False
+
+        selected_index = data.get("selected_index")
+        selected_id = None
+        if new_ids:
+            if isinstance(selected_index, int) and 0 <= selected_index < len(new_ids):
+                selected_id = new_ids[selected_index]
+            else:
+                selected_id = new_ids[-1]
+        self.current_model_id = selected_id
+        self.viewer.set_selected_model(selected_id)
+        if selected_id is not None:
+            self._select_model_in_panel(selected_id)
+        else:
+            self.model_panel.list_widget.clearSelection()
+        self._sync_popups()
+
+        self._undo_stack.clear()
+        self._redo_stack.clear()
+        self._push_undo_state()
+
+        if missing:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Open warning",
+                "Some models could not be loaded:\n" + "\n".join(missing),
+            )
+
+    def _serialize_project(self) -> dict:
+        models = []
+        for m in self.viewer.models.values():
+            scale = self._scale_to_vec(m.get("scale", 1.0))
+            rotation = self._vec3(m.get("rotation", [0.0, 0.0, 0.0]))
+            offset = self._vec3(m.get("offset", [0.0, 0.0, 0.0]))
+            entry = {
+                "name": m.get("name", ""),
+                "path": m.get("path", ""),
+                "scale": [float(v) for v in scale],
+                "rotation": [float(v) for v in rotation],
+                "offset": [float(v) for v in offset],
+            }
+            if not entry["path"]:
+                entry["vertices"] = np.asarray(m.get("base_vertices", []), dtype=float).tolist()
+                entry["faces"] = np.asarray(m.get("faces", []), dtype=int).tolist()
+            models.append(entry)
+
+        settings = self.settings_panel.to_settings()
+        return {
+            "version": 1,
+            "models": models,
+            "settings": asdict(settings),
+            "selected_index": self._selected_model_index(),
+        }
+
+    def _set_labels_visible(self, visible: bool):
+        self._labels_visible = bool(visible)
+        self.viewer.set_labels_visible(self._labels_visible)
+        state = "on" if self._labels_visible else "off"
+        self.statusBar().showMessage(f"Labels {state}")
+
+    def _switch_mode_tab(self):
+        if not hasattr(self, "_mode_tabs"):
+            return
+        enabled_tabs = [btn for btn in self._mode_tabs if btn.isEnabled()]
+        if not enabled_tabs:
+            return
+        current_idx = 0
+        for idx, btn in enumerate(enabled_tabs):
+            if btn.isChecked():
+                current_idx = idx
+                break
+        next_idx = (current_idx + 1) % len(enabled_tabs)
+        enabled_tabs[next_idx].setChecked(True)
+
+    def _show_shortcuts_dialog(self):
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Keyboard Shortcuts")
+        dlg.setModal(True)
+        layout = QtWidgets.QVBoxLayout(dlg)
+
+        tabs = QtWidgets.QTabWidget(dlg)
+        grouped = shortcuts_by_category()
+        for category, items in grouped.items():
+            table = QtWidgets.QTableWidget(len(items), 2, tabs)
+            table.setHorizontalHeaderLabels(["Shortcut", "Description"])
+            table.verticalHeader().setVisible(False)
+            table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+            table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+            for row, item in enumerate(items):
+                table.setItem(row, 0, QtWidgets.QTableWidgetItem(item.keys))
+                table.setItem(row, 1, QtWidgets.QTableWidgetItem(item.label))
+            table.horizontalHeader().setStretchLastSection(True)
+            tabs.addTab(table, category)
+
+        layout.addWidget(tabs)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.addStretch(1)
+        close_btn = QtWidgets.QPushButton("Close", dlg)
+        close_btn.clicked.connect(dlg.close)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+        dlg.resize(760, 520)
+        dlg.exec_()
+
+    def _select_all_models(self):
+        lw = self.model_panel.list_widget
+        if lw.count() == 0:
+            return
+        lw.selectAll()
+        item = lw.currentItem() or lw.item(0)
+        if item is None:
+            return
+        model_id = item.data(QtCore.Qt.UserRole)
+        self.current_model_id = model_id
+        self.viewer.set_selected_model(model_id)
+        self.statusBar().showMessage("Selected all models")
+
+    def _selected_model_ids(self):
+        lw = self.model_panel.list_widget
+        selected = []
+        for row in range(lw.count()):
+            item = lw.item(row)
+            if item is not None and item.isSelected():
+                selected.append(item.data(QtCore.Qt.UserRole))
+        if not selected and self.current_model_id is not None:
+            selected.append(self.current_model_id)
+        return selected
+
+    def _copy_selected(self):
+        model_ids = self._selected_model_ids()
+        if not model_ids:
+            return
+        payloads = self._capture_models_payload(model_ids)
+        if not payloads:
+            return
+        self._model_clipboard = payloads
+        self.statusBar().showMessage(f"Copied {len(payloads)} model(s)")
+
+    def _cut_selected(self):
+        model_ids = self._selected_model_ids()
+        if not model_ids:
+            return
+        payloads = self._capture_models_payload(model_ids)
+        if not payloads:
+            return
+        self._model_clipboard = payloads
+        self._remove_models(model_ids)
+        self.statusBar().showMessage(f"Cut {len(payloads)} model(s)")
+
+    def _paste_clipboard(self):
+        if not self._model_clipboard:
+            return
+        new_ids = self._apply_model_payloads(self._model_clipboard, offset_step=(10.0, 10.0, 0.0))
+        if new_ids:
+            self._push_undo_state()
+            self.statusBar().showMessage(f"Pasted {len(new_ids)} model(s)")
+
+    def _clone_selected(self):
+        model_ids = self._selected_model_ids()
+        if not model_ids:
+            return
+        payloads = self._capture_models_payload(model_ids)
+        if not payloads:
+            return
+        new_ids = self._apply_model_payloads(payloads, offset_step=(10.0, 10.0, 0.0))
+        if new_ids:
+            self._push_undo_state()
+            self.statusBar().showMessage(f"Cloned {len(new_ids)} model(s)")
+
+    def _capture_models_payload(self, model_ids):
+        payloads = []
+        for model_id in model_ids:
+            payload = self._capture_model_payload(model_id)
+            if payload is not None:
+                payloads.append(payload)
+        return payloads
+
+    def _capture_model_payload(self, model_id: int):
+        m = self.viewer.models.get(model_id)
+        if not m:
+            return None
+        return {
+            "name": m.get("name", f"Model {model_id}"),
+            "path": m.get("path", ""),
+            "base_vertices": np.asarray(m.get("base_vertices", []), dtype=float).copy(),
+            "faces": np.asarray(m.get("faces", []), dtype=int).copy(),
+            "scale": self._scale_to_vec(m.get("scale", 1.0)),
+            "rotation": self._vec3(m.get("rotation", [0.0, 0.0, 0.0])),
+            "offset": self._vec3(m.get("offset", [0.0, 0.0, 0.0])),
+        }
+
+    def _apply_model_payloads(self, payloads, offset_step=(0.0, 0.0, 0.0)):
+        if not payloads:
+            return []
+        new_ids = []
+        for idx, payload in enumerate(payloads):
+            model_id = self.viewer.add_model_from_data(
+                payload["name"],
+                payload["path"],
+                payload["base_vertices"],
+                payload["faces"],
+            )
+            delta = np.array(offset_step, dtype=float) * float(idx + 1)
+            offset = np.array(payload["offset"], dtype=float) + delta
+            self.viewer.set_model_transform(
+                model_id,
+                scale=payload["scale"],
+                rotation_xyz=payload["rotation"],
+                offset_xyz=offset,
+            )
+            self.model_panel.add_model(payload["name"], model_id)
+            new_ids.append(model_id)
+        if new_ids:
+            self._select_model_in_panel(new_ids[-1])
+            self.current_model_id = new_ids[-1]
+            self.viewer.set_selected_model(new_ids[-1])
+            self._sync_popups()
+        return new_ids
+
+    def _remove_models(self, model_ids):
+        model_ids = [mid for mid in model_ids if mid in self.viewer.models]
+        if not model_ids:
+            return
+        lw = self.model_panel.list_widget
+        block = lw.blockSignals(True)
+        try:
+            for model_id in model_ids:
+                self.viewer.remove_model(model_id)
+                self.model_panel.remove_model(model_id)
+        finally:
+            lw.blockSignals(block)
+
+        remaining = self.viewer.get_model_ids()
+        self.current_model_id = remaining[0] if remaining else None
+        self.viewer.set_selected_model(self.current_model_id)
+        if self.current_model_id is not None:
+            self._select_model_in_panel(self.current_model_id)
+        else:
+            self.model_panel.list_widget.clearSelection()
+        if len(model_ids) == 1:
+            self.statusBar().showMessage("Model removed")
+        else:
+            self.statusBar().showMessage(f"Removed {len(model_ids)} models")
+        self._sync_popups()
+        self._push_undo_state()
+
+    def _select_model_in_panel(self, model_id: int):
+        lw = self.model_panel.list_widget
+        block = lw.blockSignals(True)
+        try:
+            for row in range(lw.count()):
+                item = lw.item(row)
+                if item is None:
+                    continue
+                if item.data(QtCore.Qt.UserRole) == model_id:
+                    lw.setCurrentItem(item)
+                    break
+        finally:
+            lw.blockSignals(block)
+
+    def _selected_model_index(self):
+        model_ids = list(self.viewer.models.keys())
+        if self.current_model_id in model_ids:
+            return model_ids.index(self.current_model_id)
+        return None
+
+    def _vec3(self, value, default=(0.0, 0.0, 0.0)) -> np.ndarray:
+        if value is None:
+            return np.array(default, dtype=float)
+        try:
+            arr = np.asarray(value, dtype=float).reshape(-1)
+        except Exception:
+            return np.array(default, dtype=float)
+        if arr.size != 3:
+            return np.array(default, dtype=float)
+        return arr.astype(float)
+
+    def _scale_to_vec(self, scale) -> np.ndarray:
+        if isinstance(scale, np.ndarray):
+            arr = scale.astype(float).reshape(-1)
+            if arr.size == 3:
+                return arr
+            if arr.size == 1:
+                val = float(arr[0])
+                return np.array([val, val, val], dtype=float)
+        if isinstance(scale, (list, tuple)) and len(scale) == 3:
+            return np.array([float(scale[0]), float(scale[1]), float(scale[2])], dtype=float)
+        try:
+            val = float(scale)
+        except Exception:
+            val = 1.0
+        return np.array([val, val, val], dtype=float)
+
+    def _capture_state(self):
+        model_ids = list(self.viewer.models.keys())
+        selected_index = self._selected_model_index()
+        payloads = self._capture_models_payload(model_ids)
+        return {
+            "models": payloads,
+            "selected_index": selected_index,
+        }
+
+    def _state_signature(self, state) -> tuple:
+        model_sigs = []
+        for payload in state.get("models", []):
+            scale = tuple(float(v) for v in np.asarray(payload["scale"], dtype=float).reshape(-1))
+            rotation = tuple(float(v) for v in np.asarray(payload["rotation"], dtype=float).reshape(-1))
+            offset = tuple(float(v) for v in np.asarray(payload["offset"], dtype=float).reshape(-1))
+            verts_shape = np.asarray(payload["base_vertices"]).shape
+            faces_shape = np.asarray(payload["faces"]).shape
+            model_sigs.append(
+                (
+                    payload.get("name", ""),
+                    payload.get("path", ""),
+                    scale,
+                    rotation,
+                    offset,
+                    verts_shape,
+                    faces_shape,
+                )
+            )
+        return (state.get("selected_index"), tuple(model_sigs))
+
+    def _push_undo_state(self):
+        if self._undo_in_progress:
+            return
+        if self._pending_undo_snapshot:
+            self._undo_timer.stop()
+            self._pending_undo_snapshot = False
+        state = self._capture_state()
+        signature = self._state_signature(state)
+        if self._undo_stack and self._undo_stack[-1].get("signature") == signature:
+            return
+        state["signature"] = signature
+        self._undo_stack.append(state)
+        if len(self._undo_stack) > self._undo_stack_limit:
+            self._undo_stack.pop(0)
+        self._redo_stack.clear()
+        self._update_undo_redo_state()
+
+    def _schedule_undo_snapshot(self, delay_ms: int = 250):
+        if self._undo_in_progress:
+            return
+        self._pending_undo_snapshot = True
+        self._undo_timer.start(delay_ms)
+
+    def _finalize_undo_snapshot(self):
+        if not self._pending_undo_snapshot:
+            return
+        self._pending_undo_snapshot = False
+        self._push_undo_state()
+
+    def _restore_state(self, state):
+        self._undo_in_progress = True
+        try:
+            lw = self.model_panel.list_widget
+            block = lw.blockSignals(True)
+            try:
+                self.viewer.clear_all_models()
+                self.model_panel.list_widget.clear()
+                new_ids = []
+                for payload in state.get("models", []):
+                    model_id = self.viewer.add_model_from_data(
+                        payload["name"],
+                        payload["path"],
+                        payload["base_vertices"],
+                        payload["faces"],
+                    )
+                    self.model_panel.add_model(payload["name"], model_id)
+                    self.viewer.set_model_transform(
+                        model_id,
+                        scale=payload["scale"],
+                        rotation_xyz=payload["rotation"],
+                        offset_xyz=payload["offset"],
+                    )
+                    new_ids.append(model_id)
+            finally:
+                lw.blockSignals(block)
+
+            selected_index = state.get("selected_index")
+            selected_id = None
+            if new_ids:
+                if selected_index is not None and 0 <= selected_index < len(new_ids):
+                    selected_id = new_ids[selected_index]
+                else:
+                    selected_id = new_ids[-1]
+            self.current_model_id = selected_id
+            self.viewer.set_selected_model(selected_id)
+            if selected_id is not None:
+                self._select_model_in_panel(selected_id)
+            else:
+                self.model_panel.list_widget.clearSelection()
+            self._sync_popups()
+        finally:
+            self._undo_in_progress = False
+        self._update_undo_redo_state()
+
+    def _undo(self):
+        if len(self._undo_stack) <= 1:
+            return
+        current = self._undo_stack.pop()
+        self._redo_stack.append(current)
+        self._restore_state(self._undo_stack[-1])
+
+    def _redo(self):
+        if not self._redo_stack:
+            return
+        state = self._redo_stack.pop()
+        self._undo_stack.append(state)
+        self._restore_state(state)
+
+    def _update_undo_redo_state(self):
+        can_undo = len(self._undo_stack) > 1
+        can_redo = bool(self._redo_stack)
+        if hasattr(self, "_undo_action"):
+            self._undo_action.setEnabled(can_undo)
+        if hasattr(self, "_redo_action"):
+            self._redo_action.setEnabled(can_redo)
+        if hasattr(self, "_undo_btn"):
+            self._undo_btn.setEnabled(can_undo)
+        if hasattr(self, "_redo_btn"):
+            self._redo_btn.setEnabled(can_redo)
+
+    def _delete_selected_model(self):
+        model_ids = self._selected_model_ids()
+        if not model_ids:
+            return
+        self._remove_models(model_ids)
 
     def _deselect_all_models(self):
         self.current_model_id = None

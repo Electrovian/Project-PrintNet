@@ -5,6 +5,7 @@ import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from PyQt5 import QtCore, QtGui, QtWidgets
+import trimesh
 
 from .widgets.view_cube_overlay import ViewCubeOverlay
 from .theme import theme_value, theme_qcolor
@@ -36,6 +37,8 @@ class Viewer3D(gl.GLViewWidget):
         self._dragging = False
         self._drag_start_world = None
         self._drag_start_offset = None
+        self._labels_enabled = False
+        self._selection_info = None
 
         self._snap_enabled = False
         self._snap_step = 1.0
@@ -70,6 +73,7 @@ class Viewer3D(gl.GLViewWidget):
         self._build_gizmo()
         self._build_view_cube()
         self._build_rotate_hud()
+        self._build_selection_info()
 
     # -------------------- hardening --------------------
 
@@ -101,11 +105,16 @@ class Viewer3D(gl.GLViewWidget):
         self._sync_view_cube()
         return super().paintGL(*args, **kwargs)
 
+    def resizeEvent(self, ev: QtGui.QResizeEvent):
+        super().resizeEvent(ev)
+        self._position_selection_info()
+
     # -------------------- public helpers --------------------
 
     def set_selected_model(self, model_id: int | None):
         self._selected_model_id = model_id
         self._update_gizmo()
+        self._update_selection_info()
 
     def set_gizmo_mode(self, mode: str):
         self._gizmo_mode = mode
@@ -165,6 +174,7 @@ class Viewer3D(gl.GLViewWidget):
         if hasattr(self, "_view_cube") and self._view_cube is not None:
             self._view_cube.apply_theme()
         self._update_rotate_hud_style()
+        self._update_selection_info_style()
         self._update_gizmo()
 
     def _rgba_css(self, color: QtGui.QColor, alpha: int | None = None):
@@ -206,6 +216,129 @@ class Viewer3D(gl.GLViewWidget):
         if hasattr(self, "_rotate_hud") and self._rotate_hud is not None:
             self._rotate_hud.setVisible(False)
 
+    def _build_selection_info(self):
+        panel = QtWidgets.QFrame(self)
+        panel.setObjectName("SelectionInfo")
+        panel_layout = QtWidgets.QVBoxLayout(panel)
+        panel_layout.setContentsMargins(8, 6, 8, 6)
+        panel_layout.setSpacing(4)
+
+        title = QtWidgets.QLabel(panel)
+        title.setObjectName("SelectionInfoTitle")
+        title.setWordWrap(True)
+
+        details = QtWidgets.QLabel(panel)
+        details.setObjectName("SelectionInfoDetails")
+        details.setWordWrap(True)
+
+        panel_layout.addWidget(title)
+        panel_layout.addWidget(details)
+
+        self._selection_info = panel
+        self._selection_info_title = title
+        self._selection_info_details = details
+        self._update_selection_info_style()
+        panel.hide()
+
+    def _update_selection_info_style(self):
+        if not hasattr(self, "_selection_info") or self._selection_info is None:
+            return
+        bg = theme_qcolor("popup_bg")
+        border = theme_qcolor("popup_border")
+        text = theme_qcolor("popup_text")
+        muted = theme_qcolor("popup_muted_text")
+        self._selection_info.setStyleSheet(
+            "QFrame#SelectionInfo {"
+            f"background-color: {self._rgba_css(bg, 220)};"
+            f"border: 1px solid {self._rgba_css(border, 240)};"
+            "border-radius: 6px;"
+            "}"
+            "QLabel#SelectionInfoTitle {"
+            f"color: {self._rgba_css(text, 255)};"
+            "font-weight: 600;"
+            "}"
+            "QLabel#SelectionInfoDetails {"
+            f"color: {self._rgba_css(muted, 255)};"
+            "}"
+        )
+
+    def _position_selection_info(self):
+        if not hasattr(self, "_selection_info") or self._selection_info is None:
+            return
+        if not self._selection_info.isVisible():
+            return
+        margin = 12
+        self._selection_info.adjustSize()
+        x = margin
+        y = max(margin, self.height() - self._selection_info.height() - margin)
+        self._selection_info.move(x, y)
+
+    def set_labels_visible(self, visible: bool):
+        self._labels_enabled = bool(visible)
+        self._update_selection_info()
+
+    def _update_selection_info(self):
+        if not hasattr(self, "_selection_info") or self._selection_info is None:
+            return
+        if not self._labels_enabled or self._selected_model_id is None:
+            self._selection_info.setVisible(False)
+            return
+        m = self.models.get(self._selected_model_id)
+        if not m:
+            self._selection_info.setVisible(False)
+            return
+        name = (m.get("name") or "").strip() or f"Model {self._selected_model_id}"
+        path = m.get("path") or ""
+        ext = os.path.splitext(path)[1].lstrip(".").lower() if path else ""
+        ext = ext if ext else "unknown"
+
+        bounds = m.get("bounds")
+        size_line = "Size: n/a"
+        if bounds is not None:
+            mn, mx = bounds
+            size = np.abs(np.array(mx) - np.array(mn))
+            size_line = f"Size: {size[0]:.2f} x {size[1]:.2f} x {size[2]:.2f} mm"
+
+        volume = self._model_volume(m)
+        volume_line = "Volume: n/a"
+        if volume is not None:
+            volume_line = f"Volume: {volume:.2f} mm^3"
+
+        faces = m.get("faces")
+        triangles = int(len(faces)) if faces is not None else 0
+
+        self._selection_info_title.setText(f"Object name: {name}")
+        self._selection_info_details.setText(
+            "\n".join(
+                [
+                    f"Type: {ext}",
+                    size_line,
+                    volume_line,
+                    f"Triangles: {triangles}",
+                ]
+            )
+        )
+        self._selection_info.setVisible(True)
+        self._position_selection_info()
+
+    def _model_volume(self, model: dict):
+        base = model.get("base_volume")
+        if base is None:
+            try:
+                mesh = trimesh.Trimesh(vertices=model["base_vertices"], faces=model["faces"], process=False)
+                base = float(mesh.volume)
+            except Exception:
+                base = None
+            model["base_volume"] = base
+        if base is None or not np.isfinite(base):
+            return None
+        scale = self._normalize_scale(model.get("scale", 1.0))
+        factor = abs(float(scale[0] * scale[1] * scale[2]))
+        volume = abs(float(base)) * factor
+        if not np.isfinite(volume) or volume <= 0.0:
+            return None
+        return volume
+
     def reset_view(self):
         self.opts["distance"] = self._default_view["distance"] # pyright: ignore[reportArgumentType]
         self.opts["elevation"] = self._default_view["elevation"] # pyright: ignore[reportArgumentType]
@@ -235,9 +368,7 @@ class Viewer3D(gl.GLViewWidget):
 
         safe_name = (name or "").strip()
         if not safe_name:
-            safe_name = os.path.basename(path)
-        if not safe_name:
-            safe_name = f"Model {model_id}"
+            safe_name = os.path.basename(path) or f"Model {model_id}"
 
         v = np.asarray(vertices, dtype=float)
         f = np.asarray(faces, dtype=int)
@@ -252,6 +383,7 @@ class Viewer3D(gl.GLViewWidget):
             "name": safe_name,
             "base_vertices": v,
             "faces": f,
+            "base_volume": None,
             "item": None,
             "scale": 1.0,
             "rotation": np.array([0.0, 0.0, 0.0], dtype=float),
@@ -283,6 +415,7 @@ class Viewer3D(gl.GLViewWidget):
         if self._selected_model_id == model_id:
             self._selected_model_id = None
             self._update_gizmo()
+            self._update_selection_info()
         self.update()
 
     def clear_all_models(self):
@@ -415,6 +548,7 @@ class Viewer3D(gl.GLViewWidget):
         self._create_or_update_mesh_item(model_id)
         if self._selected_model_id == model_id:
             self._update_gizmo()
+            self._update_selection_info()
         self.update()
 
     # -------------------- mouse interaction --------------------

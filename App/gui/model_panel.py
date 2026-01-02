@@ -49,22 +49,15 @@ class ModelPanel(QtWidgets.QWidget):
                 break
 
     def current_model_id(self):
-        item = self.list_widget.currentItem()
-        if not item:
-            return None
-        return item.data(QtCore.Qt.UserRole)
+        return item.data(QtCore.Qt.UserRole) if (item := self.list_widget.currentItem()) else None
 
     def _on_selection_changed(self, current, previous):
-        if not current:
-            return
-        self.model_selected.emit(current.data(QtCore.Qt.UserRole))
+        if current:
+            self.model_selected.emit(current.data(QtCore.Qt.UserRole))
 
     def _on_remove_clicked(self):
-        mid = self.current_model_id()
-        if mid is not None:
+        if (mid := self.current_model_id()) is not None:
             self.request_remove.emit(mid)
 
     def _truncate_name(self, name: str) -> str:
-        if len(name) <= self.MAX_DISPLAY_NAME:
-            return name
-        return name[: self.MAX_DISPLAY_NAME - 3] + "..."
+        return name if len(name) <= self.MAX_DISPLAY_NAME else name[: self.MAX_DISPLAY_NAME - 3] + "..."

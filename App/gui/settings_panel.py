@@ -43,3 +43,16 @@ class SettingsPanel(QtWidgets.QWidget):
             infill_percent=float(self.infill_spin.value()),
             print_speed=float(self.speed_spin.value()),
         )
+
+    def apply_settings(self, settings):
+        data = {}
+        if isinstance(settings, SliceSettings):
+            data = settings.__dict__
+        elif isinstance(settings, dict):
+            data = settings
+        if "layer_height" in data:
+            self.layer_height_spin.setValue(float(data["layer_height"]))
+        if "infill_percent" in data:
+            self.infill_spin.setValue(int(data["infill_percent"]))
+        if "print_speed" in data:
+            self.speed_spin.setValue(float(data["print_speed"]))
