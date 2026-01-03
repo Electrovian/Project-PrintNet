@@ -171,24 +171,33 @@ class PreviewView(QtCore.QObject):
 
         self._timeline_panel = QtWidgets.QFrame(self.viewer)
         self._timeline_panel.setObjectName("PreviewTimeline")
-        timeline_layout = QtWidgets.QHBoxLayout(self._timeline_panel)
+        timeline_layout = QtWidgets.QVBoxLayout(self._timeline_panel)
         timeline_layout.setContentsMargins(10, 8, 10, 8)
-        timeline_layout.setSpacing(8)
+        timeline_layout.setSpacing(6)
 
+        info_row = QtWidgets.QHBoxLayout()
+        self._nozzle_info = QtWidgets.QLabel("X: --  Y: --  Z: --  Speed: --")
+        self._nozzle_info.setObjectName("PreviewNozzleInfo")
+        info_row.addWidget(self._nozzle_info)
+        info_row.addStretch(1)
+        timeline_layout.addLayout(info_row)
+
+        controls_row = QtWidgets.QHBoxLayout()
         self._play_btn = QtWidgets.QToolButton(self._timeline_panel)
         self._play_btn.setText("Play")
         self._play_btn.setObjectName("PreviewButton")
         self._play_btn.setCheckable(True)
-        timeline_layout.addWidget(self._play_btn)
+        controls_row.addWidget(self._play_btn)
 
-        timeline_layout.addWidget(QtWidgets.QLabel("Steps"))
+        controls_row.addWidget(QtWidgets.QLabel("Steps"))
         self._steps_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self._timeline_panel)
         self._steps_slider.setRange(0, 0)
-        timeline_layout.addWidget(self._steps_slider, 1)
+        controls_row.addWidget(self._steps_slider, 1)
         self._steps_spin = QtWidgets.QSpinBox(self._timeline_panel)
         self._steps_spin.setRange(0, 0)
         self._steps_spin.setFixedWidth(70)
-        timeline_layout.addWidget(self._steps_spin)
+        controls_row.addWidget(self._steps_spin)
+        timeline_layout.addLayout(controls_row)
 
         self._layer_panel = QtWidgets.QFrame(self.viewer)
         self._layer_panel.setObjectName("PreviewLayer")
@@ -255,6 +264,10 @@ class PreviewView(QtCore.QObject):
         self._line_type_combo.currentTextChanged.connect(self._on_color_mode_changed)
         self._play_btn.toggled.connect(self._on_play_toggled)
         self._line_table.itemChanged.connect(self._on_line_type_changed)
+        self._platform_check.toggled.connect(self._on_platform_toggled)
+        self._nozzle_check.toggled.connect(self._on_nozzle_toggled)
+        self._on_platform_toggled(self._platform_check.isChecked())
+        self._on_nozzle_toggled(self._nozzle_check.isChecked())
 
     def _sync_toggle_stack(self):
         if self._color_btn.isChecked():
@@ -370,6 +383,10 @@ class PreviewView(QtCore.QObject):
             "QLabel, QToolButton {"
             f"  color: {panel_text};"
             "}"
+            "QLabel#PreviewNozzleInfo {"
+            f"  color: {panel_text};"
+            "  font-weight: 600;"
+            "}"
         )
 
         self._layer_panel.setStyleSheet(
@@ -458,6 +475,7 @@ class PreviewView(QtCore.QObject):
         for panel in (self._preview_panel, self._action_panel, self._timeline_panel, self._layer_panel):
             panel.raise_()
         self.position_panels()
+        self._update_nozzle_info()
 
     def hide(self):
         self._preview_panel.hide()
@@ -469,12 +487,14 @@ class PreviewView(QtCore.QObject):
         if hasattr(self.viewer, "set_preview_layer_index"):
             self.viewer.set_preview_layer_index(int(value))
         self._update_steps_for_layer(int(value))
+        self._update_nozzle_info()
 
     def _on_step_changed(self, value: int):
         if hasattr(self.viewer, "set_preview_step_index"):
             self.viewer.set_preview_step_index(int(value))
         if self._steps_spin.value() != value:
             self._steps_spin.setValue(int(value))
+        self._update_nozzle_info()
 
     def _on_step_spin_changed(self, value: int):
         if self._steps_slider.value() != value:
@@ -504,6 +524,7 @@ class PreviewView(QtCore.QObject):
             self._play_btn.setChecked(False)
             return
         self._steps_slider.setValue(next_value)
+        self._update_nozzle_info()
 
     def set_preview_data(self, preview):
         self._preview_data = preview
@@ -512,10 +533,12 @@ class PreviewView(QtCore.QObject):
             self.set_steps_count(0)
             self._update_line_type_stats()
             self._sync_feature_filter()
+            self._update_nozzle_info()
             return
         self.set_layer_count(len(preview.layers))
         self._update_line_type_stats()
         self._sync_feature_filter()
+        self._update_nozzle_info()
 
     def _update_steps_for_layer(self, layer_index: int):
         count = 0
@@ -523,6 +546,7 @@ class PreviewView(QtCore.QObject):
             idx = max(0, min(layer_index, len(self._preview_data.layers) - 1))
             count = len(self._preview_data.layers[idx].segments)
         self.set_steps_count(count)
+        self._update_nozzle_info()
 
     def _on_line_type_changed(self, item):
         if self._line_type_updating:
@@ -595,3 +619,33 @@ class PreviewView(QtCore.QObject):
             selected = "feature"
         if hasattr(self.viewer, "set_preview_color_mode"):
             self.viewer.set_preview_color_mode(selected)
+
+    def _on_platform_toggled(self, checked: bool):
+        if hasattr(self.viewer, "set_platform_visible"):
+            self.viewer.set_platform_visible(bool(checked))
+
+    def _on_nozzle_toggled(self, checked: bool):
+        if hasattr(self.viewer, "set_nozzle_visible"):
+            self.viewer.set_nozzle_visible(bool(checked))
+
+    def sync_preview_toggles(self):
+        self._on_platform_toggled(self._platform_check.isChecked())
+        self._on_nozzle_toggled(self._nozzle_check.isChecked())
+        self._update_nozzle_info()
+
+    def _update_nozzle_info(self):
+        if not hasattr(self, "_nozzle_info") or self._nozzle_info is None:
+            return
+        if not hasattr(self.viewer, "get_preview_nozzle_state"):
+            self._nozzle_info.setText("X: --  Y: --  Z: --  Speed: --")
+            return
+        state = self.viewer.get_preview_nozzle_state()
+        if not state:
+            self._nozzle_info.setText("X: --  Y: --  Z: --  Speed: --")
+            return
+        pos, speed, is_extrude = state
+        speed_text = f"{speed:.0f}" if speed > 0 else "n/a"
+        mode = "Print" if is_extrude else "Travel"
+        self._nozzle_info.setText(
+            f"X: {pos[0]:.3f}  Y: {pos[1]:.3f}  Z: {pos[2]:.3f}  Speed: {speed_text} ({mode})"
+        )

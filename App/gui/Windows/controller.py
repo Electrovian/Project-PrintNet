@@ -1160,10 +1160,20 @@ class MainController(QtCore.QObject):
             self._central_stack.setCurrentWidget(self.viewer)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(True)
+            if hasattr(self.viewer, "set_labels_visible"):
+                self.viewer.set_labels_visible(self._labels_visible)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
                 self.viewer.set_models_visible(True)
+            if hasattr(self.viewer, "set_platform_visible"):
+                self.viewer.set_platform_visible(True)
+            if hasattr(self.viewer, "set_nozzle_visible"):
+                self.viewer.set_nozzle_visible(False)
+            if hasattr(self.viewer, "set_print_stats_visible"):
+                self.viewer.set_print_stats_visible(True)
+            if hasattr(self.viewer, "set_preview_object_visible"):
+                self.viewer.set_preview_object_visible(False)
             self._auto_slice_prepare()
             QtCore.QTimer.singleShot(0, self.prepare_view.position_panels)
         elif mode == "preview":
@@ -1172,10 +1182,18 @@ class MainController(QtCore.QObject):
             self._central_stack.setCurrentWidget(self.viewer)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_labels_visible"):
+                self.viewer.set_labels_visible(False)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(True)
             if hasattr(self.viewer, "set_models_visible"):
                 self.viewer.set_models_visible(False)
+            if hasattr(self.viewer, "set_print_stats_visible"):
+                self.viewer.set_print_stats_visible(False)
+            if hasattr(self.viewer, "set_preview_object_visible"):
+                self.viewer.set_preview_object_visible(True)
+            if hasattr(self.preview_view, "sync_preview_toggles"):
+                self.preview_view.sync_preview_toggles()
             QtCore.QTimer.singleShot(0, self.preview_view.position_panels)
         elif mode == "device":
             self.prepare_view.hide()
@@ -1187,6 +1205,10 @@ class MainController(QtCore.QObject):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
                 self.viewer.set_models_visible(False)
+            if hasattr(self.viewer, "set_print_stats_visible"):
+                self.viewer.set_print_stats_visible(False)
+            if hasattr(self.viewer, "set_preview_object_visible"):
+                self.viewer.set_preview_object_visible(False)
         else:
             return
         self._active_mode = mode

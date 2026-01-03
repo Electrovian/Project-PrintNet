@@ -45,6 +45,10 @@ class Viewer3D(gl.GLViewWidget):
         self._interaction_enabled = True
         self._print_stats_panel = None
         self._print_stats_data = None
+        self._print_stats_visible = True
+        self._preview_object_panel = None
+        self._preview_object_label = None
+        self._preview_object_visible = False
 
         self._snap_enabled = False
         self._snap_step = 1.0
@@ -85,6 +89,7 @@ class Viewer3D(gl.GLViewWidget):
         self._build_rotate_hud()
         self._build_selection_info()
         self._build_print_stats_panel()
+        self._build_preview_object_panel()
 
         self._preview_data = None
         self._preview_layer_index = None
@@ -98,6 +103,10 @@ class Viewer3D(gl.GLViewWidget):
         self._preview_step_layer = None
         self._preview_visible = False
         self._models_visible = True
+        self._platform_visible = True
+        self._nozzle_visible = False
+        self._nozzle_item = None
+        self._nozzle_mesh = None
 
     # -------------------- hardening --------------------
 
@@ -135,6 +144,8 @@ class Viewer3D(gl.GLViewWidget):
         self._selected_model_id = model_id
         self._update_gizmo()
         self._update_selection_info()
+        if self._preview_object_visible:
+            self._update_preview_object_label()
 
     def set_gizmo_mode(self, mode: str):
         self._gizmo_mode = mode
@@ -205,6 +216,7 @@ class Viewer3D(gl.GLViewWidget):
         self._update_rotate_hud_style()
         self._update_selection_info_style()
         self._update_print_stats_style()
+        self._update_preview_object_style()
         self._update_gizmo()
         self._update_preview_lines()
 
@@ -230,11 +242,50 @@ class Viewer3D(gl.GLViewWidget):
             if item is not None:
                 item.setVisible(self._models_visible)
 
+    def set_platform_visible(self, visible: bool):
+        self._platform_visible = bool(visible)
+        if getattr(self, "_grid_item", None) is not None:
+            self._grid_item.setVisible(self._platform_visible)
+        self.update()
+
+    def set_nozzle_visible(self, visible: bool):
+        self._nozzle_visible = bool(visible)
+        if self._nozzle_visible:
+            self._ensure_nozzle_item()
+            self._update_nozzle_position()
+        if self._nozzle_item is not None:
+            self._nozzle_item.setVisible(self._nozzle_visible)
+        self.update()
+
     def set_preview_visible(self, visible: bool):
         self._preview_visible = bool(visible)
         for item in self._preview_items.values():
             if item is not None:
                 item.setVisible(self._preview_visible)
+
+    def get_preview_nozzle_state(self):
+        seg = self._preview_segment_for_nozzle()
+        if seg is None:
+            return None
+        return (seg.end, float(seg.speed), bool(seg.is_extrude))
+
+    def _preview_segment_for_nozzle(self):
+        if self._preview_data is None or not getattr(self._preview_data, "layers", None):
+            return None
+        layers = self._preview_data.layers
+        layer_index = self._preview_step_layer if self._preview_step_index is not None else self._preview_layer_index
+        if layer_index is None:
+            layer_index = len(layers) - 1
+        layer_index = max(0, min(layer_index, len(layers) - 1))
+        layer = layers[layer_index]
+        segments = layer.segments
+        if not segments:
+            return None
+        if self._preview_step_index is not None:
+            idx = max(0, min(self._preview_step_index - 1, len(segments) - 1))
+        else:
+            idx = len(segments) - 1
+        return segments[idx]
 
     def clear_gcode_preview(self):
         self._preview_data = None
@@ -376,6 +427,7 @@ class Viewer3D(gl.GLViewWidget):
             for item in self._preview_items.values():
                 if item is not None:
                     item.setData(pos=np.zeros((0, 3), dtype=float))
+            self._update_nozzle_position()
             return
 
         self._ensure_preview_items()
@@ -383,6 +435,7 @@ class Viewer3D(gl.GLViewWidget):
         if layer_index is None:
             layer_index = len(self._preview_data.layers) - 1
         layer_index = max(0, min(layer_index, len(self._preview_data.layers) - 1))
+        self._update_nozzle_position(layer_index)
 
         extrude_points = []
         extrude_colors = []
@@ -442,6 +495,54 @@ class Viewer3D(gl.GLViewWidget):
                     pos=np.zeros((0, 3), dtype=float),
                     color=np.zeros((0, 4), dtype=float),
                 )
+
+    def _ensure_nozzle_item(self):
+        if self._nozzle_item is not None:
+            return
+        height = 18.0
+        radius = 4.0
+        verts, faces = self._make_cone_mesh(height, radius, 20)
+        self._nozzle_mesh = (verts, faces, height)
+        md = gl.MeshData(vertexes=verts, faces=faces)
+        color = (0.8, 0.8, 0.8, 0.7)
+        item = gl.GLMeshItem(meshdata=md, smooth=True, color=color, shader="shaded")
+        item.setGLOptions("translucent")
+        item.setVisible(self._nozzle_visible)
+        self.addItem(item)
+        self._nozzle_item = item
+
+    def _update_nozzle_position(self, layer_index: int | None = None):
+        if not self._nozzle_visible:
+            return
+        if self._nozzle_item is None or self._nozzle_mesh is None:
+            return
+        verts, faces, height = self._nozzle_mesh
+        seg = self._preview_segment_for_nozzle()
+        if seg is not None:
+            x = float(seg.end[0])
+            y = float(seg.end[1])
+            z = float(seg.end[2])
+        else:
+            x = 0.0
+            y = 0.0
+            if self._selected_model_id is not None:
+                bounds = self.get_model_bounds(self._selected_model_id)
+                if bounds is not None:
+                    mn, mx = bounds
+                    x = float((mn[0] + mx[0]) / 2.0)
+                    y = float((mn[1] + mx[1]) / 2.0)
+            z = 0.0
+            if self._preview_data is not None and getattr(self._preview_data, "layers", None):
+                if layer_index is None:
+                    layer_index = self._preview_layer_index
+                if layer_index is None:
+                    layer_index = len(self._preview_data.layers) - 1
+                if 0 <= layer_index < len(self._preview_data.layers):
+                    z = float(self._preview_data.layers[layer_index].z)
+        tip_offset = 2.0
+        offset = np.array([x, y, z + tip_offset - float(height)], dtype=float)
+        new_verts = verts + offset
+        self._nozzle_item.setMeshData(meshdata=gl.MeshData(vertexes=new_verts, faces=faces))
 
     def _rgba_css(self, color: QtGui.QColor, alpha: int | None = None):
         c = QtGui.QColor(color)
@@ -530,6 +631,23 @@ class Viewer3D(gl.GLViewWidget):
         self._update_print_stats_style()
         panel.hide()
 
+    def _build_preview_object_panel(self):
+        panel = QtWidgets.QFrame(self)
+        panel.setObjectName("PreviewObject")
+        layout = QtWidgets.QVBoxLayout(panel)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(2)
+
+        label = QtWidgets.QLabel(panel)
+        label.setObjectName("PreviewObjectLabel")
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        self._preview_object_panel = panel
+        self._preview_object_label = label
+        self._update_preview_object_style()
+        panel.hide()
+
     def _update_selection_info_style(self):
         if not hasattr(self, "_selection_info") or self._selection_info is None:
             return
@@ -574,12 +692,35 @@ class Viewer3D(gl.GLViewWidget):
             "}"
         )
 
+    def _update_preview_object_style(self):
+        if self._preview_object_panel is None:
+            return
+        bg = theme_qcolor("popup_bg")
+        border = theme_qcolor("popup_border")
+        text = theme_qcolor("popup_text")
+        self._preview_object_panel.setStyleSheet(
+            "QFrame#PreviewObject {"
+            f"background-color: {self._rgba_css(bg, 200)};"
+            f"border: 1px solid {self._rgba_css(border, 220)};"
+            "border-radius: 6px;"
+            "}"
+            "QLabel#PreviewObjectLabel {"
+            f"color: {self._rgba_css(text, 255)};"
+            "font-weight: 600;"
+            "}"
+        )
+
     def _position_selection_info(self):
         self._position_bottom_left_panels()
 
     def _position_bottom_left_panels(self):
         margin = 12
         y = self.height() - margin
+        if self._preview_object_panel is not None and self._preview_object_panel.isVisible():
+            self._preview_object_panel.adjustSize()
+            y = max(margin, y - self._preview_object_panel.height())
+            self._preview_object_panel.move(margin, y)
+            y -= margin
         if self._print_stats_panel is not None and self._print_stats_panel.isVisible():
             self._print_stats_panel.adjustSize()
             y = max(margin, y - self._print_stats_panel.height())
@@ -641,7 +782,8 @@ class Viewer3D(gl.GLViewWidget):
     def set_print_stats(self, stats: dict | None):
         if self._print_stats_panel is None:
             return
-        if not stats:
+        self._print_stats_data = stats
+        if not stats or not self._print_stats_visible:
             self._print_stats_panel.setVisible(False)
             return
         time_val = stats.get("time", "n/a")
@@ -662,6 +804,39 @@ class Viewer3D(gl.GLViewWidget):
     def clear_print_stats(self):
         if self._print_stats_panel is not None:
             self._print_stats_panel.setVisible(False)
+        self._print_stats_data = None
+
+    def set_print_stats_visible(self, visible: bool):
+        self._print_stats_visible = bool(visible)
+        if not self._print_stats_visible and self._print_stats_panel is not None:
+            self._print_stats_panel.setVisible(False)
+        if self._print_stats_visible and self._print_stats_data:
+            self.set_print_stats(self._print_stats_data)
+        self._position_bottom_left_panels()
+
+    def set_preview_object_visible(self, visible: bool):
+        self._preview_object_visible = bool(visible)
+        if self._preview_object_panel is not None:
+            self._preview_object_panel.setVisible(self._preview_object_visible)
+        if self._preview_object_visible:
+            self._update_preview_object_label()
+        self._position_bottom_left_panels()
+
+    def _update_preview_object_label(self):
+        if self._preview_object_label is None:
+            return
+        model_id = self._selected_model_id
+        if model_id is None and self.models:
+            model_id = next(iter(self.models.keys()))
+        name = "Object"
+        if model_id is not None:
+            m = self.models.get(model_id)
+            if m:
+                name = (m.get("name") or "").strip() or f"Model {model_id}"
+        self._preview_object_label.setText(f"{name}")
+        if self._preview_object_panel is not None:
+            self._preview_object_panel.adjustSize()
+        self._position_bottom_left_panels()
 
     def set_bed_limits(self, bed_size: Tuple[float, float], max_height: float):
         self._bed_size = (float(bed_size[0]), float(bed_size[1]))

@@ -23,7 +23,7 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         self._corner_radius = 6
         self.invert_x = True
         self.invert_y = True
-        self.invert_z = False
+        self.invert_z = True
         self._hover_name = None
         self._active_name = None
         self._apply_theme()
