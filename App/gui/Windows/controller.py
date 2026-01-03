@@ -1,4 +1,5 @@
 import json
+import json
 import math
 import os
 from dataclasses import asdict
@@ -10,19 +11,38 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 from ..workers import Worker
 from ..theme import export_theme, get_theme_name, register_theme, set_theme
 from config.defaults import DEFAULTS
-from slicer.slicer import slice_file
-from slicer.gcode import SliceSettings
+from slicer.slicer import slice_trimesh
+from slicer.gcode import SliceSettings, estimate_gcode_file, parse_gcode_preview_file
 
 
 class MainController(QtCore.QObject):
     def __init__(self, main_window):
         super().__init__(main_window)
         self.main = main_window
+        self.current_model_id = None
+        self._current_project_path = None
+        self._last_gcode_path = None
+        self._last_slice_signature = None
+        self._slice_in_progress = False
+        self._labels_visible = True
+        self._model_clipboard = []
+        self._undo_stack = []
+        self._redo_stack = []
+        self._undo_stack_limit = 50
+        self._undo_in_progress = False
+        self._bed_warning_active = False
+        self._undo_timer = QtCore.QTimer(self)
+        self._undo_timer.setSingleShot(True)
+        self._undo_timer.timeout.connect(self._finalize_undo_snapshot)
+        self._pending_undo_snapshot = False
 
     def __getattr__(self, name):
         main = self.__dict__.get("main")
-        if main is not None and hasattr(main, name):
-            return getattr(main, name)
+        if main is not None:
+            if name in main.__dict__:
+                return main.__dict__[name]
+            if getattr(type(main), name, None) is not None:
+                return object.__getattribute__(main, name)
         raise AttributeError(f"{type(self).__name__} has no attribute {name!r}")
 
     def initialize(self):
@@ -42,6 +62,7 @@ class MainController(QtCore.QObject):
         self._redo_stack = []
         self._undo_stack_limit = 50
         self._undo_in_progress = False
+        self._bed_warning_active = False
         self._undo_timer = QtCore.QTimer(self)
         self._undo_timer.setSingleShot(True)
         self._undo_timer.timeout.connect(self._finalize_undo_snapshot)
@@ -57,6 +78,7 @@ class MainController(QtCore.QObject):
     def _connect_signals(self):
         self.model_panel.model_selected.connect(self._on_model_selected)
         self.model_panel.request_remove.connect(self._on_model_remove)
+        self.model_panel.duplicate_requested.connect(self._on_duplicate_requested)
         self.job_queue_panel.add_btn.clicked.connect(self._add_current_model_to_queue)
         self.viewer.modelPicked.connect(self._on_viewer_model_picked)
         self.viewer.modelMoved.connect(self._on_viewer_model_moved)
@@ -99,6 +121,62 @@ class MainController(QtCore.QObject):
 
     def _on_model_remove(self, model_id: int):
         self._remove_models([model_id])
+
+    def _on_duplicate_requested(self, count: int, rows: int, cols: int):
+        if self.current_model_id is None:
+            QtWidgets.QMessageBox.warning(self.main, "Duplicate", "Select a model first.")
+            return
+        payload = self._capture_model_payload(self.current_model_id)
+        if payload is None:
+            return
+        bounds = self.viewer.get_model_bounds(self.current_model_id)
+        if bounds is None:
+            QtWidgets.QMessageBox.warning(self.main, "Duplicate", "Model bounds unavailable.")
+            return
+        mn, mx = bounds
+        width = float(mx[0] - mn[0])
+        depth = float(mx[1] - mn[1])
+        spacing = float(DEFAULTS["popups"]["arrange"]["auto_spacing"])
+        dx = width + spacing
+        dy = depth + spacing
+        if dx <= 0.0 or dy <= 0.0:
+            return
+
+        count = max(1, int(count))
+        rows = max(1, int(rows))
+        cols = max(1, int(cols))
+        if rows * cols < count:
+            rows = int(math.ceil(count / cols))
+
+        base_offset = np.array(payload["offset"], dtype=float)
+        name = payload.get("name", "Model")
+        new_ids = []
+        for idx in range(count):
+            row = idx // cols
+            col = idx % cols
+            offset = base_offset + np.array([(col + 1) * dx, row * dy, 0.0], dtype=float)
+            model_id = self.viewer.add_model_from_data(
+                f"{name} Copy {idx + 1}",
+                payload["path"],
+                payload["base_vertices"],
+                payload["faces"],
+            )
+            self.viewer.set_model_transform(
+                model_id,
+                scale=payload["scale"],
+                rotation_xyz=payload["rotation"],
+                offset_xyz=offset,
+            )
+            self.model_panel.add_model(f"{name} Copy {idx + 1}", model_id)
+            new_ids.append(model_id)
+
+        if new_ids:
+            self.current_model_id = new_ids[-1]
+            self.viewer.set_selected_model(self.current_model_id)
+            self._select_model_in_panel(self.current_model_id)
+            self._sync_popups()
+            self._update_bed_warnings()
+            self._push_undo_state()
 
     def _clear_all_models(self):
         model_ids = self.viewer.get_model_ids()
@@ -161,6 +239,7 @@ class MainController(QtCore.QObject):
             QtWidgets.QMessageBox.warning(self.main, "Lay on Face", "Unable to orient model.")
             return
         self._sync_popups()
+        self._update_bed_warnings()
         self._schedule_undo_snapshot()
 
     # ------------------------------------------------------------ transforms (viewer -> panel)
@@ -192,6 +271,7 @@ class MainController(QtCore.QObject):
 
         self.statusBar().showMessage(f"Moved model {model_id}: x={x:.2f} y={y:.2f}")
         self._sync_popups()
+        self._update_bed_warnings()
         self._schedule_undo_snapshot()
 
     def _on_viewer_model_rotated(self, model_id: int, x: float, y: float, z: float):
@@ -200,7 +280,28 @@ class MainController(QtCore.QObject):
             self.viewer.set_selected_model(model_id)
         self.statusBar().showMessage(f"Rotated model {model_id}: x={x:.2f} y={y:.2f} z={z:.2f}")
         self._sync_popups()
+        self._update_bed_warnings()
         self._schedule_undo_snapshot()
+
+    def _update_bed_warnings(self):
+        if not hasattr(self.viewer, "get_out_of_bounds_models"):
+            return
+        ids = self.viewer.get_out_of_bounds_models()
+        if not ids:
+            if self._bed_warning_active:
+                self.statusBar().showMessage(DEFAULTS["app"]["status_ready"])
+                self._bed_warning_active = False
+            return
+        names = []
+        for mid in ids:
+            name = self.viewer.get_model_name(mid) or f"Model {mid}"
+            names.append(name)
+        bed = DEFAULTS.get("printer", {}).get("bed_size", (0, 0))
+        max_height = DEFAULTS.get("printer", {}).get("max_height", 0)
+        bed_str = f"{bed[0]}x{bed[1]} mm"
+        msg = "Warning: " + ", ".join(names) + f" exceed bed {bed_str} or height {max_height} mm."
+        self.statusBar().showMessage(msg)
+        self._bed_warning_active = True
 
     # ------------------------------------------------------------- async load
     def _add_model_from_path_async(self, path: str):
@@ -229,6 +330,7 @@ class MainController(QtCore.QObject):
             self.viewer.set_selected_model(model_id)
 
             self.statusBar().showMessage(f"Loaded {payload['name']}")
+            self._update_bed_warnings()
             self._push_undo_state()
 
         def on_err(msg):
@@ -245,21 +347,65 @@ class MainController(QtCore.QObject):
             return None
         return self.viewer.get_model_path(self.current_model_id)
 
-    def slice_current_model(self):
+    def _get_current_mesh(self):
+        if self.current_model_id is None:
+            return None
+        mesh_data = self.viewer.get_model_mesh_data(self.current_model_id)
+        if not mesh_data:
+            return None
+        vertices, faces = mesh_data
+        return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+
+    def _build_slice_signature(self, settings: SliceSettings):
+        if self.current_model_id is None:
+            return None
+        scale_offset = self.viewer.get_model_transform(self.current_model_id)
+        rotation = self.viewer.get_model_rotation(self.current_model_id)
+        if scale_offset is None or rotation is None:
+            return None
+        scale, offset = scale_offset
+        payload = {
+            "model_id": int(self.current_model_id),
+            "scale": [float(v) for v in np.asarray(scale).reshape(-1)],
+            "offset": [float(v) for v in np.asarray(offset).reshape(-1)],
+            "rotation": [float(v) for v in np.asarray(rotation).reshape(-1)],
+            "settings": asdict(settings),
+        }
+        return json.dumps(payload, sort_keys=True, default=str)
+
+    def _slice_model(self,
+                     settings: SliceSettings,
+                     activate_preview: bool,
+                     show_dialog: bool,
+                     show_errors: bool = True):
         stl_path = self._get_current_stl_path()
         if not stl_path:
-            QtWidgets.QMessageBox.warning(self.main, "No model", "Load and select an STL first.")
+            if show_dialog:
+                QtWidgets.QMessageBox.warning(self.main, "No model", "Load and select an STL first.")
+            return
+        mesh = self._get_current_mesh()
+        if mesh is None:
+            if show_dialog:
+                QtWidgets.QMessageBox.warning(self.main, "No model", "Model data unavailable for slicing.")
+            return
+        if self._slice_in_progress:
             return
 
-        settings = self.settings_panel.to_settings()
-        dlg = self._busy_dialog("Slicing", "Slicing model...\nPlease wait.")
-        dlg.show()
-
-        worker = Worker(slice_file, stl_path, settings=settings)
+        signature = self._build_slice_signature(settings)
+        dlg = None
+        if show_dialog:
+            dlg = self._busy_dialog("Slicing", "Slicing model...\nPlease wait.")
+            dlg.show()
+        else:
+            self.statusBar().showMessage("Slicing model...")
+        self._slice_in_progress = True
 
         def on_done(gcode_path):
-            dlg.close()
+            if dlg is not None:
+                dlg.close()
+            self._slice_in_progress = False
             self._last_gcode_path = gcode_path
+            self._last_slice_signature = signature
             stats = self._analyze_gcode(gcode_path, settings)
             self._update_preview_from_gcode(gcode_path, stats)
             self.statusBar().showMessage(f"Sliced to {gcode_path}")
@@ -268,33 +414,51 @@ class MainController(QtCore.QObject):
                     if btn.text().strip().lower() == "preview":
                         btn.setChecked(True)
                         break
-            self._activate_mode("preview")
+            if activate_preview:
+                self._activate_mode("preview")
 
         def on_err(msg):
-            dlg.close()
+            if dlg is not None:
+                dlg.close()
+            self._slice_in_progress = False
             self.statusBar().showMessage("Slicing failed")
-            QtWidgets.QMessageBox.critical(self.main, "Slicing error", msg)
+            if show_errors:
+                QtWidgets.QMessageBox.critical(self.main, "Slicing error", msg)
 
+        worker = Worker(slice_trimesh,
+                        mesh,
+                        output_gcode_path=None,
+                        settings=settings,
+                        source_path=stl_path)
         worker.signals.finished.connect(on_done)
         worker.signals.error.connect(on_err)
         self.pool.start(worker)
+
+    def slice_current_model(self):
+        settings = self.settings_panel.to_settings()
+        self._slice_model(settings, activate_preview=True, show_dialog=True, show_errors=True)
 
     def print_current_model(self, printer=None):
         stl_path = self._get_current_stl_path()
         if not stl_path:
             QtWidgets.QMessageBox.warning(self.main, "No model", "Load and select a model first.")
             return
+        mesh = self._get_current_mesh()
+        if mesh is None:
+            QtWidgets.QMessageBox.warning(self.main, "No model", "Model data unavailable for slicing.")
+            return
 
         settings = self.settings_panel.to_settings()
         dlg = self._busy_dialog("Print", "Slicing & sending to printer...\nPlease wait.")
         dlg.show()
 
-        def do_print(p, s):
+        def do_print(m, s, source_path):
             if printer is not None and hasattr(self.printer_manager, "set_active_printer"):
                 self.printer_manager.set_active_printer(printer)
-            return self.printer_manager.slice_and_print(p, settings=s)
+            gcode_path = slice_trimesh(m, settings=s, source_path=source_path)
+            return self.printer_manager.print_gcode(gcode_path, printer=printer)
 
-        worker = Worker(do_print, stl_path, settings)
+        worker = Worker(do_print, mesh, settings, stl_path)
 
         def on_done(msg):
             dlg.close()
@@ -315,6 +479,10 @@ class MainController(QtCore.QObject):
         if not stl_path:
             QtWidgets.QMessageBox.warning(self.main, "No model", "Load and select a model first.")
             return
+        mesh = self._get_current_mesh()
+        if mesh is None:
+            QtWidgets.QMessageBox.warning(self.main, "No model", "Model data unavailable for slicing.")
+            return
 
         base = os.path.splitext(os.path.basename(stl_path))[0]
         suggested = os.path.join(os.path.dirname(stl_path), f"{base}.gcode")
@@ -333,7 +501,11 @@ class MainController(QtCore.QObject):
         dlg = self._busy_dialog("Export", "Exporting G-code...\nPlease wait.")
         dlg.show()
 
-        worker = Worker(slice_file, stl_path, output_gcode_path=out_path, settings=settings)
+        worker = Worker(slice_trimesh,
+                        mesh,
+                        output_gcode_path=out_path,
+                        settings=settings,
+                        source_path=stl_path)
 
         def on_done(gcode_path):
             dlg.close()
@@ -398,112 +570,8 @@ class MainController(QtCore.QObject):
             preview = "".join(lines)
         return preview, total_lines
 
-    def _format_duration(self, seconds: float) -> str:
-        if seconds <= 0:
-            return "0s"
-        total = int(round(seconds))
-        mins, secs = divmod(total, 60)
-        hours, mins = divmod(mins, 60)
-        if hours:
-            return f"{hours}h{mins:02d}m"
-        return f"{mins}m{secs:02d}s"
-
     def _analyze_gcode(self, gcode_path: str, settings: SliceSettings) -> dict:
-        last_pos = None
-        last_e = None
-        feed_rate = None  # mm/min
-        total_time = 0.0
-        extrude_len = 0.0
-        line_count = 0
-
-        try:
-            with open(gcode_path, "r", encoding="utf-8", errors="ignore") as f:
-                lines = f.readlines()
-        except Exception:
-            return {"time": "n/a", "weight": "n/a", "length": "n/a", "cost": "n/a", "line_count": 0}
-
-        for raw in lines:
-            line = raw.split(";", 1)[0].strip()
-            if not line:
-                continue
-            line_count += 1
-            parts = line.split()
-            if not parts:
-                continue
-            cmd = parts[0].upper()
-            if cmd == "G92":
-                for part in parts[1:]:
-                    if part.startswith("E"):
-                        try:
-                            last_e = float(part[1:])
-                        except ValueError:
-                            pass
-                continue
-            if cmd not in ("G0", "G1"):
-                continue
-
-            x = y = z = None
-            e_val = None
-            for part in parts[1:]:
-                axis = part[0].upper()
-                try:
-                    val = float(part[1:])
-                except ValueError:
-                    continue
-                if axis == "X":
-                    x = val
-                elif axis == "Y":
-                    y = val
-                elif axis == "Z":
-                    z = val
-                elif axis == "E":
-                    e_val = val
-                elif axis == "F":
-                    feed_rate = val
-
-            if last_pos is None:
-                last_pos = [0.0, 0.0, 0.0]
-            new_pos = [
-                x if x is not None else last_pos[0],
-                y if y is not None else last_pos[1],
-                z if z is not None else last_pos[2],
-            ]
-            dist = math.dist(last_pos, new_pos)
-
-            is_extrude = False
-            if e_val is not None:
-                if last_e is None:
-                    last_e = e_val
-                else:
-                    delta = e_val - last_e
-                    if delta > 0:
-                        extrude_len += delta
-                        is_extrude = True
-                    last_e = e_val
-
-            if dist > 0:
-                if feed_rate is None:
-                    speed = settings.print_speed if is_extrude else settings.travel_speed
-                    feed_rate = speed * 60.0
-                if feed_rate:
-                    total_time += dist / (feed_rate / 60.0)
-
-            last_pos = new_pos
-
-        filament_diameter = float(settings.filament_diameter or 1.75)
-        area = math.pi * (filament_diameter / 2.0) ** 2
-        volume_mm3 = area * extrude_len
-        density = 1.24  # PLA-ish g/cm3
-        weight_g = (volume_mm3 / 1000.0) * density
-
-        length_m = extrude_len / 1000.0
-        return {
-            "time": self._format_duration(total_time),
-            "weight": f"{weight_g:.2f} g",
-            "length": f"{length_m:.2f} m",
-            "cost": "n/a",
-            "line_count": line_count,
-        }
+        return dict(estimate_gcode_file(gcode_path, settings))
 
     def _update_preview_from_gcode(self, gcode_path: str, stats: dict):
         if not hasattr(self, "preview_view"):
@@ -511,16 +579,28 @@ class MainController(QtCore.QObject):
         preview_text, total_lines = self._read_gcode_preview(gcode_path)
         self.preview_view.set_gcode_text(preview_text)
         self.preview_view.update_stats(stats)
-        line_count = stats.get("line_count", total_lines)
-        self.preview_view.set_steps_count(line_count or total_lines)
+        if hasattr(self.viewer, "set_print_stats"):
+            self.viewer.set_print_stats(stats)
+        preview = parse_gcode_preview_file(gcode_path)
+        if hasattr(self.viewer, "set_gcode_preview"):
+            self.viewer.set_gcode_preview(preview)
+        self.preview_view.set_preview_data(preview)
 
     def _clear_preview(self):
         self._last_gcode_path = None
+        self._last_slice_signature = None
+        self._slice_in_progress = False
         if not hasattr(self, "preview_view"):
             return
         self.preview_view.set_gcode_text("")
         self.preview_view.update_stats({})
         self.preview_view.set_steps_count(0)
+        self.preview_view.set_layer_count(0)
+        self.preview_view.set_preview_data(None)
+        if hasattr(self.viewer, "clear_gcode_preview"):
+            self.viewer.clear_gcode_preview()
+        if hasattr(self.viewer, "clear_print_stats"):
+            self.viewer.clear_print_stats()
 
     # -------------------------------------------------------------- job queue
     def _add_current_model_to_queue(self):
@@ -582,14 +662,14 @@ class MainController(QtCore.QObject):
         if action is not None:
             btn = toolbar.widgetForAction(action)
             if btn is not None:
-                anchor = btn.mapTo(self, QtCore.QPoint(btn.width() // 2, btn.height()))
+                anchor = btn.mapTo(self.main, QtCore.QPoint(btn.width() // 2, btn.height()))
                 x = anchor.x() - popup.width() // 2
-                x = max(8, min(x, self.width() - popup.width() - 8))
+                x = max(8, min(x, self.main.width() - popup.width() - 8))
                 y = anchor.y() + 6
                 popup.move(QtCore.QPoint(x, y))
                 return
 
-        pos = toolbar.mapTo(self, QtCore.QPoint(8, toolbar.height() + 6))
+        pos = toolbar.mapTo(self.main, QtCore.QPoint(8, toolbar.height() + 6))
         popup.move(pos)
 
     def _sync_popups(self):
@@ -801,6 +881,7 @@ class MainController(QtCore.QObject):
             return
         self.viewer.set_model_transform(self.current_model_id, offset_xyz=(0.0, 0.0, 0.0))
         self._sync_popups()
+        self._update_bed_warnings()
         self._schedule_undo_snapshot()
 
     def _on_transform_scale_changed(self, x: float, y: float, z: float):
@@ -813,6 +894,7 @@ class MainController(QtCore.QObject):
             return
         self.viewer.set_model_transform(self.current_model_id, scale=scale, offset_xyz=m["offset"])
         self._sync_popups()
+        self._update_bed_warnings()
         self._schedule_undo_snapshot()
 
     def _on_auto_orient_requested(self, mode: str):
@@ -838,6 +920,7 @@ class MainController(QtCore.QObject):
             QtWidgets.QMessageBox.warning(self.main, "Arrange", "Unable to arrange models.")
             return
         self._sync_popups()
+        self._update_bed_warnings()
         self._push_undo_state()
 
     def _on_arrange_selected_requested(self):
@@ -855,6 +938,7 @@ class MainController(QtCore.QObject):
             QtWidgets.QMessageBox.warning(self.main, "Arrange", "Unable to arrange model.")
             return
         self._sync_popups()
+        self._update_bed_warnings()
         self._push_undo_state()
 
     def _on_arrange_reset(self):
@@ -1074,17 +1158,50 @@ class MainController(QtCore.QObject):
             self.prepare_view.show()
             self.preview_view.hide()
             self._central_stack.setCurrentWidget(self.viewer)
+            if hasattr(self.viewer, "set_interaction_enabled"):
+                self.viewer.set_interaction_enabled(True)
+            if hasattr(self.viewer, "set_preview_visible"):
+                self.viewer.set_preview_visible(False)
+            if hasattr(self.viewer, "set_models_visible"):
+                self.viewer.set_models_visible(True)
+            self._auto_slice_prepare()
+            QtCore.QTimer.singleShot(0, self.prepare_view.position_panels)
         elif mode == "preview":
             self.prepare_view.hide()
             self.preview_view.show()
             self._central_stack.setCurrentWidget(self.viewer)
+            if hasattr(self.viewer, "set_interaction_enabled"):
+                self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_preview_visible"):
+                self.viewer.set_preview_visible(True)
+            if hasattr(self.viewer, "set_models_visible"):
+                self.viewer.set_models_visible(False)
+            QtCore.QTimer.singleShot(0, self.preview_view.position_panels)
         elif mode == "device":
             self.prepare_view.hide()
             self.preview_view.hide()
             self._central_stack.setCurrentWidget(self.device_view)
+            if hasattr(self.viewer, "set_interaction_enabled"):
+                self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_preview_visible"):
+                self.viewer.set_preview_visible(False)
+            if hasattr(self.viewer, "set_models_visible"):
+                self.viewer.set_models_visible(False)
         else:
             return
         self._active_mode = mode
+
+    def _auto_slice_prepare(self):
+        if self.current_model_id is None:
+            return
+        settings = self.settings_panel.to_settings()
+        signature = self._build_slice_signature(settings)
+        if signature and signature == self._last_slice_signature and self._last_gcode_path:
+            return
+        self._slice_model(settings,
+                          activate_preview=False,
+                          show_dialog=False,
+                          show_errors=False)
 
     def _open_device_view(self):
         if hasattr(self, "_mode_tabs"):
@@ -1490,5 +1607,7 @@ class MainController(QtCore.QObject):
         ):
             if popup.isVisible():
                 self._position_popup(popup)
+        if hasattr(self, "prepare_view"):
+            self.prepare_view.position_panels()
         if hasattr(self, "preview_view"):
             self.preview_view.position_panels()

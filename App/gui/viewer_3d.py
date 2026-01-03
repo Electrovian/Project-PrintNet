@@ -1,11 +1,14 @@
 import os
 import math
 from numbers import Real
+from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from PyQt5 import QtCore, QtGui, QtWidgets
 import trimesh
+
+from slicer.geometry import arrange_rectangles, lowest_planar_face
 
 from .widgets.view_cube_overlay import ViewCubeOverlay
 from .theme import theme_value, theme_qcolor
@@ -39,6 +42,9 @@ class Viewer3D(gl.GLViewWidget):
         self._drag_start_offset = None
         self._labels_enabled = False
         self._selection_info = None
+        self._interaction_enabled = True
+        self._print_stats_panel = None
+        self._print_stats_data = None
 
         self._snap_enabled = False
         self._snap_step = 1.0
@@ -70,10 +76,28 @@ class Viewer3D(gl.GLViewWidget):
         self._grid_item = g
         self.addItem(g)
 
+        printer_defaults = DEFAULTS.get("printer", {})
+        self._bed_size = tuple(printer_defaults.get("bed_size", (200, 200)))
+        self._bed_height = float(printer_defaults.get("max_height", 200))
+
         self._build_gizmo()
         self._build_view_cube()
         self._build_rotate_hud()
         self._build_selection_info()
+        self._build_print_stats_panel()
+
+        self._preview_data = None
+        self._preview_layer_index = None
+        self._preview_color_mode = "feature"
+        self._preview_items: Dict[str, Optional[gl.GLLinePlotItem]] = {
+            "extrude": None,
+            "travel": None,
+        }
+        self._preview_feature_filter: Optional[set[str]] = None
+        self._preview_step_index = None
+        self._preview_step_layer = None
+        self._preview_visible = False
+        self._models_visible = True
 
     # -------------------- hardening --------------------
 
@@ -120,6 +144,15 @@ class Viewer3D(gl.GLViewWidget):
             self._hide_rotate_hud()
         self._update_gizmo()
 
+    def set_interaction_enabled(self, enabled: bool):
+        self._interaction_enabled = bool(enabled)
+        if not self._interaction_enabled:
+            self._dragging = False
+            self._gizmo_drag_axis = None
+            self._gizmo_rotate_axis = None
+            self._hide_rotate_hud()
+        self._update_gizmo()
+
     def apply_theme(self):
         self.setBackgroundColor(theme_value("view_bg", (20, 22, 26)))
         if getattr(self, "_grid_item", None) is not None:
@@ -129,7 +162,9 @@ class Viewer3D(gl.GLViewWidget):
             line = self._gizmo_move_lines.get(axis)
             if line is not None:
                 try:
-                    line.setData(pos=line.pos, color=theme_value(key), width=line.width)
+                    pos = line.pos if line.pos is not None else np.zeros((0, 3), dtype=float)
+                    color = self._color_array(theme_value(key), len(pos))
+                    line.setData(pos=pos, color=color, width=line.width)
                 except Exception:
                     pass
             cone = self._gizmo_move_cones.get(axis)
@@ -142,13 +177,17 @@ class Viewer3D(gl.GLViewWidget):
             ring = self._gizmo_rotate_rings.get(axis)
             if ring is not None:
                 try:
-                    ring.setData(pos=ring.pos, color=theme_value(key), width=ring.width)
+                    pos = ring.pos if ring.pos is not None else np.zeros((0, 3), dtype=float)
+                    color = self._color_array(theme_value(key), len(pos))
+                    ring.setData(pos=pos, color=color, width=ring.width)
                 except Exception:
                     pass
             ticks = self._gizmo_rotate_ticks.get(axis)
             if ticks is not None:
                 try:
-                    ticks.setData(pos=ticks.pos, color=theme_value("gizmo_tick"), width=ticks.width)
+                    pos = ticks.pos if ticks.pos is not None else np.zeros((0, 3), dtype=float)
+                    color = self._color_array(theme_value("gizmo_tick"), len(pos))
+                    ticks.setData(pos=pos, color=color, width=ticks.width)
                 except Exception:
                     pass
             arrows = self._gizmo_rotate_arrows.get(axis)
@@ -158,20 +197,251 @@ class Viewer3D(gl.GLViewWidget):
                 except Exception:
                     pass
 
-        mesh_color = theme_value("mesh_color", (0.0, 0.9, 0.4, 0.9))
         for m in self.models.values():
-            item = m.get("item")
-            if item is not None:
-                try:
-                    item.setColor(mesh_color)
-                except Exception:
-                    pass
+            self._apply_model_color(m)
 
         if hasattr(self, "_view_cube") and self._view_cube is not None:
             self._view_cube.apply_theme()
         self._update_rotate_hud_style()
         self._update_selection_info_style()
+        self._update_print_stats_style()
         self._update_gizmo()
+        self._update_preview_lines()
+
+    # -------------------- gcode preview --------------------
+
+    def set_gcode_preview(self, preview):
+        self._preview_data = preview
+        if preview is None or not getattr(preview, "layers", None):
+            self._preview_layer_index = None
+            self._preview_step_index = None
+            self._preview_step_layer = None
+            self._update_preview_lines()
+            return
+        self._preview_layer_index = len(preview.layers) - 1
+        self._preview_step_index = None
+        self._preview_step_layer = self._preview_layer_index
+        self._update_preview_lines()
+
+    def set_models_visible(self, visible: bool):
+        self._models_visible = bool(visible)
+        for m in self.models.values():
+            item = m.get("item")
+            if item is not None:
+                item.setVisible(self._models_visible)
+
+    def set_preview_visible(self, visible: bool):
+        self._preview_visible = bool(visible)
+        for item in self._preview_items.values():
+            if item is not None:
+                item.setVisible(self._preview_visible)
+
+    def clear_gcode_preview(self):
+        self._preview_data = None
+        self._preview_layer_index = None
+        self._preview_step_index = None
+        self._preview_step_layer = None
+        self._update_preview_lines()
+
+    def set_preview_layer_index(self, index: int):
+        if self._preview_data is None or not self._preview_data.layers:
+            return
+        idx = max(0, min(int(index), len(self._preview_data.layers) - 1))
+        if self._preview_layer_index == idx:
+            return
+        self._preview_layer_index = idx
+        self._preview_step_index = None
+        self._preview_step_layer = idx
+        self._update_preview_lines()
+
+    def set_preview_step_index(self, step_count: int | None):
+        if self._preview_data is None or not self._preview_data.layers:
+            return
+        layer_index = self._preview_layer_index
+        if layer_index is None:
+            layer_index = len(self._preview_data.layers) - 1
+        layer_index = max(0, min(layer_index, len(self._preview_data.layers) - 1))
+        segments = self._preview_data.layers[layer_index].segments
+        max_count = len(segments)
+        if step_count is None:
+            self._preview_step_index = None
+        else:
+            self._preview_step_index = max(0, min(int(step_count), max_count))
+        self._preview_step_layer = layer_index
+        self._update_preview_lines()
+
+    def preview_layer_step_count(self, layer_index: int | None = None) -> int:
+        if self._preview_data is None or not self._preview_data.layers:
+            return 0
+        if layer_index is None:
+            layer_index = self._preview_layer_index
+        if layer_index is None:
+            layer_index = len(self._preview_data.layers) - 1
+        layer_index = max(0, min(layer_index, len(self._preview_data.layers) - 1))
+        return len(self._preview_data.layers[layer_index].segments)
+
+    def set_preview_color_mode(self, mode: str):
+        mode = (mode or "").strip().lower()
+        if mode not in ("feature", "speed", "flow"):
+            mode = "feature"
+        if self._preview_color_mode == mode:
+            return
+        self._preview_color_mode = mode
+        self._update_preview_lines()
+
+    def set_preview_feature_filter(self, features: Optional[Sequence[str]]):
+        if not features:
+            self._preview_feature_filter = None
+        else:
+            self._preview_feature_filter = set(features)
+        self._update_preview_lines()
+
+    def _ensure_preview_items(self):
+        if self._preview_items["extrude"] is None:
+            item = gl.GLLinePlotItem(pos=np.zeros((0, 3), dtype=float), mode="lines", width=2)
+            item.setGLOptions("opaque")
+            self.addItem(item)
+            item.setVisible(self._preview_visible)
+            self._preview_items["extrude"] = item
+        if self._preview_items["travel"] is None:
+            item = gl.GLLinePlotItem(pos=np.zeros((0, 3), dtype=float), mode="lines", width=1)
+            item.setGLOptions("translucent")
+            self.addItem(item)
+            item.setVisible(self._preview_visible)
+            self._preview_items["travel"] = item
+
+    def _preview_feature_color(self, feature: str):
+        colors = {
+            "outer_wall": (1.0, 0.6, 0.2, 1.0),
+            "inner_wall": (1.0, 0.75, 0.35, 1.0),
+            "sparse_infill": (0.2, 0.8, 0.3, 1.0),
+            "solid_infill": (0.35, 0.85, 0.4, 1.0),
+            "top_surface": (0.95, 0.75, 0.2, 1.0),
+            "bottom_surface": (0.85, 0.55, 0.15, 1.0),
+            "perimeter": (1.0, 0.6, 0.2, 1.0),
+            "infill": (0.2, 0.8, 0.3, 1.0),
+            "top": (0.95, 0.75, 0.2, 1.0),
+            "bottom": (0.85, 0.55, 0.15, 1.0),
+            "bridge": (0.95, 0.3, 0.3, 1.0),
+            "gap_infill": (0.8, 0.6, 0.3, 1.0),
+            "thin_wall": (0.9, 0.5, 0.2, 1.0),
+            "support": (0.2, 0.6, 0.9, 1.0),
+            "support_interface": (0.2, 0.5, 0.8, 1.0),
+            "skirt": (0.7, 0.5, 0.2, 1.0),
+            "brim": (0.7, 0.4, 0.2, 1.0),
+            "raft": (0.5, 0.5, 0.5, 1.0),
+            "ironing": (0.9, 0.9, 0.2, 1.0),
+            "travel": (0.7, 0.7, 0.7, 0.2),
+            "retract": (0.7, 0.7, 0.7, 0.2),
+            "other": (0.8, 0.8, 0.8, 0.9),
+        }
+        return colors.get(feature, colors["other"])
+
+    def _preview_color_from_scalar(self, value: float, min_val: float, max_val: float):
+        if max_val <= min_val:
+            return (0.2, 0.6, 0.9, 1.0)
+        t = (value - min_val) / (max_val - min_val)
+        t = max(0.0, min(1.0, t))
+        return (t, 0.2 + (1.0 - t) * 0.6, 1.0 - t, 1.0)
+
+    def _normalize_gl_color(self, color) -> Tuple[float, float, float, float]:
+        if isinstance(color, QtGui.QColor):
+            r, g, b, a = color.getRgbF()
+            return (float(r), float(g), float(b), float(a))
+        if isinstance(color, str):
+            q = QtGui.QColor(color)
+            r, g, b, a = q.getRgbF()
+            return (float(r), float(g), float(b), float(a))
+        if isinstance(color, (list, tuple, np.ndarray)):
+            values = list(color)
+            if len(values) < 3:
+                return (1.0, 1.0, 1.0, 1.0)
+            if len(values) == 3:
+                values.append(1.0)
+            vals = [float(v) for v in values[:4]]
+            if max(vals[:3]) > 1.0:
+                vals = [v / 255.0 for v in vals]
+            return (vals[0], vals[1], vals[2], vals[3])
+        return (1.0, 1.0, 1.0, 1.0)
+
+    def _color_array(self, color, count: int) -> np.ndarray:
+        count = max(0, int(count))
+        rgba = self._normalize_gl_color(color)
+        if count == 0:
+            return np.zeros((0, 4), dtype=float)
+        return np.tile(np.array(rgba, dtype=float), (count, 1))
+
+    def _update_preview_lines(self):
+        if self._preview_data is None or not getattr(self._preview_data, "layers", None):
+            for item in self._preview_items.values():
+                if item is not None:
+                    item.setData(pos=np.zeros((0, 3), dtype=float))
+            return
+
+        self._ensure_preview_items()
+        layer_index = self._preview_layer_index
+        if layer_index is None:
+            layer_index = len(self._preview_data.layers) - 1
+        layer_index = max(0, min(layer_index, len(self._preview_data.layers) - 1))
+
+        extrude_points = []
+        extrude_colors = []
+        travel_points = []
+        travel_colors = []
+
+        for idx, layer in enumerate(self._preview_data.layers[: layer_index + 1]):
+            segments = layer.segments
+            if idx == layer_index and self._preview_step_layer == layer_index:
+                if self._preview_step_index is not None:
+                    segments = segments[: self._preview_step_index]
+            for seg in segments:
+                if self._preview_feature_filter is not None and seg.feature not in self._preview_feature_filter:
+                    continue
+                if self._preview_color_mode == "feature":
+                    color = self._preview_feature_color(seg.feature if seg.is_extrude else "travel")
+                elif self._preview_color_mode == "speed":
+                    color = self._preview_color_from_scalar(seg.speed,
+                                                            self._preview_data.min_speed,
+                                                            self._preview_data.max_speed)
+                else:
+                    if seg.is_extrude:
+                        color = self._preview_color_from_scalar(seg.flow,
+                                                                self._preview_data.min_flow,
+                                                                self._preview_data.max_flow)
+                    else:
+                        color = self._preview_feature_color("travel")
+
+                if seg.is_extrude:
+                    extrude_points.extend([seg.start, seg.end])
+                    extrude_colors.extend([color, color])
+                else:
+                    travel_points.extend([seg.start, seg.end])
+                    travel_colors.extend([color, color])
+
+        extrude_item = self._preview_items["extrude"]
+        travel_item = self._preview_items["travel"]
+        if extrude_item is not None:
+            if extrude_points and extrude_colors:
+                extrude_item.setData(
+                    pos=np.array(extrude_points, dtype=float),
+                    color=np.array(extrude_colors, dtype=float),
+                )
+            else:
+                extrude_item.setData(
+                    pos=np.zeros((0, 3), dtype=float),
+                    color=np.zeros((0, 4), dtype=float),
+                )
+        if travel_item is not None:
+            if travel_points and travel_colors:
+                travel_item.setData(
+                    pos=np.array(travel_points, dtype=float),
+                    color=np.array(travel_colors, dtype=float),
+                )
+            else:
+                travel_item.setData(
+                    pos=np.zeros((0, 3), dtype=float),
+                    color=np.zeros((0, 4), dtype=float),
+                )
 
     def _rgba_css(self, color: QtGui.QColor, alpha: int | None = None):
         c = QtGui.QColor(color)
@@ -236,6 +506,30 @@ class Viewer3D(gl.GLViewWidget):
         self._update_selection_info_style()
         panel.hide()
 
+    def _build_print_stats_panel(self):
+        panel = QtWidgets.QFrame(self)
+        panel.setObjectName("PrintStats")
+        panel_layout = QtWidgets.QVBoxLayout(panel)
+        panel_layout.setContentsMargins(8, 6, 8, 6)
+        panel_layout.setSpacing(4)
+
+        title = QtWidgets.QLabel("Slice Estimate", panel)
+        title.setObjectName("PrintStatsTitle")
+        title.setWordWrap(True)
+
+        details = QtWidgets.QLabel("No stats yet.", panel)
+        details.setObjectName("PrintStatsDetails")
+        details.setWordWrap(True)
+
+        panel_layout.addWidget(title)
+        panel_layout.addWidget(details)
+
+        self._print_stats_panel = panel
+        self._print_stats_title = title
+        self._print_stats_details = details
+        self._update_print_stats_style()
+        panel.hide()
+
     def _update_selection_info_style(self):
         if not hasattr(self, "_selection_info") or self._selection_info is None:
             return
@@ -258,16 +552,43 @@ class Viewer3D(gl.GLViewWidget):
             "}"
         )
 
+    def _update_print_stats_style(self):
+        if not hasattr(self, "_print_stats_panel") or self._print_stats_panel is None:
+            return
+        bg = theme_qcolor("popup_bg")
+        border = theme_qcolor("popup_border")
+        text = theme_qcolor("popup_text")
+        muted = theme_qcolor("popup_muted_text")
+        self._print_stats_panel.setStyleSheet(
+            "QFrame#PrintStats {"
+            f"background-color: {self._rgba_css(bg, 220)};"
+            f"border: 1px solid {self._rgba_css(border, 240)};"
+            "border-radius: 6px;"
+            "}"
+            "QLabel#PrintStatsTitle {"
+            f"color: {self._rgba_css(text, 255)};"
+            "font-weight: 600;"
+            "}"
+            "QLabel#PrintStatsDetails {"
+            f"color: {self._rgba_css(muted, 255)};"
+            "}"
+        )
+
     def _position_selection_info(self):
-        if not hasattr(self, "_selection_info") or self._selection_info is None:
-            return
-        if not self._selection_info.isVisible():
-            return
+        self._position_bottom_left_panels()
+
+    def _position_bottom_left_panels(self):
         margin = 12
-        self._selection_info.adjustSize()
-        x = margin
-        y = max(margin, self.height() - self._selection_info.height() - margin)
-        self._selection_info.move(x, y)
+        y = self.height() - margin
+        if self._print_stats_panel is not None and self._print_stats_panel.isVisible():
+            self._print_stats_panel.adjustSize()
+            y = max(margin, y - self._print_stats_panel.height())
+            self._print_stats_panel.move(margin, y)
+            y -= margin
+        if self._selection_info is not None and self._selection_info.isVisible():
+            self._selection_info.adjustSize()
+            y = max(margin, y - self._selection_info.height())
+            self._selection_info.move(margin, y)
 
     def set_labels_visible(self, visible: bool):
         self._labels_enabled = bool(visible)
@@ -315,7 +636,81 @@ class Viewer3D(gl.GLViewWidget):
             )
         )
         self._selection_info.setVisible(True)
-        self._position_selection_info()
+        self._position_bottom_left_panels()
+
+    def set_print_stats(self, stats: dict | None):
+        if self._print_stats_panel is None:
+            return
+        if not stats:
+            self._print_stats_panel.setVisible(False)
+            return
+        time_val = stats.get("time", "n/a")
+        length_val = stats.get("length", "n/a")
+        weight_val = stats.get("weight", "n/a")
+        self._print_stats_details.setText(
+            "\n".join(
+                [
+                    f"Time: {time_val}",
+                    f"Length: {length_val}",
+                    f"Weight: {weight_val}",
+                ]
+            )
+        )
+        self._print_stats_panel.setVisible(True)
+        self._position_bottom_left_panels()
+
+    def clear_print_stats(self):
+        if self._print_stats_panel is not None:
+            self._print_stats_panel.setVisible(False)
+
+    def set_bed_limits(self, bed_size: Tuple[float, float], max_height: float):
+        self._bed_size = (float(bed_size[0]), float(bed_size[1]))
+        self._bed_height = float(max_height)
+        for mid in self.models:
+            self._update_bed_state(mid)
+        self.update()
+
+    def get_out_of_bounds_models(self) -> List[int]:
+        return [mid for mid, model in self.models.items() if model.get("out_of_bounds")]
+
+    def _bed_bounds(self) -> Tuple[float, float, float, float]:
+        half_w = float(self._bed_size[0]) / 2.0
+        half_d = float(self._bed_size[1]) / 2.0
+        return (-half_w, half_w, -half_d, half_d)
+
+    def _is_outside_bed(self, bounds) -> bool:
+        if bounds is None:
+            return False
+        mn, mx = bounds
+        min_x, max_x, min_y, max_y = self._bed_bounds()
+        if mn[0] < min_x or mx[0] > max_x:
+            return True
+        if mn[1] < min_y or mx[1] > max_y:
+            return True
+        if mx[2] > self._bed_height:
+            return True
+        return False
+
+    def _update_bed_state(self, model_id: int) -> bool:
+        m = self.models.get(model_id)
+        if m is None:
+            return False
+        out_of_bounds = self._is_outside_bed(m.get("bounds"))
+        m["out_of_bounds"] = out_of_bounds
+        self._apply_model_color(m)
+        return out_of_bounds
+
+    def _apply_model_color(self, model: dict):
+        item = model.get("item")
+        if item is None:
+            return
+        base_color = theme_value("mesh_color", (0.0, 0.9, 0.4, 0.9))
+        warn_color = theme_value("mesh_warning", (1.0, 0.25, 0.2, 0.95))
+        color = warn_color if model.get("out_of_bounds") else base_color
+        try:
+            item.setColor(color)
+        except Exception:
+            pass
 
     def _model_volume(self, model: dict):
         base = model.get("base_volume")
@@ -386,17 +781,18 @@ class Viewer3D(gl.GLViewWidget):
             "offset": np.array([0.0, 0.0, 0.0], dtype=float),
             "pivot": np.array(pivot, dtype=float),
             "bounds": None,
+            "out_of_bounds": False,
         }
 
         self._create_or_update_mesh_item(model_id)
 
         mn = v.min(axis=0)
         mx = v.max(axis=0)
-        center = (mn + mx) / 2.0
         size = float(np.max(mx - mn))
+        bed_span = max(float(self._bed_size[0]), float(self._bed_size[1]), size)
 
-        self.opts["center"] = pg.Vector(*center) # pyright: ignore[reportArgumentType]
-        self.opts["distance"] = float(max(size * 2.0, 200.0)) # pyright: ignore[reportArgumentType]
+        self.opts["center"] = pg.Vector(0.0, 0.0, 0.0) # pyright: ignore[reportArgumentType]
+        self.opts["distance"] = float(max(bed_span * 2.0, 200.0)) # pyright: ignore[reportArgumentType]
         self._coerce_distance()
         self.update()
         return model_id
@@ -450,6 +846,20 @@ class Viewer3D(gl.GLViewWidget):
         if rot is None:
             return np.array([0.0, 0.0, 0.0], dtype=float)
         return np.array(rot, dtype=float)
+
+    def get_model_mesh_data(self, model_id: int):
+        m = self.models.get(model_id)
+        if not m:
+            return None
+        result = self._compute_transformed_vertices(m)
+        if result is None:
+            return None
+        v, off, mn, mx = result
+        if not np.allclose(off, np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)):
+            m["offset"] = off
+        m["bounds"] = (mn, mx)
+        self._update_bed_state(model_id)
+        return v, m.get("faces")
 
     # -------------------- transforms --------------------
 
@@ -550,6 +960,9 @@ class Viewer3D(gl.GLViewWidget):
     # -------------------- mouse interaction --------------------
 
     def mousePressEvent(self, ev: QtGui.QMouseEvent):
+        if not self._interaction_enabled:
+            super().mousePressEvent(ev)
+            return
         if ev.button() == QtCore.Qt.LeftButton:
             if self._gizmo_mode == "move":
                 axis = self._pick_gizmo_axis(ev.pos())
@@ -590,6 +1003,9 @@ class Viewer3D(gl.GLViewWidget):
         super().mousePressEvent(ev)
 
     def mouseMoveEvent(self, ev: QtGui.QMouseEvent):
+        if not self._interaction_enabled:
+            super().mouseMoveEvent(ev)
+            return
         if self._gizmo_rotate_axis is not None and bool(ev.buttons() & QtCore.Qt.LeftButton):
             if self._selected_model_id is None:
                 ev.accept()
@@ -672,6 +1088,9 @@ class Viewer3D(gl.GLViewWidget):
         super().mouseMoveEvent(ev)
 
     def mouseReleaseEvent(self, ev: QtGui.QMouseEvent):
+        if not self._interaction_enabled:
+            super().mouseReleaseEvent(ev)
+            return
         if ev.button() == QtCore.Qt.LeftButton and self._dragging:
             self._dragging = False
             self._drag_start_world = None
@@ -698,48 +1117,58 @@ class Viewer3D(gl.GLViewWidget):
 
     def _create_or_update_mesh_item(self, model_id: int):
         m = self.models[model_id]
-        v0 = m["base_vertices"]
-        f = m["faces"]
-        s = self._normalize_scale(m.get("scale", 1.0))
-        off = np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
-        rot = np.array(m.get("rotation", [0.0, 0.0, 0.0]), dtype=float)
-        pivot = m.get("pivot", np.zeros(3, dtype=float))
-
-        v = (v0 - pivot) * s
-        if rot is not None:
-            R = self._rotation_matrix(float(rot[0]), float(rot[1]), float(rot[2]))
-            v = v @ R.T
-        v = v + pivot + off
-
-        mn = v.min(axis=0)
-        if float(mn[2]) < 0.0:
-            # Safety: keep the model above the build plate.
-            lift = -float(mn[2])
-            off = np.array([float(off[0]), float(off[1]), float(off[2]) + lift], dtype=float)
-            m["offset"] = off
-            v = (v0 - pivot) * s
-            if rot is not None:
-                R = self._rotation_matrix(float(rot[0]), float(rot[1]), float(rot[2]))
-                v = v @ R.T
-            v = v + pivot + off
-            mn = v.min(axis=0)
-        mx = v.max(axis=0)
+        result = self._compute_transformed_vertices(m)
+        if result is None:
+            m["bounds"] = None
+            return
+        v, off, mn, mx = result
+        m["offset"] = off
         m["bounds"] = (mn, mx)
+        self._update_bed_state(model_id)
 
-        md = gl.MeshData(vertexes=v, faces=f)
-        color = theme_value("mesh_color", (0.0, 0.9, 0.4, 0.9))
+        md = gl.MeshData(vertexes=v, faces=m["faces"])
+        base_color = theme_value("mesh_color", (0.0, 0.9, 0.4, 0.9))
+        warn_color = theme_value("mesh_warning", (1.0, 0.25, 0.2, 0.95))
+        color = warn_color if m.get("out_of_bounds") else base_color
 
         item = m.get("item")
         if item is None:
             item = gl.GLMeshItem(meshdata=md, smooth=False, color=color, shader="shaded")
             self.addItem(item)
+            item.setVisible(self._models_visible)
             m["item"] = item
         else:
             item.setMeshData(meshdata=md)
             try:
-                item.setColor(color)
+                self._apply_model_color(m)
             except Exception:
                 pass
+            item.setVisible(self._models_visible)
+
+    def _compute_transformed_vertices(self, model: dict):
+        v0 = model.get("base_vertices")
+        if v0 is None or len(v0) == 0:
+            return None
+        s = self._normalize_scale(model.get("scale", 1.0))
+        off = np.array(model.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+        rot = np.array(model.get("rotation", [0.0, 0.0, 0.0]), dtype=float)
+        pivot = model.get("pivot", np.zeros(3, dtype=float))
+
+        v = (v0 - pivot) * s
+        R = self._rotation_matrix(float(rot[0]), float(rot[1]), float(rot[2]))
+        v = v @ R.T
+        v = v + pivot + off
+
+        mn = v.min(axis=0)
+        if float(mn[2]) < 0.0:
+            lift = -float(mn[2])
+            off = np.array([float(off[0]), float(off[1]), float(off[2]) + lift], dtype=float)
+            v = (v0 - pivot) * s
+            v = v @ R.T
+            v = v + pivot + off
+            mn = v.min(axis=0)
+        mx = v.max(axis=0)
+        return v, off, mn, mx
 
     def _rotation_matrix(self, rx_deg: float, ry_deg: float, rz_deg: float):
         rx = np.deg2rad(rx_deg)
@@ -844,47 +1273,7 @@ class Viewer3D(gl.GLViewWidget):
             return False
 
         sizes = [(mid, w, d) for mid, w, d, _center_offset, _z in model_info]
-        positions = {}
-        if align_y:
-            total_depth = sum(d for _mid, _w, d in sizes) + spacing_val * (len(sizes) - 1)
-            y_cursor = -total_depth / 2.0
-            for mid, _w, d in sizes:
-                y = y_cursor + d / 2.0
-                positions[mid] = (0.0, y)
-                y_cursor += d + spacing_val
-        else:
-            total_area = sum(w * d for _mid, w, d in sizes)
-            target_width = math.sqrt(total_area) if total_area > 0.0 else 0.0
-            x_cursor = 0.0
-            y_cursor = 0.0
-            row_depth = 0.0
-
-            for mid, w, d in sizes:
-                if x_cursor > 0.0 and target_width > 0.0 and (x_cursor + w) > target_width:
-                    x_cursor = 0.0
-                    y_cursor += row_depth + spacing_val
-                    row_depth = 0.0
-                x = x_cursor + w / 2.0
-                y = y_cursor + d / 2.0
-                positions[mid] = (x, y)
-                x_cursor += w + spacing_val
-                row_depth = max(row_depth, d)
-
-            min_x = float("inf")
-            max_x = float("-inf")
-            min_y = float("inf")
-            max_y = float("-inf")
-            for mid, w, d in sizes:
-                x, y = positions[mid]
-                min_x = min(min_x, x - w / 2.0)
-                max_x = max(max_x, x + w / 2.0)
-                min_y = min(min_y, y - d / 2.0)
-                max_y = max(max_y, y + d / 2.0)
-            cx = (min_x + max_x) / 2.0
-            cy = (min_y + max_y) / 2.0
-            for mid in positions:
-                x, y = positions[mid]
-                positions[mid] = (x - cx, y - cy)
+        positions = arrange_rectangles(sizes, spacing_val, align_y=align_y)
 
         info_map = {mid: (center_offset, z) for mid, _w, _d, center_offset, z in model_info}
         for mid, (x, y) in positions.items():
@@ -915,22 +1304,25 @@ class Viewer3D(gl.GLViewWidget):
         verts = (v0 - pivot) * scale
         verts = verts @ R_current.T
 
-        best_area = 0.0
-        best_normal = None
-        for tri in faces:
-            a = verts[tri[0]]
-            b = verts[tri[1]]
-            c = verts[tri[2]]
-            normal = np.cross(b - a, c - a)
-            area = float(np.linalg.norm(normal) * 0.5)
-            if area > best_area:
-                best_area = area
-                best_normal = normal
+        best = lowest_planar_face(verts, faces)
+        if best is None:
+            best_area = 0.0
+            best_normal = None
+            for tri in faces:
+                a = verts[tri[0]]
+                b = verts[tri[1]]
+                c = verts[tri[2]]
+                normal = np.cross(b - a, c - a)
+                area = float(np.linalg.norm(normal) * 0.5)
+                if area > best_area:
+                    best_area = area
+                    best_normal = normal
+            if best_normal is None or best_area <= 1e-6:
+                return False
+            n = best_normal / max(1e-9, float(np.linalg.norm(best_normal)))
+        else:
+            n = np.array(best[0], dtype=float)
 
-        if best_normal is None or best_area <= 1e-6:
-            return False
-
-        n = best_normal / max(1e-9, float(np.linalg.norm(best_normal)))
         target = np.array([0.0, 0.0, -1.0], dtype=float)
         R_align = self._rotation_from_to(n, target)
         R_new = R_align @ R_current
@@ -1045,7 +1437,7 @@ class Viewer3D(gl.GLViewWidget):
 
     def resizeEvent(self, e: QtGui.QResizeEvent):
         super().resizeEvent(e)
-        self._position_selection_info()
+        self._position_bottom_left_panels()
         self._position_view_cube()
 
     # -------------------- gizmo --------------------
@@ -1100,6 +1492,9 @@ class Viewer3D(gl.GLViewWidget):
             self.addItem(arrows)
 
     def _update_gizmo(self):
+        if not self._interaction_enabled:
+            self._set_gizmo_visible(False)
+            return
         if self._selected_model_id is None or self._gizmo_mode not in {"move", "rotate", "scale"}:
             self._set_gizmo_visible(False)
             return
@@ -1344,7 +1739,8 @@ class Viewer3D(gl.GLViewWidget):
             color = theme_value(f"gizmo_{axis}", (1.0, 0.1, 0.1, 1.0))
             p0 = origin
             p1 = origin + direction * (line_length - cone_height * 0.2)
-            self._gizmo_move_lines[axis].setData(pos=np.array([p0, p1], dtype=float), color=color)
+            pos = np.array([p0, p1], dtype=float)
+            self._gizmo_move_lines[axis].setData(pos=pos, color=self._color_array(color, len(pos)))
 
             base = origin + direction * (line_length - cone_height)
             verts, faces = self._make_cone_mesh(cone_height, cone_radius, 18)
@@ -1368,11 +1764,15 @@ class Viewer3D(gl.GLViewWidget):
         for axis in ("x", "y", "z"):
             color = theme_value(f"gizmo_{axis}", (1.0, 0.1, 0.1, 1.0))
             ring_points = self._ring_points_for_axis(axis, radius, 96)
-            self._gizmo_rotate_rings[axis].setData(pos=ring_points, mode="line_strip", color=color)
+            self._gizmo_rotate_rings[axis].setData(pos=ring_points,
+                                                   mode="line_strip",
+                                                   color=self._color_array(color, len(ring_points)))
             self._gizmo_ring_points[axis] = ring_points
 
             tick_points = self._tick_points_for_axis(axis, radius, 60)
-            self._gizmo_rotate_ticks[axis].setData(pos=tick_points, mode="lines", color=tick_color)
+            self._gizmo_rotate_ticks[axis].setData(pos=tick_points,
+                                                   mode="lines",
+                                                   color=self._color_array(tick_color, len(tick_points)))
             self._update_rotate_arrows(axis, radius, arrow_len, arrow_radius, color)
 
     def _update_rotate_arrows(self, axis: str, radius: float, height: float, cone_radius: float, color):
@@ -1623,6 +2023,15 @@ class Viewer3D(gl.GLViewWidget):
             if bounds is None:
                 continue
             mn, mx = bounds
+            try:
+                mn = np.array(mn, dtype=float).reshape(3)
+                mx = np.array(mx, dtype=float).reshape(3)
+            except Exception:
+                continue
+            if not np.all(np.isfinite(mn)) or not np.all(np.isfinite(mx)):
+                continue
+            if np.any(mx < mn):
+                mn, mx = np.minimum(mn, mx), np.maximum(mn, mx)
 
             corners = np.array(
                 [

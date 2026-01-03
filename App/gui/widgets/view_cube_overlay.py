@@ -23,7 +23,7 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         self._corner_radius = 6
         self.invert_x = True
         self.invert_y = True
-        self.invert_z = True
+        self.invert_z = False
         self._hover_name = None
         self._active_name = None
         self._apply_theme()
@@ -367,7 +367,7 @@ class ViewCubeOverlay(QtWidgets.QWidget):
             return ("left", "right") if self.invert_x else ("right", "left")
         if axis == "y":
             return ("back", "front") if self.invert_y else ("front", "back")
-        return ("Bottom", "top") if self.invert_z else ("Bottom", "top")
+        return ("bottom", "top") if self.invert_z else ("top", "bottom")
 
     def _face_sign(self, axis: str, name: str):
         pos_name, neg_name = self._axis_names(axis)

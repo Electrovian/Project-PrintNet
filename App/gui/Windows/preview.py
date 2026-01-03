@@ -1,6 +1,7 @@
-from PyQt5 import QtWidgets, QtCore
+import math
+from PyQt5 import QtWidgets, QtCore, QtGui
 
-from ..theme import theme_css
+from ..theme import theme_css, theme_qcolor
 
 
 class PreviewView(QtCore.QObject):
@@ -8,12 +9,22 @@ class PreviewView(QtCore.QObject):
         super().__init__(main_window)
         self.main = main_window
         self.viewer = viewer
+        self._preview_data = None
+        self._play_timer = QtCore.QTimer(self.main)
+        self._play_timer.timeout.connect(self._on_play_tick)
+        self._is_playing = False
+        self._line_type_updating = False
+        self._line_type_map = []
         self._build_panels()
         self.hide()
 
     def _build_panels(self):
         self._preview_panel = QtWidgets.QFrame(self.viewer)
         self._preview_panel.setObjectName("PreviewPanel")
+        self._preview_panel.setSizePolicy(
+            QtWidgets.QSizePolicy.Preferred,
+            QtWidgets.QSizePolicy.Expanding,
+        )
         panel_layout = QtWidgets.QVBoxLayout(self._preview_panel)
         panel_layout.setContentsMargins(12, 12, 12, 12)
         panel_layout.setSpacing(10)
@@ -132,13 +143,16 @@ class PreviewView(QtCore.QObject):
         self._line_table.verticalHeader().setVisible(False)
         self._line_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self._line_table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
-        self._line_table.horizontalHeader().setStretchLastSection(True)
+        self._line_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        self._line_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self._line_table.setWordWrap(False)
         self._stack.addWidget(self._line_table)
 
         self._gcode_text = QtWidgets.QPlainTextEdit(self._preview_panel)
         self._gcode_text.setReadOnly(True)
         self._gcode_text.setObjectName("PreviewGCode")
         self._gcode_text.setPlaceholderText("Slice to generate a preview...")
+        self._gcode_text.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
         self._stack.addWidget(self._gcode_text)
 
         self._action_panel = QtWidgets.QFrame(self.viewer)
@@ -164,6 +178,7 @@ class PreviewView(QtCore.QObject):
         self._play_btn = QtWidgets.QToolButton(self._timeline_panel)
         self._play_btn.setText("Play")
         self._play_btn.setObjectName("PreviewButton")
+        self._play_btn.setCheckable(True)
         timeline_layout.addWidget(self._play_btn)
 
         timeline_layout.addWidget(QtWidgets.QLabel("Steps"))
@@ -207,30 +222,39 @@ class PreviewView(QtCore.QObject):
             self._printer_combo.addItem(name or "Printer")
 
     def _populate_line_types(self):
-        line_types = [
-            "Inner wall",
-            "Outer wall",
-            "Sparse infill",
-            "Internal solid infill",
-            "Top surface",
-            "Bottom surface",
-            "Internal Bridge",
-            "Gap infill",
-            "Travel",
-            "Retract",
+        self._line_type_map = [
+            ("Inner wall", "inner_wall"),
+            ("Outer wall", "outer_wall"),
+            ("Sparse infill", "sparse_infill"),
+            ("Internal solid infill", "solid_infill"),
+            ("Top surface", "top_surface"),
+            ("Bottom surface", "bottom_surface"),
+            ("Internal Bridge", "bridge"),
+            ("Gap infill", "gap_infill"),
+            ("Travel", "travel"),
+            ("Retract", "retract"),
         ]
-        self._line_table.setRowCount(len(line_types))
-        for row, label in enumerate(line_types):
+        self._line_type_updating = True
+        self._line_table.setRowCount(len(self._line_type_map))
+        for row, (label, key) in enumerate(self._line_type_map):
             item = QtWidgets.QTableWidgetItem(label)
             item.setCheckState(QtCore.Qt.Checked)
+            item.setData(QtCore.Qt.UserRole, key)
             self._line_table.setItem(row, 0, item)
             self._line_table.setItem(row, 1, QtWidgets.QTableWidgetItem("n/a"))
             self._line_table.setItem(row, 2, QtWidgets.QTableWidgetItem("n/a"))
+        self._line_type_updating = False
 
     def _wire_toggles(self):
         self._color_btn.toggled.connect(self._sync_toggle_stack)
         self._gcode_btn.toggled.connect(self._sync_toggle_stack)
         self._sync_toggle_stack()
+        self._layer_slider.valueChanged.connect(self._on_layer_changed)
+        self._steps_slider.valueChanged.connect(self._on_step_changed)
+        self._steps_spin.valueChanged.connect(self._on_step_spin_changed)
+        self._line_type_combo.currentTextChanged.connect(self._on_color_mode_changed)
+        self._play_btn.toggled.connect(self._on_play_toggled)
+        self._line_table.itemChanged.connect(self._on_line_type_changed)
 
     def _sync_toggle_stack(self):
         if self._color_btn.isChecked():
@@ -239,7 +263,10 @@ class PreviewView(QtCore.QObject):
             self._stack.setCurrentIndex(1)
 
     def apply_theme(self):
-        panel_bg = theme_css("popup_bg")
+        panel_bg_color = theme_qcolor("popup_bg")
+        panel_bg_color.setAlpha(210)
+        panel_bg = (f"rgba({panel_bg_color.red()}, {panel_bg_color.green()}, "
+                    f"{panel_bg_color.blue()}, {panel_bg_color.alpha()})")
         panel_border = theme_css("popup_border")
         panel_text = theme_css("popup_text")
         muted_text = theme_css("popup_muted_text")
@@ -355,9 +382,11 @@ class PreviewView(QtCore.QObject):
             f"  color: {panel_text};"
             "}"
         )
+        self._autosize_panel()
 
     def position_panels(self):
         margin = 16
+        self._autosize_panel()
         self._preview_panel.adjustSize()
         self._preview_panel.move(margin, margin + 6)
 
@@ -375,6 +404,17 @@ class PreviewView(QtCore.QObject):
         l_x = max(0, self.viewer.width() - self._layer_panel.width() - margin)
         l_y = max(0, (self.viewer.height() - self._layer_panel.height()) // 2)
         self._layer_panel.move(l_x, l_y)
+        self._autosize_panel()
+
+    def _autosize_panel(self):
+        if self._preview_panel is None:
+            return
+        margin = 16
+        available = max(240, self.viewer.width() - margin * 2)
+        max_width = min(380, available)
+        target = min(self._preview_panel.sizeHint().width(), max_width)
+        target = max(260, int(target))
+        self._preview_panel.setFixedWidth(target)
 
     def update_stats(self, stats):
         if not stats:
@@ -395,15 +435,28 @@ class PreviewView(QtCore.QObject):
         count = max(0, int(count))
         self._steps_slider.setRange(0, count)
         self._steps_spin.setRange(0, count)
-        self._layer_slider.setRange(0, max(0, count))
-        self._layer_top.setText(str(count))
+        self._steps_slider.setValue(count)
+        self._steps_spin.setValue(count)
+
+    def set_layer_count(self, count: int):
+        count = max(0, int(count))
+        top = max(0, count - 1)
+        self._layer_slider.setRange(0, top)
+        self._layer_slider.setValue(top)
+        self._layer_top.setText(str(top))
         self._layer_bottom.setText("0")
+        if count > 0:
+            self._update_steps_for_layer(top)
 
     def show(self):
         self._preview_panel.show()
         self._action_panel.show()
         self._timeline_panel.show()
         self._layer_panel.show()
+        if self._play_btn.isChecked():
+            self._play_btn.setChecked(False)
+        for panel in (self._preview_panel, self._action_panel, self._timeline_panel, self._layer_panel):
+            panel.raise_()
         self.position_panels()
 
     def hide(self):
@@ -411,3 +464,134 @@ class PreviewView(QtCore.QObject):
         self._action_panel.hide()
         self._timeline_panel.hide()
         self._layer_panel.hide()
+
+    def _on_layer_changed(self, value: int):
+        if hasattr(self.viewer, "set_preview_layer_index"):
+            self.viewer.set_preview_layer_index(int(value))
+        self._update_steps_for_layer(int(value))
+
+    def _on_step_changed(self, value: int):
+        if hasattr(self.viewer, "set_preview_step_index"):
+            self.viewer.set_preview_step_index(int(value))
+        if self._steps_spin.value() != value:
+            self._steps_spin.setValue(int(value))
+
+    def _on_step_spin_changed(self, value: int):
+        if self._steps_slider.value() != value:
+            self._steps_slider.setValue(int(value))
+
+    def _on_play_toggled(self, checked: bool):
+        if self._preview_data is None or not getattr(self._preview_data, "layers", None):
+            self._play_btn.setChecked(False)
+            return
+        if checked:
+            if self._steps_slider.value() >= self._steps_slider.maximum():
+                self._steps_slider.setValue(0)
+            self._play_btn.setText("Pause")
+            self._is_playing = True
+            self._play_timer.start(30)
+        else:
+            self._play_btn.setText("Play")
+            self._is_playing = False
+            self._play_timer.stop()
+
+    def _on_play_tick(self):
+        if self._steps_slider.maximum() <= 0:
+            self._play_btn.setChecked(False)
+            return
+        next_value = self._steps_slider.value() + 1
+        if next_value > self._steps_slider.maximum():
+            self._play_btn.setChecked(False)
+            return
+        self._steps_slider.setValue(next_value)
+
+    def set_preview_data(self, preview):
+        self._preview_data = preview
+        if preview is None or not getattr(preview, "layers", None):
+            self.set_layer_count(0)
+            self.set_steps_count(0)
+            self._update_line_type_stats()
+            self._sync_feature_filter()
+            return
+        self.set_layer_count(len(preview.layers))
+        self._update_line_type_stats()
+        self._sync_feature_filter()
+
+    def _update_steps_for_layer(self, layer_index: int):
+        count = 0
+        if self._preview_data is not None and getattr(self._preview_data, "layers", None):
+            idx = max(0, min(layer_index, len(self._preview_data.layers) - 1))
+            count = len(self._preview_data.layers[idx].segments)
+        self.set_steps_count(count)
+
+    def _on_line_type_changed(self, item):
+        if self._line_type_updating:
+            return
+        if item is None or item.column() != 0:
+            return
+        self._sync_feature_filter()
+
+    def _sync_feature_filter(self):
+        if not hasattr(self.viewer, "set_preview_feature_filter"):
+            return
+        total_rows = self._line_table.rowCount()
+        if total_rows == 0:
+            self.viewer.set_preview_feature_filter(None)
+            return
+        checked = []
+        checked_count = 0
+        for row in range(total_rows):
+            item = self._line_table.item(row, 0)
+            if item is None:
+                continue
+            if item.checkState() == QtCore.Qt.Checked:
+                checked_count += 1
+                key = item.data(QtCore.Qt.UserRole) or item.text().strip().lower().replace(" ", "_")
+                checked.append(key)
+        if checked_count == total_rows:
+            self.viewer.set_preview_feature_filter(None)
+        else:
+            self.viewer.set_preview_feature_filter(checked)
+
+    def _format_duration(self, seconds: float) -> str:
+        seconds = max(0, int(round(seconds)))
+        mins, secs = divmod(seconds, 60)
+        hours, mins = divmod(mins, 60)
+        if hours:
+            return f"{hours}h{mins:02d}m"
+        return f"{mins}m{secs:02d}s"
+
+    def _update_line_type_stats(self):
+        totals = {}
+        total_time = 0.0
+        if self._preview_data is not None and getattr(self._preview_data, "layers", None):
+            for layer in self._preview_data.layers:
+                for seg in layer.segments:
+                    dist = math.dist(seg.start, seg.end)
+                    if seg.speed > 0:
+                        t = dist / seg.speed
+                    else:
+                        t = 0.0
+                    totals[seg.feature] = totals.get(seg.feature, 0.0) + t
+                    total_time += t
+        for row in range(self._line_table.rowCount()):
+            item = self._line_table.item(row, 0)
+            if item is None:
+                continue
+            key = item.data(QtCore.Qt.UserRole)
+            seconds = totals.get(key, 0.0)
+            time_str = self._format_duration(seconds) if seconds > 0 else "n/a"
+            percent = (seconds / total_time * 100.0) if total_time > 0 else 0.0
+            self._line_table.setItem(row, 1, QtWidgets.QTableWidgetItem(time_str))
+            self._line_table.setItem(row, 2, QtWidgets.QTableWidgetItem(f"{percent:.1f}%"))
+
+    def _on_color_mode_changed(self, value: str):
+        mode = (value or "").strip().lower()
+        if mode == "speed":
+            selected = "speed"
+        elif mode in ("flow", "filament"):
+            selected = "flow"
+        else:
+            selected = "feature"
+        if hasattr(self.viewer, "set_preview_color_mode"):
+            self.viewer.set_preview_color_mode(selected)

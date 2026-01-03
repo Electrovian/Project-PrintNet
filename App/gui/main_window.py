@@ -65,8 +65,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __getattr__(self, name):
         controller = self.__dict__.get("controller")
-        if controller is not None and hasattr(controller, name):
-            return getattr(controller, name)
+        if controller is not None:
+            if name in controller.__dict__:
+                return controller.__dict__[name]
+            if getattr(type(controller), name, None) is not None:
+                return object.__getattribute__(controller, name)
         raise AttributeError(f"{type(self).__name__} has no attribute {name!r}")
 
     def dragEnterEvent(self, a0: QtGui.QDragEnterEvent):

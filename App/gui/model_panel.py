@@ -7,6 +7,7 @@ class ModelPanel(QtWidgets.QWidget):
 
     model_selected = QtCore.pyqtSignal(int)  # model_id
     request_remove = QtCore.pyqtSignal(int)  # model_id
+    duplicate_requested = QtCore.pyqtSignal(int, int, int)  # count, rows, cols
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -20,13 +21,16 @@ class ModelPanel(QtWidgets.QWidget):
         layout.addWidget(self.list_widget)
 
         btn_row = QtWidgets.QHBoxLayout()
+        self.duplicate_btn = QtWidgets.QPushButton("Duplicate")
         self.remove_btn = QtWidgets.QPushButton("Remove selected")
+        btn_row.addWidget(self.duplicate_btn)
         btn_row.addStretch(1)
         btn_row.addWidget(self.remove_btn)
         layout.addLayout(btn_row)
 
         self.list_widget.currentItemChanged.connect(self._on_selection_changed)
         self.remove_btn.clicked.connect(self._on_remove_clicked)
+        self.duplicate_btn.clicked.connect(self._on_duplicate_clicked)
 
     def add_model(self, name: str, model_id: int):
         full_name = (name or "").strip()
@@ -59,5 +63,48 @@ class ModelPanel(QtWidgets.QWidget):
         if (mid := self.current_model_id()) is not None:
             self.request_remove.emit(mid)
 
+    def _on_duplicate_clicked(self):
+        dlg = DuplicateDialog(self)
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
+            return
+        count, rows, cols = dlg.values()
+        if count > 0:
+            self.duplicate_requested.emit(count, rows, cols)
+
     def _truncate_name(self, name: str) -> str:
         return name if len(name) <= self.MAX_DISPLAY_NAME else name[: self.MAX_DISPLAY_NAME - 3] + "..."
+
+
+class DuplicateDialog(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Duplicate")
+        self.setModal(True)
+        layout = QtWidgets.QFormLayout(self)
+
+        self.count_spin = QtWidgets.QSpinBox(self)
+        self.count_spin.setRange(1, 200)
+        self.count_spin.setValue(1)
+        layout.addRow("Copy count", self.count_spin)
+
+        self.rows_spin = QtWidgets.QSpinBox(self)
+        self.rows_spin.setRange(1, 200)
+        self.rows_spin.setValue(1)
+        layout.addRow("Grid rows", self.rows_spin)
+
+        self.cols_spin = QtWidgets.QSpinBox(self)
+        self.cols_spin.setRange(1, 200)
+        self.cols_spin.setValue(1)
+        layout.addRow("Grid columns", self.cols_spin)
+
+        btn_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+        layout.addRow(btn_box)
+
+    def values(self):
+        return (int(self.count_spin.value()),
+                int(self.rows_spin.value()),
+                int(self.cols_spin.value()))

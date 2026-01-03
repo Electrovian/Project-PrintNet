@@ -6,6 +6,7 @@ from ..job_queue_panel import JobQueuePanel
 from ..controls import TransformToolbar
 from ..model_panel import ModelPanel
 from ..popups import MovePopup, RotatePopup, ScalePopup, AutoOrientPopup, ArrangePopup
+from ..theme import theme_css
 
 
 class PrepareView(QtCore.QObject):
@@ -17,6 +18,7 @@ class PrepareView(QtCore.QObject):
         self._build_docks()
         self._build_toolbar()
         self._build_popups()
+        self._build_action_panel()
 
         self.main.viewer = self.viewer
 
@@ -94,15 +96,41 @@ class PrepareView(QtCore.QObject):
         self.main._popup_arrange.arrange_selected_requested.connect(self.main._on_arrange_selected_requested)
         self.main._popup_arrange.reset_requested.connect(self.main._on_arrange_reset)
 
+    def _build_action_panel(self):
+        self._action_panel = QtWidgets.QFrame(self.viewer)
+        self._action_panel.setObjectName("ActionPanel")
+        action_layout = QtWidgets.QVBoxLayout(self._action_panel)
+        action_layout.setContentsMargins(10, 8, 10, 8)
+        action_layout.setSpacing(6)
+
+        self._slice_btn = QtWidgets.QPushButton("Slice plate", self._action_panel)
+        self._slice_btn.clicked.connect(self.main.slice_current_model)
+        action_layout.addWidget(self._slice_btn)
+
+        self._print_btn = QtWidgets.QPushButton("Send print", self._action_panel)
+        self._print_btn.clicked.connect(self.main._open_device_view)
+        action_layout.addWidget(self._print_btn)
+
+    def position_panels(self):
+        margin = 16
+        self._action_panel.adjustSize()
+        x = max(0, self.viewer.width() - self._action_panel.width() - margin)
+        y = max(0, self.viewer.height() - self._action_panel.height() - margin)
+        self._action_panel.move(x, y)
+
     def show(self):
         for dock in (self._settings_dock, self._model_dock, self._job_dock):
             dock.show()
         self.transform_toolbar.show()
+        self._action_panel.show()
+        self._action_panel.raise_()
+        self.position_panels()
 
     def hide(self):
         for dock in (self._settings_dock, self._model_dock, self._job_dock):
             dock.hide()
         self.transform_toolbar.hide()
+        self._action_panel.hide()
         for popup in (
             self.main._popup_move,
             self.main._popup_rotate,
@@ -114,6 +142,28 @@ class PrepareView(QtCore.QObject):
 
     def apply_theme(self):
         self.viewer.apply_theme()
+        action_border = theme_css("action_panel_border")
+        action_bg = theme_css("action_panel_bg")
+        self._action_panel.setStyleSheet(
+            "QFrame#ActionPanel {"
+            f"  background: {action_bg};"
+            f"  border: 1px solid {action_border};"
+            "  border-radius: 6px;"
+            "}"
+            "QPushButton {"
+            f"  background: {theme_css('action_button_bg')};"
+            f"  color: {theme_css('action_button_text')};"
+            f"  border: 1px solid {action_border};"
+            "  border-radius: 4px;"
+            "  padding: 6px 16px;"
+            "}"
+            "QPushButton:hover {"
+            f"  background: {theme_css('action_button_hover_bg')};"
+            "}"
+            "QPushButton:pressed {"
+            f"  background: {theme_css('action_button_active_bg')};"
+            "}"
+        )
         for popup in (
             self.main._popup_move,
             self.main._popup_rotate,
