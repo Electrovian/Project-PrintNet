@@ -513,7 +513,10 @@ class SharedView(QtCore.QObject):
             "User Guide",
         ):
             action = QtWidgets.QAction(label, self.main)
-            action.triggered.connect(self.main._not_implemented)
+            if label == "User Feedback":
+                action.triggered.connect(self.main._open_feedback)
+            else:
+                action.triggered.connect(self.main._not_implemented)
             self.main._help_menu.addAction(action)
 
     def _topbar_separator(self, parent):

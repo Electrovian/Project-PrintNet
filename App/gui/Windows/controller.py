@@ -951,6 +951,17 @@ class MainController(QtCore.QObject):
     def _not_implemented(self):
         QtWidgets.QMessageBox.information(self.main, "Not implemented", "This feature is not implemented yet.")
 
+    def _open_feedback(self):
+        url = "https://github.com/Electrovian/Project-PrintNet/issues"
+        reply = QtWidgets.QMessageBox.question(
+            self.main,
+            "User Feedback",
+            "Open the feedback page in your browser?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply == QtWidgets.QMessageBox.Yes:
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
+
     def _save_project(self):
         if self._current_project_path:
             self._write_project_file(self._current_project_path)
@@ -1106,7 +1117,7 @@ class MainController(QtCore.QObject):
 
         if missing:
             QtWidgets.QMessageBox.warning(
-                self,
+                self.main,
                 "Open warning",
                 "Some models could not be loaded:\n" + "\n".join(missing),
             )
@@ -1432,9 +1443,9 @@ class MainController(QtCore.QObject):
                 return np.array([val, val, val], dtype=float)
         if isinstance(scale, (list, tuple)) and len(scale) == 3:
             return np.array([float(scale[0]), float(scale[1]), float(scale[2])], dtype=float)
-        try:
+        if isinstance(scale, (int, float, np.floating)):
             val = float(scale)
-        except Exception:
+        else:
             val = 1.0
         return np.array([val, val, val], dtype=float)
 
