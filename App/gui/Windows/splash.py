@@ -26,9 +26,12 @@ class SplashScreen(QtWidgets.QDialog):
         message_label.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
 
         bar = QtWidgets.QProgressBar(outer)
-        bar.setRange(0, 0)
+        bar.setRange(0, 100)
+        bar.setValue(0)
         bar.setTextVisible(False)
         bar.setFixedHeight(10)
+        self._progress_bar = bar
+        self._progress_anim = None
 
         version_label = QtWidgets.QLabel("Version: 0.1", outer)
         version_label.setObjectName("SplashVersion")
@@ -45,6 +48,19 @@ class SplashScreen(QtWidgets.QDialog):
 
         self._apply_style()
         self.setFixedSize(360, 240)
+
+    def start_progress(self, duration_ms: int = 3000):
+        if self._progress_bar is None:
+            return
+        if self._progress_anim is None:
+            self._progress_anim = QtCore.QPropertyAnimation(self._progress_bar, b"value", self)
+            self._progress_anim.setEasingCurve(QtCore.QEasingCurve.Linear)
+        self._progress_bar.setValue(0)
+        self._progress_anim.stop()
+        self._progress_anim.setDuration(max(100, int(duration_ms)))
+        self._progress_anim.setStartValue(0)
+        self._progress_anim.setEndValue(100)
+        self._progress_anim.start()
 
     def _apply_style(self):
         self.setStyleSheet(

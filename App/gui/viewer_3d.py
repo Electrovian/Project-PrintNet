@@ -1048,8 +1048,11 @@ class Viewer3D(gl.GLViewWidget):
     def _finish_marquee(self, pos: QtCore.QPoint):
         if not self._marquee_active:
             return
+        origin = self._marquee_origin
+        if origin is None:
+            return
         rect_tuple = rect_from_points(
-            (float(self._marquee_origin.x()), float(self._marquee_origin.y())),
+            (float(origin.x()), float(origin.y())),
             (float(pos.x()), float(pos.y())),
         )
         if self._marquee_band is not None:

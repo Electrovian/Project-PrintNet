@@ -51,13 +51,20 @@ def get_firmware_profile(name: str) -> FirmwareProfile:
 @dataclass
 class SliceSettings:
     layer_height: float = 0.2
+    first_layer_height: float = 0.2
     min_layer_height: float = 0.1
     max_layer_height: float = 0.3
+    seam_position: str = "aligned"
+    precise_wall: bool = False
+    only_one_wall_top: bool = False
+    only_one_wall_first_layer: bool = False
     firmware_flavor: str = "marlin"
     retract_style: Optional[str] = None
     supports_arcs: Optional[bool] = None
     start_gcode: Optional[List[str] | str] = None
     end_gcode: Optional[List[str] | str] = None
+    filament_name: str = "Hyper PLA"
+    filament_color: str = "#42d94a"
     filament_density: float = 1.24
     infill_percent: float = 15.0
     infill_density: Optional[float] = None
@@ -74,13 +81,18 @@ class SliceSettings:
     perimeter_count: int = 1
     top_layers: int = 3
     bottom_layers: int = 3
+    support_enabled: bool = False
+    support_type: str = "normal"
     overhang_angle: float = 45.0
+    support_build_plate_only: bool = False
     support_z_gap: float = 0.2
     support_xy_gap: float = 0.3
     interface_layers: int = 2
     interface_density: float = 0.9
     support_spacing: float = 2.0
     support_style: str = "pillars"
+    support_filament_base: str = "default"
+    support_filament_interface: str = "default"
     tree_branch_angle: float = 45.0
     tree_merge_distance: float = 2.0
     retract_distance: float = 1.0
@@ -94,8 +106,21 @@ class SliceSettings:
     adaptive_overhang_height: float = 0.1
     layer_height_ranges: Optional[List[Tuple[float, float, float]]] = None
     brim_width: float = 0.0
+    brim_type: str = "auto"
     skirt_loops: int = 0
+    skirt_height: int = 1
     skirt_distance: float = 5.0
+    print_sequence: str = "by_layer"
+    spiral_vase: bool = False
+    ignore_inner_color: bool = False
+    timelapse_mode: str = "traditional"
+    fuzzy_skin: str = "none"
+    prime_tower_enabled: bool = False
+    prime_tower_width: float = 35.0
+    prime_tower_square: bool = True
+    prime_tower_volume: float = 45.0
+    flush_into_infill: bool = False
+    flush_into_support: bool = False
     raft_layers: int = 0
     raft_margin: float = 3.0
     hole_compensation_mm: float = 0.0
@@ -105,6 +130,8 @@ class SliceSettings:
         self.max_layer_height = max(self.min_layer_height, float(self.max_layer_height))
         self.layer_height = max(self.min_layer_height,
                                 min(float(self.layer_height), self.max_layer_height))
+        self.first_layer_height = max(self.min_layer_height,
+                                      min(float(self.first_layer_height), self.max_layer_height))
         profile = get_firmware_profile(self.firmware_flavor)
         self.firmware_flavor = profile.name
         if self.retract_style is None:
@@ -115,6 +142,12 @@ class SliceSettings:
         if self.supports_arcs is None:
             self.supports_arcs = profile.supports_arcs
         self.supports_arcs = bool(self.supports_arcs)
+        self.seam_position = str(self.seam_position).strip().lower() or "aligned"
+        self.precise_wall = bool(self.precise_wall)
+        self.only_one_wall_top = bool(self.only_one_wall_top)
+        self.only_one_wall_first_layer = bool(self.only_one_wall_first_layer)
+        self.filament_name = str(self.filament_name or "").strip() or "Hyper PLA"
+        self.filament_color = str(self.filament_color or "").strip() or "#42d94a"
         if self.start_gcode is None:
             self.start_gcode = list(profile.start_gcode)
         self.start_gcode = _normalize_gcode_lines(self.start_gcode)
@@ -130,14 +163,34 @@ class SliceSettings:
         self.perimeter_count = max(1, int(self.perimeter_count))
         self.top_layers = max(0, int(self.top_layers))
         self.bottom_layers = max(0, int(self.bottom_layers))
+        self.support_enabled = bool(self.support_enabled)
+        self.support_type = str(self.support_type).strip().lower() or "normal"
+        self.support_build_plate_only = bool(self.support_build_plate_only)
         self.interface_layers = max(0, int(self.interface_layers))
         self.interface_density = max(0.0, min(1.0, float(self.interface_density)))
         self.support_spacing = max(0.1, float(self.support_spacing))
         self.support_style = str(self.support_style).strip().lower() or "pillars"
+        self.support_filament_base = str(self.support_filament_base).strip().lower() or "default"
+        self.support_filament_interface = str(self.support_filament_interface).strip().lower() or "default"
         self.tree_branch_angle = max(0.0, min(85.0, float(self.tree_branch_angle)))
         self.tree_merge_distance = max(0.1, float(self.tree_merge_distance))
         self.retract_distance = max(0.0, float(self.retract_distance))
         self.retract_speed = max(1.0, float(self.retract_speed))
+        self.brim_width = max(0.0, float(self.brim_width))
+        self.brim_type = str(self.brim_type).strip().lower() or "auto"
+        self.skirt_loops = max(0, int(self.skirt_loops))
+        self.skirt_height = max(0, int(self.skirt_height))
+        self.print_sequence = str(self.print_sequence).strip().lower() or "by_layer"
+        self.spiral_vase = bool(self.spiral_vase)
+        self.ignore_inner_color = bool(self.ignore_inner_color)
+        self.timelapse_mode = str(self.timelapse_mode).strip().lower() or "traditional"
+        self.fuzzy_skin = str(self.fuzzy_skin).strip().lower() or "none"
+        self.prime_tower_enabled = bool(self.prime_tower_enabled)
+        self.prime_tower_width = max(0.0, float(self.prime_tower_width))
+        self.prime_tower_square = bool(self.prime_tower_square)
+        self.prime_tower_volume = max(0.0, float(self.prime_tower_volume))
+        self.flush_into_infill = bool(self.flush_into_infill)
+        self.flush_into_support = bool(self.flush_into_support)
         self.z_hop_height = max(0.0, float(self.z_hop_height))
         self.ironing_speed = max(1.0, float(self.ironing_speed))
         self.ironing_flow = max(0.0, min(1.0, float(self.ironing_flow)))

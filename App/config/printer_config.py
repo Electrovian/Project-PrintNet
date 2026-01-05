@@ -3,6 +3,8 @@ from typing import List, Tuple, Dict
 
 import pandas as pd
 
+from .printers_catalog import PRINTER_CATALOG
+
 EXCEL_FILE = "Printer Information.xlsx"
 
 def load_printer_config() -> Tuple[List[Dict], Dict]:
@@ -50,8 +52,19 @@ def load_printer_config() -> Tuple[List[Dict], Dict]:
                     airtable_cfg["status_field"] = str(row.get("StatusField", "Status"))
         except Exception as exc:
             print(f"[printer_config] Failed to parse Excel config: {exc}")
-    else:
-        # Fallback dummy printer
+
+    if PRINTER_CATALOG:
+        existing = {str(p.get("name", "")).strip().lower() for p in printers}
+        for entry in PRINTER_CATALOG:
+            name = str(entry.get("name", "")).strip()
+            if not name:
+                continue
+            if name.lower() in existing:
+                continue
+            printers.append(dict(entry))
+            existing.add(name.lower())
+
+    if not printers:
         printers.append({
             "name": "Dummy M3",
             "octoprint_url": "http://localhost",

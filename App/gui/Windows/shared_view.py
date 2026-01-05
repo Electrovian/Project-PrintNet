@@ -311,6 +311,34 @@ class SharedView(QtCore.QObject):
         ):
             menu.setStyleSheet(menu_style)
 
+        dock_border = theme_css("popup_border")
+        dock_bg = theme_css("popup_bg")
+        dock_text = theme_css("popup_text")
+        self.main.setStyleSheet(
+            "QMainWindow {"
+            f"  background: {dock_bg};"
+            "}"
+            "QDockWidget {"
+            f"  border: 1px solid {dock_border};"
+            f"  background: {dock_bg};"
+            "}"
+            "QDockWidget::title {"
+            f"  background: {dock_bg};"
+            f"  color: {dock_text};"
+            f"  border-bottom: 1px solid {dock_border};"
+            "  padding: 4px 8px;"
+            "}"
+            "QDockWidget::close-button, QDockWidget::float-button {"
+            "  border: none;"
+            "  background: transparent;"
+            "}"
+            "QMainWindow::separator {"
+            f"  background: {dock_border};"
+            "  width: 1px;"
+            "  height: 1px;"
+            "}"
+        )
+
     def show_shortcuts_dialog(self):
         dlg = QtWidgets.QDialog(self.main)
         dlg.setWindowTitle("Keyboard Shortcuts")

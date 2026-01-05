@@ -35,6 +35,7 @@ class MainWindow(QtWidgets.QMainWindow):
         max_threads = max(1, (os.cpu_count() or 2) - 1)
         self.pool.setMaxThreadCount(max_threads)
         self._build_ui()
+        self._apply_windows_titlebar_theme()
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self):
@@ -86,3 +87,31 @@ class MainWindow(QtWidgets.QMainWindow):
         super().resizeEvent(a0)
         if hasattr(self, "controller"):
             self.controller.resizeEvent(a0)
+
+    def apply_titlebar_theme(self):
+        self._apply_windows_titlebar_theme()
+
+    def _apply_windows_titlebar_theme(self):
+        if os.name != "nt":
+            return
+        try:
+            import ctypes
+        except Exception:
+            return
+        try:
+            hwnd = int(self.winId())
+        except Exception:
+            return
+        value = ctypes.c_int(1)
+        dwmapi = ctypes.windll.dwmapi
+        for attr in (20, 19):
+            try:
+                dwmapi.DwmSetWindowAttribute(
+                    hwnd,
+                    attr,
+                    ctypes.byref(value),
+                    ctypes.sizeof(value),
+                )
+                break
+            except Exception:
+                continue

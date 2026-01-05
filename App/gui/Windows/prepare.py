@@ -142,6 +142,8 @@ class PrepareView(QtCore.QObject):
 
     def apply_theme(self):
         self.viewer.apply_theme()
+        if hasattr(self, "settings_panel") and hasattr(self.settings_panel, "apply_theme"):
+            self.settings_panel.apply_theme()
         action_border = theme_css("action_panel_border")
         action_bg = theme_css("action_panel_bg")
         self._action_panel.setStyleSheet(
