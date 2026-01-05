@@ -52,6 +52,7 @@ class Viewer3D(gl.GLViewWidget):
         self._dragging = False
         self._drag_start_world = None
         self._drag_start_offsets = None
+        self._drag_plane_z = 0.0
         self._labels_enabled = False
         self._selection_info = None
         self._interaction_enabled = True
@@ -103,6 +104,7 @@ class Viewer3D(gl.GLViewWidget):
         printer_defaults = DEFAULTS.get("printer", {})
         self._bed_size = tuple(printer_defaults.get("bed_size", (200, 200)))
         self._bed_height = float(printer_defaults.get("max_height", 200))
+        self._sync_bed_grid()
 
         self._build_gizmo()
         self._build_view_cube()
@@ -299,6 +301,28 @@ class Viewer3D(gl.GLViewWidget):
         if seg is None:
             return None
         return (seg.end, float(seg.speed), bool(seg.is_extrude))
+
+    def get_preview_progress(self):
+        if self._preview_data is None or not getattr(self._preview_data, "layers", None):
+            return None
+        layers = self._preview_data.layers
+        total = sum(len(layer.segments) for layer in layers)
+        if total <= 0:
+            return (0, 0)
+        if self._preview_step_index is not None:
+            layer_index = self._preview_step_layer
+        else:
+            layer_index = self._preview_layer_index
+        if layer_index is None:
+            layer_index = len(layers) - 1
+        layer_index = max(0, min(layer_index, len(layers) - 1))
+        completed = sum(len(layers[idx].segments) for idx in range(layer_index))
+        layer_segments = len(layers[layer_index].segments)
+        if self._preview_step_index is None:
+            completed += layer_segments
+        else:
+            completed += max(0, min(int(self._preview_step_index), layer_segments))
+        return (completed, total)
 
     def _preview_segment_for_nozzle(self):
         if self._preview_data is None or not getattr(self._preview_data, "layers", None):
@@ -890,9 +914,20 @@ class Viewer3D(gl.GLViewWidget):
     def set_bed_limits(self, bed_size: Tuple[float, float], max_height: float):
         self._bed_size = (float(bed_size[0]), float(bed_size[1]))
         self._bed_height = float(max_height)
+        self._sync_bed_grid()
         for mid in self.models:
             self._update_bed_state(mid)
         self.update()
+
+    def _sync_bed_grid(self):
+        if getattr(self, "_grid_item", None) is None:
+            return
+        size_x = float(self._bed_size[0]) if self._bed_size else 0.0
+        size_y = float(self._bed_size[1]) if self._bed_size else 0.0
+        try:
+            self._grid_item.setSize(size_x, size_y, 0)
+        except Exception:
+            pass
 
     def get_out_of_bounds_models(self) -> List[int]:
         return [mid for mid, model in self.models.items() if model.get("out_of_bounds")]
@@ -979,6 +1014,7 @@ class Viewer3D(gl.GLViewWidget):
         self._dragging = False
         self._drag_start_world = None
         self._drag_start_offsets = None
+        self._drag_plane_z = 0.0
         self._gizmo_drag_axis = None
         self._gizmo_drag_start_param = None
         self._gizmo_drag_start_offsets = None
@@ -1386,10 +1422,21 @@ class Viewer3D(gl.GLViewWidget):
 
             # 2) Allow drag of selected model even if pick missed (Bambu-like)
             if self._selected_model_id is not None:
-                hit = self._mouse_to_plane_z0(ev.pos())
+                plane_z = 0.0
+                bounds_list = [self.models[mid].get("bounds") for mid in self._selected_model_ids if mid in self.models]
+                bounds_list = [b for b in bounds_list if b is not None]
+                if bounds_list:
+                    try:
+                        plane_z = float(min(b[0][2] for b in bounds_list))
+                    except Exception:
+                        plane_z = 0.0
+                hit = self._mouse_to_plane(ev.pos(), plane_z)
+                if hit is None:
+                    hit = self._mouse_to_plane_z0(ev.pos())
                 if hit is not None:
                     self._dragging = True
                     self._drag_start_world = hit
+                    self._drag_plane_z = plane_z
 
                     offsets = {}
                     for mid in self._selected_model_ids or [self._selected_model_id]:
@@ -1497,7 +1544,9 @@ class Viewer3D(gl.GLViewWidget):
                 ev.accept()
                 return
 
-            hit = self._mouse_to_plane_z0(ev.pos())
+            hit = self._mouse_to_plane(ev.pos(), self._drag_plane_z)
+            if hit is None:
+                hit = self._mouse_to_plane_z0(ev.pos())
             if hit is None or self._drag_start_world is None or self._drag_start_offsets is None:
                 ev.accept()
                 return
@@ -1536,6 +1585,7 @@ class Viewer3D(gl.GLViewWidget):
             self._dragging = False
             self._drag_start_world = None
             self._drag_start_offsets = None
+            self._drag_plane_z = 0.0
             ev.accept()
             return
         if ev.button() == QtCore.Qt.LeftButton and self._gizmo_rotate_axis is not None:
@@ -2501,20 +2551,23 @@ class Viewer3D(gl.GLViewWidget):
         d /= n
         return p_near, d
 
-    def _mouse_to_plane_z0(self, pos: QtCore.QPoint):
+    def _mouse_to_plane(self, pos: QtCore.QPoint, plane_z: float):
         o, d = self._mouse_ray(pos)
         if o is None or d is None:
             return None
         if abs(d[2]) < 1e-8:
             return None
 
-        t = -o[2] / d[2]
+        t = (float(plane_z) - float(o[2])) / float(d[2])
         if t < 0:
             return None
 
         p = o + t * d
-        p[2] = 0.0
+        p[2] = float(plane_z)
         return p
+
+    def _mouse_to_plane_z0(self, pos: QtCore.QPoint):
+        return self._mouse_to_plane(pos, 0.0)
 
     # -------------------- picking (AABB projection) --------------------
 

@@ -11,6 +11,7 @@ class SelectionUtilsTests(unittest.TestCase):
     def test_rect_size(self):
         rect = (2.0, 5.0, 10.0, 7.0)
         self.assertEqual(rect_size(rect), (8.0, 2.0))
+        self.assertEqual(rect_size((5.0, 5.0, 2.0, 2.0)), (0.0, 0.0))
 
     def test_rect_intersects(self):
         a = (0.0, 0.0, 5.0, 5.0)
@@ -26,6 +27,7 @@ class SelectionUtilsTests(unittest.TestCase):
         outer = (0.0, 0.0, 10.0, 10.0)
         inner = (2.0, 3.0, 6.0, 7.0)
         self.assertTrue(rect_contains(outer, inner))
+        self.assertFalse(rect_contains(inner, outer))
 
     def test_rect_intersects_false(self):
         a = (0.0, 0.0, 5.0, 5.0)

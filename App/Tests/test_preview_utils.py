@@ -13,5 +13,10 @@ class TestPreviewUtils(unittest.TestCase):
         self.assertEqual(play_interval_ms(30, 10.0, min_ms=8, max_ms=250), 8)
         self.assertEqual(play_interval_ms(1000, 0.1, min_ms=8, max_ms=250), 250)
 
+    def test_play_interval_ms_invalid_speed(self):
+        self.assertEqual(play_interval_ms(50, None), 50)
+        self.assertEqual(play_interval_ms(50, -2), 50)
+        self.assertEqual(play_interval_ms(0, 1.0), 8)
+
 if __name__ == "__main__":
     unittest.main()

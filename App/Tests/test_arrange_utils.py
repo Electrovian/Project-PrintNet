@@ -13,12 +13,14 @@ class TestArrangeUtils(unittest.TestCase):
         values = spacing_candidates(2.0, step=0.5)
         self.assertEqual(values[0], 2.0)
         self.assertIn(0.0, values)
+        self.assertEqual(spacing_candidates(0.0), [0.0])
 
     def test_positions_fit(self):
         sizes = [(1, 20.0, 20.0)]
         bed_bounds = (-50.0, 50.0, -50.0, 50.0)
         self.assertTrue(positions_fit({1: (0.0, 0.0)}, sizes, bed_bounds))
         self.assertFalse(positions_fit({1: (60.0, 0.0)}, sizes, bed_bounds))
+        self.assertFalse(positions_fit({2: (0.0, 0.0)}, sizes, bed_bounds))
 
 
 if __name__ == "__main__":

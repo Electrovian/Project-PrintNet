@@ -559,12 +559,11 @@ def point_in_polygon(point: Point2D, polygon: Sequence[Point2D]) -> bool:
     return pc.PointInPolygon(pt, path) > 0
 
 def point_in_island(point: Point2D, island: Island2D) -> bool:
-    pc = _require_pyclipper()
     outer, holes = island
     if not point_in_polygon(point, outer):
         return False
     for hole in holes:
-        if pc.PointInPolygon(point, _normalize_polygon(hole)) > 0:
+        if point_in_polygon(point, hole):
             return False
     return True
 

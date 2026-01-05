@@ -23,6 +23,7 @@ class MainController(QtCore.QObject):
         self._current_project_path = None
         self._last_gcode_path = None
         self._last_slice_signature = None
+        self._last_gcode_stats = None
         self._slice_in_progress = False
         self._labels_visible = True
         self._model_clipboard = []
@@ -35,6 +36,9 @@ class MainController(QtCore.QObject):
         self._undo_timer.setSingleShot(True)
         self._undo_timer.timeout.connect(self._finalize_undo_snapshot)
         self._pending_undo_snapshot = False
+        self._device_status_timer = QtCore.QTimer(self)
+        self._device_status_timer.setInterval(750)
+        self._device_status_timer.timeout.connect(self._update_device_status)
 
     def __getattr__(self, name):
         main = self.__dict__.get("main")
@@ -63,6 +67,7 @@ class MainController(QtCore.QObject):
         self._undo_stack_limit = 50
         self._undo_in_progress = False
         self._bed_warning_active = False
+        self._last_gcode_stats = None
         self._undo_timer = QtCore.QTimer(self)
         self._undo_timer.setSingleShot(True)
         self._undo_timer.timeout.connect(self._finalize_undo_snapshot)
@@ -74,6 +79,8 @@ class MainController(QtCore.QObject):
 
         self._activate_mode("prepare")
         self.statusBar().showMessage(DEFAULTS["app"]["status_ready"])
+        if self._device_status_timer is not None:
+            self._device_status_timer.start()
 
     def _connect_signals(self):
         self.model_panel.model_selected.connect(self._on_model_selected)
@@ -662,6 +669,7 @@ class MainController(QtCore.QObject):
     def _update_preview_from_gcode(self, gcode_path: str, stats: dict):
         if not hasattr(self, "preview_view"):
             return
+        self._last_gcode_stats = dict(stats or {})
         preview_text, total_lines = self._read_gcode_preview(gcode_path)
         self.preview_view.set_gcode_text(preview_text)
         self.preview_view.update_stats(stats)
@@ -676,6 +684,7 @@ class MainController(QtCore.QObject):
         self._last_gcode_path = None
         self._last_slice_signature = None
         self._slice_in_progress = False
+        self._last_gcode_stats = None
         if not hasattr(self, "preview_view"):
             return
         self.preview_view.set_gcode_text("")
@@ -687,6 +696,43 @@ class MainController(QtCore.QObject):
             self.viewer.clear_gcode_preview()
         if hasattr(self.viewer, "clear_print_stats"):
             self.viewer.clear_print_stats()
+
+    def _update_device_status(self):
+        if not hasattr(self, "device_view") or not hasattr(self, "viewer"):
+            return
+        head_pos = None
+        if hasattr(self.viewer, "get_preview_nozzle_state"):
+            state = self.viewer.get_preview_nozzle_state()
+            if state is not None:
+                head_pos = tuple(float(v) for v in state[0])
+
+        time_left = None
+        pla_remaining = None
+        pla_low = None
+        stats = self._last_gcode_stats or {}
+        total_time = stats.get("time_seconds")
+        total_len = stats.get("length_mm")
+
+        progress = None
+        if hasattr(self.viewer, "get_preview_progress"):
+            progress = self.viewer.get_preview_progress()
+
+        if progress and total_time is not None:
+            completed, total = progress
+            if total > 0:
+                ratio = max(0.0, min(1.0, float(completed) / float(total)))
+                time_left = max(0.0, float(total_time)) * (1.0 - ratio)
+                if total_len is not None:
+                    remaining_mm = max(0.0, float(total_len)) * (1.0 - ratio)
+                    pla_remaining = remaining_mm / 1000.0
+                    pla_low = remaining_mm <= 2000.0
+
+        self.device_view.update_live_status(
+            head_pos=head_pos,
+            time_left_s=time_left,
+            pla_remaining_m=pla_remaining,
+            pla_low=pla_low,
+        )
 
     # -------------------------------------------------------------- job queue
     def _add_current_model_to_queue(self):
