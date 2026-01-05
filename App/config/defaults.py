@@ -28,6 +28,10 @@ DEFAULTS = {
         "infill": {"min": 0, "max": 100, "default": 15},
         "speed": {"min": 10, "max": 200, "default": 60.0},
     },
+    "performance": {
+        "max_threads": None,
+        "max_slice_cache_mb": None,
+    },
     "popups": {
         "min_width": 420,
         "arrange_min_width": 340,

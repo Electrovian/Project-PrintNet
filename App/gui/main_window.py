@@ -9,6 +9,7 @@ from .Windows.device import DeviceView
 from .Windows.shared_view import SharedView
 from .Windows.controller import MainController
 from config.defaults import DEFAULTS
+from config.performance import resolve_performance_limits
 
 from integrations.printer_manager import PrinterManager
 
@@ -32,8 +33,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer_manager = PrinterManager(printers=self.printers, airtable_cfg=self.airtable_cfg)
 
         self.pool = QtCore.QThreadPool.globalInstance()
-        max_threads = max(1, (os.cpu_count() or 2) - 1)
-        self.pool.setMaxThreadCount(max_threads)
+        limits = resolve_performance_limits(DEFAULTS.get("performance"))
+        self.performance_limits = limits
+        self.pool.setMaxThreadCount(int(limits.get("max_threads", 1)))
         self._build_ui()
         self._apply_windows_titlebar_theme()
 
