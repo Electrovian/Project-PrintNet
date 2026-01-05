@@ -24,8 +24,8 @@ class GCodePreviewTests(unittest.TestCase):
         preview = parse_gcode_preview(lines)
         self.assertEqual(len(preview.layers), 2)
         first_layer = preview.layers[0]
-        self.assertIn("perimeter", first_layer.features)
-        self.assertIn("infill", first_layer.features)
+        self.assertIn("outer_wall", first_layer.features)
+        self.assertIn("sparse_infill", first_layer.features)
         self.assertIn("travel", first_layer.features)
         second_layer = preview.layers[1]
         self.assertIn("support", second_layer.features)

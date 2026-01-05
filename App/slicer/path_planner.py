@@ -141,7 +141,10 @@ def apply_seam_placement(loop: Sequence[Point2D],
     index = 0
     if mode_norm == "random":
         rng = rng or random.Random()
-        index = rng.randrange(len(points))
+        if len(points) > 1:
+            index = rng.randrange(1, len(points))
+        else:
+            index = 0
     elif mode_norm == "aligned" and anchor is not None:
         ax, ay = anchor
         best_dist = float("inf")

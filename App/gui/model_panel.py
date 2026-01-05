@@ -6,8 +6,11 @@ class ModelPanel(QtWidgets.QWidget):
     MAX_DISPLAY_NAME = 28
 
     model_selected = QtCore.pyqtSignal(int)  # model_id
+    selection_changed = QtCore.pyqtSignal(list)  # model_ids
     request_remove = QtCore.pyqtSignal(int)  # model_id
     duplicate_requested = QtCore.pyqtSignal(int, int, int)  # count, rows, cols
+    select_all_requested = QtCore.pyqtSignal()
+    deselect_all_requested = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -17,8 +20,15 @@ class ModelPanel(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(self)
 
         self.list_widget = QtWidgets.QListWidget()
-        self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         layout.addWidget(self.list_widget)
+
+        select_row = QtWidgets.QHBoxLayout()
+        self.select_all_btn = QtWidgets.QPushButton("Select all")
+        self.clear_selection_btn = QtWidgets.QPushButton("Clear selection")
+        select_row.addWidget(self.select_all_btn)
+        select_row.addWidget(self.clear_selection_btn)
+        layout.addLayout(select_row)
 
         btn_row = QtWidgets.QHBoxLayout()
         self.duplicate_btn = QtWidgets.QPushButton("Duplicate")
@@ -28,9 +38,12 @@ class ModelPanel(QtWidgets.QWidget):
         btn_row.addWidget(self.remove_btn)
         layout.addLayout(btn_row)
 
-        self.list_widget.currentItemChanged.connect(self._on_selection_changed)
+        self.list_widget.currentItemChanged.connect(self._on_current_changed)
+        self.list_widget.itemSelectionChanged.connect(self._on_selection_changed)
         self.remove_btn.clicked.connect(self._on_remove_clicked)
         self.duplicate_btn.clicked.connect(self._on_duplicate_clicked)
+        self.select_all_btn.clicked.connect(self._on_select_all_clicked)
+        self.clear_selection_btn.clicked.connect(self._on_clear_selection_clicked)
 
     def add_model(self, name: str, model_id: int):
         full_name = (name or "").strip()
@@ -55,7 +68,16 @@ class ModelPanel(QtWidgets.QWidget):
     def current_model_id(self):
         return item.data(QtCore.Qt.UserRole) if (item := self.list_widget.currentItem()) else None
 
-    def _on_selection_changed(self, current, previous):
+    def _on_selection_changed(self):
+        selected = []
+        for row in range(self.list_widget.count()):
+            item = self.list_widget.item(row)
+            if item is not None and item.isSelected():
+                selected.append(item.data(QtCore.Qt.UserRole))
+        self.selection_changed.emit(selected)
+
+    def _on_current_changed(self, current, previous):
+        _ = previous
         if current:
             self.model_selected.emit(current.data(QtCore.Qt.UserRole))
 
@@ -70,6 +92,12 @@ class ModelPanel(QtWidgets.QWidget):
         count, rows, cols = dlg.values()
         if count > 0:
             self.duplicate_requested.emit(count, rows, cols)
+
+    def _on_select_all_clicked(self):
+        self.select_all_requested.emit()
+
+    def _on_clear_selection_clicked(self):
+        self.deselect_all_requested.emit()
 
     def _truncate_name(self, name: str) -> str:
         return name if len(name) <= self.MAX_DISPLAY_NAME else name[: self.MAX_DISPLAY_NAME - 3] + "..."

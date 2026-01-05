@@ -11,6 +11,16 @@ import trimesh
 from slicer.geometry import arrange_rectangles, lowest_planar_face
 
 from .widgets.view_cube_overlay import ViewCubeOverlay
+from .widgets.nozzle_item import NozzleItem, make_cone_mesh
+from .auto_orient import (
+    face_normals_and_areas,
+    orientation_metrics,
+    pick_best_orientation,
+    rotation_from_to,
+    select_candidate_normals,
+)
+from .arrange_utils import positions_fit, spacing_candidates, spacing_with_base
+from .selection_utils import rect_from_points, rect_intersects, rect_size
 from .theme import theme_value, theme_qcolor
 from config.defaults import DEFAULTS
 
@@ -19,6 +29,7 @@ class Viewer3D(gl.GLViewWidget):
     modelPicked = QtCore.pyqtSignal(int)
     modelMoved = QtCore.pyqtSignal(int, float, float)
     modelRotated = QtCore.pyqtSignal(int, float, float, float)
+    selectionChanged = QtCore.pyqtSignal(list)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -37,9 +48,10 @@ class Viewer3D(gl.GLViewWidget):
         self._next_model_id = 1
 
         self._selected_model_id = None
+        self._selected_model_ids: List[int] = []
         self._dragging = False
         self._drag_start_world = None
-        self._drag_start_offset = None
+        self._drag_start_offsets = None
         self._labels_enabled = False
         self._selection_info = None
         self._interaction_enabled = True
@@ -49,6 +61,11 @@ class Viewer3D(gl.GLViewWidget):
         self._preview_object_panel = None
         self._preview_object_label = None
         self._preview_object_visible = False
+        self._marquee_band = None
+        self._marquee_active = False
+        self._marquee_origin = None
+        self._marquee_additive = False
+        self._marquee_min_drag = 4.0
 
         self._snap_enabled = False
         self._snap_step = 1.0
@@ -64,10 +81,13 @@ class Viewer3D(gl.GLViewWidget):
         self._gizmo_model_extent = None
         self._gizmo_drag_axis = None
         self._gizmo_drag_start_param = None
-        self._gizmo_drag_start_offset = None
+        self._gizmo_drag_start_offsets = None
         self._gizmo_rotate_axis = None
         self._gizmo_rotate_start_angle = None
         self._gizmo_rotate_start_rotation = None
+        self._gizmo_rotate_start_rotations = None
+        self._gizmo_rotate_start_offsets = None
+        self._gizmo_rotate_pivot = None
         self._gizmo_ring_points = {}
 
         g = gl.GLGridItem()
@@ -105,8 +125,7 @@ class Viewer3D(gl.GLViewWidget):
         self._models_visible = True
         self._platform_visible = True
         self._nozzle_visible = False
-        self._nozzle_item = None
-        self._nozzle_mesh = None
+        self._nozzle = None
 
     # -------------------- hardening --------------------
 
@@ -141,11 +160,22 @@ class Viewer3D(gl.GLViewWidget):
     # -------------------- public helpers --------------------
 
     def set_selected_model(self, model_id: int | None):
-        self._selected_model_id = model_id
+        ids = [model_id] if model_id is not None else []
+        self.set_selected_models(ids)
+
+    def set_selected_models(self, model_ids: Sequence[int], emit_signal: bool = True):
+        ids = [mid for mid in model_ids if mid in self.models]
+        self._selected_model_ids = ids
+        self._selected_model_id = ids[0] if ids else None
         self._update_gizmo()
         self._update_selection_info()
         if self._preview_object_visible:
             self._update_preview_object_label()
+        if emit_signal:
+            self.selectionChanged.emit(list(self._selected_model_ids))
+
+    def get_selected_model_ids(self) -> List[int]:
+        return list(self._selected_model_ids)
 
     def set_gizmo_mode(self, mode: str):
         self._gizmo_mode = mode
@@ -217,6 +247,7 @@ class Viewer3D(gl.GLViewWidget):
         self._update_selection_info_style()
         self._update_print_stats_style()
         self._update_preview_object_style()
+        self._update_marquee_style()
         self._update_gizmo()
         self._update_preview_lines()
 
@@ -253,8 +284,8 @@ class Viewer3D(gl.GLViewWidget):
         if self._nozzle_visible:
             self._ensure_nozzle_item()
             self._update_nozzle_position()
-        if self._nozzle_item is not None:
-            self._nozzle_item.setVisible(self._nozzle_visible)
+        if self._nozzle is not None:
+            self._nozzle.set_visible(self._nozzle_visible)
         self.update()
 
     def set_preview_visible(self, visible: bool):
@@ -497,26 +528,18 @@ class Viewer3D(gl.GLViewWidget):
                 )
 
     def _ensure_nozzle_item(self):
-        if self._nozzle_item is not None:
+        if self._nozzle is not None:
             return
-        height = 18.0
-        radius = 4.0
-        verts, faces = self._make_cone_mesh(height, radius, 20)
-        self._nozzle_mesh = (verts, faces, height)
-        md = gl.MeshData(vertexes=verts, faces=faces)
-        color = (0.8, 0.8, 0.8, 0.7)
-        item = gl.GLMeshItem(meshdata=md, smooth=True, color=color, shader="shaded")
-        item.setGLOptions("translucent")
-        item.setVisible(self._nozzle_visible)
-        self.addItem(item)
-        self._nozzle_item = item
+        nozzle = NozzleItem()
+        nozzle.set_visible(self._nozzle_visible)
+        self.addItem(nozzle.item)
+        self._nozzle = nozzle
 
     def _update_nozzle_position(self, layer_index: int | None = None):
         if not self._nozzle_visible:
             return
-        if self._nozzle_item is None or self._nozzle_mesh is None:
+        if self._nozzle is None:
             return
-        verts, faces, height = self._nozzle_mesh
         seg = self._preview_segment_for_nozzle()
         if seg is not None:
             x = float(seg.end[0])
@@ -539,10 +562,7 @@ class Viewer3D(gl.GLViewWidget):
                     layer_index = len(self._preview_data.layers) - 1
                 if 0 <= layer_index < len(self._preview_data.layers):
                     z = float(self._preview_data.layers[layer_index].z)
-        tip_offset = 2.0
-        offset = np.array([x, y, z + tip_offset - float(height)], dtype=float)
-        new_verts = verts + offset
-        self._nozzle_item.setMeshData(meshdata=gl.MeshData(vertexes=new_verts, faces=faces))
+        self._nozzle.update_position(x, y, z, tip_offset=2.0)
 
     def _rgba_css(self, color: QtGui.QColor, alpha: int | None = None):
         c = QtGui.QColor(color)
@@ -738,34 +758,63 @@ class Viewer3D(gl.GLViewWidget):
     def _update_selection_info(self):
         if not hasattr(self, "_selection_info") or self._selection_info is None:
             return
-        if not self._labels_enabled or self._selected_model_id is None:
+        if not self._labels_enabled:
             self._selection_info.setVisible(False)
             return
-        m = self.models.get(self._selected_model_id)
-        if not m:
+        selected_ids = self._selected_model_ids or ([self._selected_model_id] if self._selected_model_id is not None else [])
+        if not selected_ids:
             self._selection_info.setVisible(False)
             return
-        name = (m.get("name") or "").strip() or f"Model {self._selected_model_id}"
-        path = m.get("path") or ""
-        ext = os.path.splitext(path)[1].lstrip(".").lower() if path else ""
-        ext = ext if ext else "unknown"
+        if len(selected_ids) == 1:
+            m = self.models.get(selected_ids[0])
+            if not m:
+                self._selection_info.setVisible(False)
+                return
+            name = (m.get("name") or "").strip() or f"Model {selected_ids[0]}"
+            path = m.get("path") or ""
+            ext = os.path.splitext(path)[1].lstrip(".").lower() if path else ""
+            ext = ext if ext else "unknown"
 
-        bounds = m.get("bounds")
-        size_line = "Size: n/a"
-        if bounds is not None:
-            mn, mx = bounds
-            size = np.abs(np.array(mx) - np.array(mn))
-            size_line = f"Size: {size[0]:.2f} x {size[1]:.2f} x {size[2]:.2f} mm"
+            bounds = m.get("bounds")
+            size_line = "Size: n/a"
+            if bounds is not None:
+                mn, mx = bounds
+                size = np.abs(np.array(mx) - np.array(mn))
+                size_line = f"Size: {size[0]:.2f} x {size[1]:.2f} x {size[2]:.2f} mm"
 
-        volume = self._model_volume(m)
-        volume_line = "Volume: n/a"
-        if volume is not None:
-            volume_line = f"Volume: {volume:.2f} mm^3"
+            volume = self._model_volume(m)
+            volume_line = "Volume: n/a"
+            if volume is not None:
+                volume_line = f"Volume: {volume:.2f} mm^3"
 
-        faces = m.get("faces")
-        triangles = int(len(faces)) if faces is not None else 0
+            faces = m.get("faces")
+            triangles = int(len(faces)) if faces is not None else 0
 
-        self._selection_info_title.setText(f"Object name: {name}")
+            self._selection_info_title.setText(f"Object name: {name}")
+        else:
+            bounds_list = [self.models[mid].get("bounds") for mid in selected_ids if mid in self.models]
+            bounds_list = [b for b in bounds_list if b is not None]
+            size_line = "Size: n/a"
+            if bounds_list:
+                mn = np.min([b[0] for b in bounds_list], axis=0)
+                mx = np.max([b[1] for b in bounds_list], axis=0)
+                size = np.abs(np.array(mx) - np.array(mn))
+                size_line = f"Size: {size[0]:.2f} x {size[1]:.2f} x {size[2]:.2f} mm"
+            volume_vals = [self._model_volume(self.models[mid]) for mid in selected_ids if mid in self.models]
+            volume_vals = [v for v in volume_vals if v is not None]
+            volume_line = "Volume: n/a"
+            if volume_vals:
+                volume_line = f"Volume: {sum(volume_vals):.2f} mm^3"
+            triangles = 0
+            for mid in selected_ids:
+                if mid not in self.models:
+                    continue
+                faces = self.models[mid].get("faces")
+                if faces is None:
+                    continue
+                triangles += int(len(faces))
+            ext = "mixed"
+            self._selection_info_title.setText(f"Selected models: {len(selected_ids)}")
         self._selection_info_details.setText(
             "\n".join(
                 [
@@ -926,6 +975,156 @@ class Viewer3D(gl.GLViewWidget):
         self._snap_enabled = bool(enabled)
         self._snap_step = max(0.001, float(step_mm))
 
+    def _cancel_interaction(self):
+        self._dragging = False
+        self._drag_start_world = None
+        self._drag_start_offsets = None
+        self._gizmo_drag_axis = None
+        self._gizmo_drag_start_param = None
+        self._gizmo_drag_start_offsets = None
+        if self._gizmo_rotate_axis is not None:
+            self._gizmo_rotate_axis = None
+            self._gizmo_rotate_start_angle = None
+            self._gizmo_rotate_start_rotation = None
+            self._gizmo_rotate_start_rotations = None
+            self._gizmo_rotate_start_offsets = None
+            self._gizmo_rotate_pivot = None
+            self._hide_rotate_hud()
+        if self._marquee_active:
+            if self._marquee_band is not None:
+                self._marquee_band.hide()
+            self._marquee_active = False
+            self._marquee_origin = None
+        self._update_gizmo()
+
+    # -------------------- marquee selection --------------------
+
+    def _ensure_marquee_band(self):
+        if self._marquee_band is None:
+            band = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Rectangle, self)
+            band.hide()
+            self._marquee_band = band
+            self._update_marquee_style()
+
+    def _update_marquee_style(self):
+        if self._marquee_band is None:
+            return
+        accent = theme_qcolor("topbar_accent")
+        border = QtGui.QColor(accent)
+        border.setAlpha(220)
+        fill = QtGui.QColor(accent)
+        fill.setAlpha(60)
+        self._marquee_band.setStyleSheet(
+            "QRubberBand {"
+            f"border: 1px solid rgba({border.red()}, {border.green()}, {border.blue()}, {border.alpha()});"
+            f"background-color: rgba({fill.red()}, {fill.green()}, {fill.blue()}, {fill.alpha()});"
+            "}"
+        )
+
+    def _marquee_rect(self, pos: QtCore.QPoint) -> QtCore.QRect:
+        if self._marquee_origin is None:
+            return QtCore.QRect()
+        rect = rect_from_points(
+            (float(self._marquee_origin.x()), float(self._marquee_origin.y())),
+            (float(pos.x()), float(pos.y())),
+        )
+        return QtCore.QRect(int(rect[0]), int(rect[1]),
+                            int(rect[2] - rect[0]), int(rect[3] - rect[1]))
+
+    def _start_marquee(self, pos: QtCore.QPoint, additive: bool):
+        self._ensure_marquee_band()
+        self._marquee_active = True
+        self._marquee_origin = QtCore.QPoint(pos)
+        self._marquee_additive = bool(additive)
+        if self._marquee_band is not None:
+            self._marquee_band.setGeometry(self._marquee_rect(pos))
+            self._marquee_band.show()
+
+    def _update_marquee(self, pos: QtCore.QPoint):
+        if not self._marquee_active or self._marquee_band is None:
+            return
+        self._marquee_band.setGeometry(self._marquee_rect(pos))
+
+    def _finish_marquee(self, pos: QtCore.QPoint):
+        if not self._marquee_active:
+            return
+        rect_tuple = rect_from_points(
+            (float(self._marquee_origin.x()), float(self._marquee_origin.y())),
+            (float(pos.x()), float(pos.y())),
+        )
+        if self._marquee_band is not None:
+            self._marquee_band.hide()
+        self._marquee_active = False
+        self._marquee_origin = None
+
+        width, height = rect_size(rect_tuple)
+        if width < self._marquee_min_drag and height < self._marquee_min_drag:
+            picked = self._pick_model_at(pos)
+            if picked is None:
+                if not self._marquee_additive:
+                    self.set_selected_models([])
+                return
+            if self._marquee_additive:
+                selected = set(self._selected_model_ids)
+                if picked in selected:
+                    selected.remove(picked)
+                else:
+                    selected.add(picked)
+                self.set_selected_models(list(selected))
+            else:
+                self.set_selected_models([picked])
+            self.modelPicked.emit(picked)
+            return
+
+        self._select_models_in_rect(rect_tuple, additive=self._marquee_additive)
+
+    def _project_bounds_to_screen_rect(self, bounds) -> Tuple[float, float, float, float] | None:
+        if bounds is None:
+            return None
+        mn, mx = bounds
+        try:
+            mn = np.array(mn, dtype=float).reshape(3)
+            mx = np.array(mx, dtype=float).reshape(3)
+        except Exception:
+            return None
+        if not np.all(np.isfinite(mn)) or not np.all(np.isfinite(mx)):
+            return None
+        if np.any(mx < mn):
+            mn, mx = np.minimum(mn, mx), np.maximum(mn, mx)
+        corners = np.array(
+            [
+                [mn[0], mn[1], mn[2]],
+                [mn[0], mn[1], mx[2]],
+                [mn[0], mx[1], mn[2]],
+                [mn[0], mx[1], mx[2]],
+                [mx[0], mn[1], mn[2]],
+                [mx[0], mn[1], mx[2]],
+                [mx[0], mx[1], mn[2]],
+                [mx[0], mx[1], mx[2]],
+            ],
+            dtype=float,
+        )
+        proj = [self._project_world_to_screen(c) for c in corners]
+        proj = [p for p in proj if p is not None]
+        if len(proj) < 4:
+            return None
+        xs = [p[0] for p in proj]
+        ys = [p[1] for p in proj]
+        return (float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys)))
+
+    def _select_models_in_rect(self, rect: Tuple[float, float, float, float], additive: bool = False):
+        selected = set(self._selected_model_ids) if additive else set()
+        if not self._models_visible:
+            self.set_selected_models(list(selected))
+            return
+        for mid, m in self.models.items():
+            screen_rect = self._project_bounds_to_screen_rect(m.get("bounds"))
+            if screen_rect is None:
+                continue
+            if rect_intersects(rect, screen_rect):
+                selected.add(mid)
+        self.set_selected_models(list(selected))
+
     # -------------------- model management --------------------
 
     def add_model_from_data(self, name: str, path: str, vertices, faces):
@@ -979,10 +1178,12 @@ class Viewer3D(gl.GLViewWidget):
         if m.get("item") is not None:
             self.removeItem(m["item"])
         del self.models[model_id]
+        if model_id in self._selected_model_ids:
+            self._selected_model_ids = [mid for mid in self._selected_model_ids if mid != model_id]
         if self._selected_model_id == model_id:
-            self._selected_model_id = None
-            self._update_gizmo()
-            self._update_selection_info()
+            self._selected_model_id = self._selected_model_ids[0] if self._selected_model_ids else None
+        self._update_gizmo()
+        self._update_selection_info()
         self.update()
 
     def clear_all_models(self):
@@ -1138,7 +1339,17 @@ class Viewer3D(gl.GLViewWidget):
         if not self._interaction_enabled:
             super().mousePressEvent(ev)
             return
+        if ev.button() == QtCore.Qt.MiddleButton:
+            self._cancel_interaction()
+            super().mousePressEvent(ev)
+            return
         if ev.button() == QtCore.Qt.LeftButton:
+            ctrl_down = bool(ev.modifiers() & QtCore.Qt.ControlModifier)
+            shift_down = bool(ev.modifiers() & QtCore.Qt.ShiftModifier)
+            if shift_down:
+                self._start_marquee(ev.pos(), additive=ctrl_down)
+                ev.accept()
+                return
             if self._gizmo_mode == "move":
                 axis = self._pick_gizmo_axis(ev.pos())
                 if axis is not None:
@@ -1155,8 +1366,19 @@ class Viewer3D(gl.GLViewWidget):
             # 1) Try to pick a model under cursor
             picked = self._pick_model_at(ev.pos())
             if picked is not None:
-                self._selected_model_id = picked
-                self._update_gizmo()
+                if ctrl_down:
+                    selected = set(self._selected_model_ids)
+                    if picked in selected:
+                        selected.remove(picked)
+                    else:
+                        selected.add(picked)
+                    self.set_selected_models(list(selected))
+                else:
+                    if picked in self._selected_model_ids:
+                        ordered = [picked] + [mid for mid in self._selected_model_ids if mid != picked]
+                        self.set_selected_models(ordered)
+                    else:
+                        self.set_selected_models([picked])
                 self.modelPicked.emit(picked)
 
             # 2) Allow drag of selected model even if pick missed (Bambu-like)
@@ -1166,11 +1388,12 @@ class Viewer3D(gl.GLViewWidget):
                     self._dragging = True
                     self._drag_start_world = hit
 
-                    m = self.models.get(self._selected_model_id)
-                    if m is not None:
-                        self._drag_start_offset = (float(m["offset"][0]), float(m["offset"][1]))
-                    else:
-                        self._drag_start_offset = (0.0, 0.0)
+                    offsets = {}
+                    for mid in self._selected_model_ids or [self._selected_model_id]:
+                        m = self.models.get(mid)
+                        if m is not None:
+                            offsets[mid] = np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+                    self._drag_start_offsets = offsets if offsets else None
 
                     ev.accept()
                     return
@@ -1180,6 +1403,14 @@ class Viewer3D(gl.GLViewWidget):
     def mouseMoveEvent(self, ev: QtGui.QMouseEvent):
         if not self._interaction_enabled:
             super().mouseMoveEvent(ev)
+            return
+        if bool(ev.buttons() & QtCore.Qt.MiddleButton):
+            self._cancel_interaction()
+            super().mouseMoveEvent(ev)
+            return
+        if self._marquee_active and bool(ev.buttons() & QtCore.Qt.LeftButton):
+            self._update_marquee(ev.pos())
+            ev.accept()
             return
         if self._gizmo_rotate_axis is not None and bool(ev.buttons() & QtCore.Qt.LeftButton):
             if self._selected_model_id is None:
@@ -1191,13 +1422,38 @@ class Viewer3D(gl.GLViewWidget):
                 return
             delta = float(angle - self._gizmo_rotate_start_angle)
             delta_deg = math.degrees(delta)
-            rot = np.array(self._gizmo_rotate_start_rotation, dtype=float)
             axis_idx = {"x": 0, "y": 1, "z": 2}[self._gizmo_rotate_axis]
-            rot[axis_idx] = rot[axis_idx] + delta_deg
-            self.set_model_transform(self._selected_model_id, rotation_xyz=rot)
-            self.modelRotated.emit(self._selected_model_id, float(rot[0]), float(rot[1]), float(rot[2]))
+            rotations = self._gizmo_rotate_start_rotations or {}
+            offsets = self._gizmo_rotate_start_offsets or {}
+            pivot = self._gizmo_rotate_pivot
+            multi = len(rotations) > 1 and pivot is not None
+
+            if self._gizmo_rotate_axis == "x":
+                rot_delta = self._rotation_matrix(delta_deg, 0.0, 0.0)
+            elif self._gizmo_rotate_axis == "y":
+                rot_delta = self._rotation_matrix(0.0, delta_deg, 0.0)
+            else:
+                rot_delta = self._rotation_matrix(0.0, 0.0, delta_deg)
+
+            for mid, start_rot in rotations.items():
+                rot = np.array(start_rot, dtype=float)
+                rot[axis_idx] = rot[axis_idx] + delta_deg
+                new_offset = None
+                if multi and mid in offsets:
+                    vec = offsets[mid] - pivot
+                    vec_rot = vec @ rot_delta.T
+                    new_offset = pivot + vec_rot
+                if new_offset is not None:
+                    self.set_model_transform(mid, rotation_xyz=rot, offset_xyz=new_offset)
+                else:
+                    self.set_model_transform(mid, rotation_xyz=rot)
+                if mid == self._selected_model_id:
+                    self.modelRotated.emit(mid, float(rot[0]), float(rot[1]), float(rot[2]))
             axis_label = self._gizmo_rotate_axis.upper()
-            self._show_rotate_hud(ev.pos(), axis_label, float(rot[axis_idx]))
+            primary_rot = rotations.get(self._selected_model_id, self._gizmo_rotate_start_rotation)
+            if primary_rot is not None:
+                value = float(np.array(primary_rot, dtype=float)[axis_idx] + delta_deg)
+                self._show_rotate_hud(ev.pos(), axis_label, value)
             ev.accept()
             return
 
@@ -1206,8 +1462,7 @@ class Viewer3D(gl.GLViewWidget):
                 ev.accept()
                 return
 
-            m = self.models.get(self._selected_model_id)
-            if m is None or self._gizmo_origin is None:
+            if self._gizmo_origin is None:
                 ev.accept()
                 return
 
@@ -1217,20 +1472,20 @@ class Viewer3D(gl.GLViewWidget):
                 return
 
             param = self._axis_param_from_mouse(ev.pos(), self._gizmo_origin, axis_dir)
-            if param is None or self._gizmo_drag_start_param is None or self._gizmo_drag_start_offset is None:
+            if param is None or self._gizmo_drag_start_param is None or self._gizmo_drag_start_offsets is None:
                 ev.accept()
                 return
 
             delta = float(param - self._gizmo_drag_start_param)
-            new_offset = self._gizmo_drag_start_offset + axis_dir * delta
-
-            if self._snap_enabled:
-                step = self._snap_step
-                axis_idx = {"x": 0, "y": 1, "z": 2}[self._gizmo_drag_axis]
-                new_offset[axis_idx] = round(float(new_offset[axis_idx]) / step) * step
-
-            self.set_model_transform(self._selected_model_id, offset_xyz=new_offset)
-            self.modelMoved.emit(self._selected_model_id, float(new_offset[0]), float(new_offset[1]))
+            axis_idx = {"x": 0, "y": 1, "z": 2}[self._gizmo_drag_axis]
+            for mid, start_offset in self._gizmo_drag_start_offsets.items():
+                new_offset = np.array(start_offset, dtype=float) + axis_dir * delta
+                if self._snap_enabled:
+                    step = self._snap_step
+                    new_offset[axis_idx] = round(float(new_offset[axis_idx]) / step) * step
+                self.set_model_transform(mid, offset_xyz=new_offset)
+                if mid == self._selected_model_id:
+                    self.modelMoved.emit(mid, float(new_offset[0]), float(new_offset[1]))
             ev.accept()
             return
 
@@ -1240,23 +1495,23 @@ class Viewer3D(gl.GLViewWidget):
                 return
 
             hit = self._mouse_to_plane_z0(ev.pos())
-            if hit is None or self._drag_start_world is None or self._drag_start_offset is None:
+            if hit is None or self._drag_start_world is None or self._drag_start_offsets is None:
                 ev.accept()
                 return
 
             dx = float(hit[0] - self._drag_start_world[0])
             dy = float(hit[1] - self._drag_start_world[1])
 
-            new_x = self._drag_start_offset[0] + dx
-            new_y = self._drag_start_offset[1] + dy
-
-            if self._snap_enabled:
-                step = self._snap_step
-                new_x = round(new_x / step) * step
-                new_y = round(new_y / step) * step
-
-            self.set_model_transform(self._selected_model_id, offset_xy=(new_x, new_y))
-            self.modelMoved.emit(self._selected_model_id, float(new_x), float(new_y))
+            for mid, start_offset in self._drag_start_offsets.items():
+                new_x = float(start_offset[0]) + dx
+                new_y = float(start_offset[1]) + dy
+                if self._snap_enabled:
+                    step = self._snap_step
+                    new_x = round(new_x / step) * step
+                    new_y = round(new_y / step) * step
+                self.set_model_transform(mid, offset_xy=(new_x, new_y))
+                if mid == self._selected_model_id:
+                    self.modelMoved.emit(mid, float(new_x), float(new_y))
             ev.accept()
             return
 
@@ -1266,16 +1521,27 @@ class Viewer3D(gl.GLViewWidget):
         if not self._interaction_enabled:
             super().mouseReleaseEvent(ev)
             return
+        if ev.button() == QtCore.Qt.MiddleButton:
+            self._cancel_interaction()
+            super().mouseReleaseEvent(ev)
+            return
+        if ev.button() == QtCore.Qt.LeftButton and self._marquee_active:
+            self._finish_marquee(ev.pos())
+            ev.accept()
+            return
         if ev.button() == QtCore.Qt.LeftButton and self._dragging:
             self._dragging = False
             self._drag_start_world = None
-            self._drag_start_offset = None
+            self._drag_start_offsets = None
             ev.accept()
             return
         if ev.button() == QtCore.Qt.LeftButton and self._gizmo_rotate_axis is not None:
             self._gizmo_rotate_axis = None
             self._gizmo_rotate_start_angle = None
             self._gizmo_rotate_start_rotation = None
+            self._gizmo_rotate_start_rotations = None
+            self._gizmo_rotate_start_offsets = None
+            self._gizmo_rotate_pivot = None
             self._hide_rotate_hud()
             self._update_gizmo()
             ev.accept()
@@ -1283,7 +1549,7 @@ class Viewer3D(gl.GLViewWidget):
         if ev.button() == QtCore.Qt.LeftButton and self._gizmo_drag_axis is not None:
             self._gizmo_drag_axis = None
             self._gizmo_drag_start_param = None
-            self._gizmo_drag_start_offset = None
+            self._gizmo_drag_start_offsets = None
             ev.accept()
             return
         super().mouseReleaseEvent(ev)
@@ -1409,9 +1675,8 @@ class Viewer3D(gl.GLViewWidget):
         if not ids:
             return False
 
-        spacing_val = max(0.0, float(spacing))
-        if spacing_val <= 0.0:
-            spacing_val = float(DEFAULTS["popups"]["arrange"]["auto_spacing"])
+        base_spacing = float(DEFAULTS["popups"]["arrange"].get("spacing_base", 3.0))
+        extra_spacing = max(0.0, float(spacing))
 
         model_info = []
         for mid in ids:
@@ -1448,7 +1713,29 @@ class Viewer3D(gl.GLViewWidget):
             return False
 
         sizes = [(mid, w, d) for mid, w, d, _center_offset, _z in model_info]
-        positions = arrange_rectangles(sizes, spacing_val, align_y=align_y)
+        bed_bounds = self._bed_bounds()
+        spacing_values = spacing_candidates(extra_spacing, step=0.5)
+        align_candidates = [align_y]
+        if len(model_info) > 1:
+            align_candidates.append(not align_y)
+
+        positions = None
+        fit_found = False
+        for align in align_candidates:
+            for extra in spacing_values:
+                spacing_val = spacing_with_base(base_spacing, extra)
+                attempt = arrange_rectangles(sizes, spacing_val, align_y=align)
+                if positions is None:
+                    positions = attempt
+                if positions_fit(attempt, sizes, bed_bounds):
+                    positions = attempt
+                    fit_found = True
+                    break
+            if fit_found:
+                break
+
+        if positions is None:
+            return False
 
         info_map = {mid: (center_offset, z) for mid, _w, _d, center_offset, z in model_info}
         for mid, (x, y) in positions.items():
@@ -1502,6 +1789,63 @@ class Viewer3D(gl.GLViewWidget):
         R_align = self._rotation_from_to(n, target)
         R_new = R_align @ R_current
         rx, ry, rz = self._euler_from_matrix(R_new)
+        self.set_model_transform(model_id, rotation_xyz=(rx, ry, rz))
+        bounds = self.get_model_bounds(model_id)
+        if bounds is not None:
+            mn, _mx = bounds
+            if abs(float(mn[2])) > 1e-6:
+                off = np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+                off[2] = float(off[2]) - float(mn[2])
+                self.set_model_transform(model_id, offset_xyz=off)
+        return True
+
+    def auto_orient_model(self, model_id: int, mode: str = "default", overhang_angle: float = 45.0) -> bool:
+        m = self.models.get(model_id)
+        if m is None:
+            return False
+        v0 = m.get("base_vertices")
+        faces = m.get("faces")
+        if v0 is None or faces is None or len(faces) == 0:
+            return False
+
+        scale = self._normalize_scale(m.get("scale", 1.0))
+        rot = np.array(m.get("rotation", [0.0, 0.0, 0.0]), dtype=float)
+        pivot = m.get("pivot", np.zeros(3, dtype=float))
+        verts = (v0 - pivot) * scale
+
+        normals_base, areas = face_normals_and_areas(verts, faces)
+        if normals_base.size == 0:
+            return False
+
+        R_current = self._rotation_matrix(float(rot[0]), float(rot[1]), float(rot[2]))
+        normals_current = normals_base @ R_current.T
+        candidates = select_candidate_normals(normals_current, areas)
+        if not candidates:
+            return False
+
+        target = np.array([0.0, 0.0, -1.0], dtype=float)
+        metrics = []
+        rotations = []
+        for n in candidates:
+            R_align = rotation_from_to(n, target)
+            R_candidate = R_align @ R_current
+            support, height = orientation_metrics(
+                verts,
+                faces,
+                normals_base,
+                areas,
+                R_candidate,
+                overhang_angle,
+            )
+            rotations.append(R_candidate)
+            metrics.append({"support": support, "height": height})
+
+        best_idx = pick_best_orientation(metrics, mode)
+        if best_idx is None:
+            return False
+
+        R_best = rotations[best_idx]
+        rx, ry, rz = self._euler_from_matrix(R_best)
         self.set_model_transform(model_id, rotation_xyz=(rx, ry, rz))
         bounds = self.get_model_bounds(model_id)
         if bounds is not None:
@@ -1670,16 +2014,25 @@ class Viewer3D(gl.GLViewWidget):
         if not self._interaction_enabled:
             self._set_gizmo_visible(False)
             return
-        if self._selected_model_id is None or self._gizmo_mode not in {"move", "rotate", "scale"}:
+        if self._gizmo_mode not in {"move", "rotate", "scale"}:
+            self._set_gizmo_visible(False)
+            return
+        selected_ids = self._selected_model_ids or ([self._selected_model_id] if self._selected_model_id is not None else [])
+        if not selected_ids:
             self._set_gizmo_visible(False)
             return
 
-        m = self.models.get(self._selected_model_id)
-        if m is None or m.get("bounds") is None:
+        bounds_list = []
+        for mid in selected_ids:
+            m = self.models.get(mid)
+            if m is None or m.get("bounds") is None:
+                continue
+            bounds_list.append(m.get("bounds"))
+        if not bounds_list:
             self._set_gizmo_visible(False)
             return
-
-        mn, mx = m["bounds"]
+        mn = np.min([b[0] for b in bounds_list], axis=0)
+        mx = np.max([b[1] for b in bounds_list], axis=0)
         center = (mn + mx) / 2.0
         model_extent = float(np.max(mx - mn))
         size = max(10.0, min(80.0, model_extent * 0.25))
@@ -1785,9 +2138,6 @@ class Viewer3D(gl.GLViewWidget):
     def _begin_gizmo_drag(self, axis: str, pos: QtCore.QPoint):
         if self._selected_model_id is None or self._gizmo_origin is None:
             return False
-        m = self.models.get(self._selected_model_id)
-        if m is None:
-            return False
         axis_dir = self._gizmo_axis_direction(axis)
         if axis_dir is None:
             return False
@@ -1797,7 +2147,12 @@ class Viewer3D(gl.GLViewWidget):
 
         self._gizmo_drag_axis = axis
         self._gizmo_drag_start_param = float(param)
-        self._gizmo_drag_start_offset = np.array(m["offset"], dtype=float)
+        offsets = {}
+        for mid in self._selected_model_ids or [self._selected_model_id]:
+            m = self.models.get(mid)
+            if m is not None:
+                offsets[mid] = np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+        self._gizmo_drag_start_offsets = offsets if offsets else None
         return True
 
     def _begin_rotate_drag(self, axis: str, pos: QtCore.QPoint):
@@ -1812,6 +2167,17 @@ class Viewer3D(gl.GLViewWidget):
         self._gizmo_rotate_axis = axis
         self._gizmo_rotate_start_angle = float(angle)
         self._gizmo_rotate_start_rotation = np.array(m.get("rotation", [0.0, 0.0, 0.0]), dtype=float)
+        rotations = {}
+        offsets = {}
+        for mid in self._selected_model_ids or [self._selected_model_id]:
+            m = self.models.get(mid)
+            if m is None:
+                continue
+            rotations[mid] = np.array(m.get("rotation", [0.0, 0.0, 0.0]), dtype=float)
+            offsets[mid] = np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+        self._gizmo_rotate_start_rotations = rotations if rotations else None
+        self._gizmo_rotate_start_offsets = offsets if offsets else None
+        self._gizmo_rotate_pivot = np.array(self._gizmo_origin, dtype=float)
         self._update_gizmo()
         return True
 
@@ -1918,7 +2284,7 @@ class Viewer3D(gl.GLViewWidget):
             self._gizmo_move_lines[axis].setData(pos=pos, color=self._color_array(color, len(pos)))
 
             base = origin + direction * (line_length - cone_height)
-            verts, faces = self._make_cone_mesh(cone_height, cone_radius, 18)
+            verts, faces = make_cone_mesh(cone_height, cone_radius, 18)
             R = self._axis_rotation_matrix(axis)
             verts = verts @ R.T
             verts = verts + base
@@ -1960,7 +2326,7 @@ class Viewer3D(gl.GLViewWidget):
         basis1, basis2 = self._ring_basis(axis)
         direction = basis2 / max(1e-6, float(np.linalg.norm(basis2)))
         ring_point = origin + basis1 * radius
-        verts, faces = self._make_cone_mesh(height, cone_radius, 18)
+        verts, faces = make_cone_mesh(height, cone_radius, 18)
         rot = self._rotation_from_z(direction)
 
         tip0 = ring_point
@@ -1980,19 +2346,6 @@ class Viewer3D(gl.GLViewWidget):
         except Exception:
             pass
 
-    def _make_cone_mesh(self, height: float, radius: float, segments: int):
-        verts = []
-        faces = []
-        verts.append([0.0, 0.0, height])
-        for i in range(segments):
-            ang = (2.0 * math.pi * i) / segments
-            verts.append([radius * math.cos(ang), radius * math.sin(ang), 0.0])
-        tip_index = 0
-        for i in range(segments):
-            i0 = 1 + i
-            i1 = 1 + ((i + 1) % segments)
-            faces.append([tip_index, i0, i1])
-        return np.array(verts, dtype=float), np.array(faces, dtype=int)
 
     def _axis_rotation_matrix(self, axis: str):
         if axis == "x":

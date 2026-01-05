@@ -36,6 +36,12 @@ DEFAULTS = {
         "rotate": {"min": -360.0, "max": 360.0, "step": 1.0, "decimals": 2},
         "scale": {"min": 1.0, "max": 500.0, "default": 100.0, "step": 1.0, "decimals": 2},
         "size": {"min": 0.0, "max": 99999.0, "step": 1.0, "decimals": 2},
-        "arrange": {"spacing_min": 0, "spacing_max": 20, "spacing_default": 0, "auto_spacing": 5.0},
+        "arrange": {
+            "spacing_min": 0,
+            "spacing_max": 20,
+            "spacing_default": 0,
+            "auto_spacing": 5.0,
+            "spacing_base": 3.0,
+        },
     },
 }

@@ -218,21 +218,12 @@ def arrange_rectangles(sizes: Sequence[Tuple[int, float, float]],
             x_cursor += w + spacing_val
             row_depth = max(row_depth, d)
 
-        min_x = float("inf")
-        max_x = float("-inf")
-        min_y = float("inf")
-        max_y = float("-inf")
-        for mid, w, d in sizes_list:
-            x, y = positions[mid]
-            min_x = min(min_x, x - w / 2.0)
-            max_x = max(max_x, x + w / 2.0)
-            min_y = min(min_y, y - d / 2.0)
-            max_y = max(max_y, y + d / 2.0)
-        cx = (min_x + max_x) / 2.0
-        cy = (min_y + max_y) / 2.0
-        for mid in positions:
-            x, y = positions[mid]
-            positions[mid] = (x - cx, y - cy)
+        if positions:
+            cx = sum(pos[0] for pos in positions.values()) / len(positions)
+            cy = sum(pos[1] for pos in positions.values()) / len(positions)
+            for mid in positions:
+                x, y = positions[mid]
+                positions[mid] = (x - cx, y - cy)
 
     return positions
 
@@ -311,23 +302,79 @@ def slice_mesh(mesh: trimesh.Trimesh | _MeshLike, z_height: float) -> List[Polyg
     return clean_polygons(planar.discrete, tolerance=_CLIPPER_EPS)
 
 def polygons_with_holes(polygons: Sequence[Sequence[Point2D]]) -> List[Island2D]:
-    """Group loops into islands with holes using clipper union."""
-    pc = _require_pyclipper()
+    """Group loops into islands with holes using nesting."""
+    _require_pyclipper()
     cleaned_polygons = clean_polygons(polygons, tolerance=_CLIPPER_EPS)
-    paths: List[List[Tuple[int, int]]] = [
-        _to_clip_path(_normalize_polygon(poly)) for poly in cleaned_polygons
-    ]
-
-    if not paths:
+    if not cleaned_polygons:
         return []
 
-    clipper = pc.Pyclipper()
-    clipper.AddPaths(paths, pc.PT_SUBJECT, True)
-    tree = clipper.Execute2(pc.CT_UNION,
-                            pc.PFT_NONZERO,
-                            pc.PFT_NONZERO)
+    loop_data = []
+    for loop in cleaned_polygons:
+        base = _normalize_polygon(loop)
+        if len(base) < 3:
+            continue
+        area = _polygon_area(base)
+        abs_area = abs(area)
+        if abs_area <= _MIN_LOOP_AREA:
+            continue
+        centroid = _polygon_centroid(base)
+        loop_data.append(
+            {
+                "loop": loop,
+                "base": base,
+                "abs_area": abs_area,
+                "centroid": centroid,
+            }
+        )
 
-    return _polytree_to_islands(tree)
+    if not loop_data:
+        return []
+
+    parents = [-1 for _ in loop_data]
+    for i, data in enumerate(loop_data):
+        best_parent = -1
+        best_area = None
+        for j, other in enumerate(loop_data):
+            if i == j:
+                continue
+            if other["abs_area"] <= data["abs_area"] + 1e-9:
+                continue
+            if point_in_polygon(data["centroid"], other["base"]):
+                if best_area is None or other["abs_area"] < best_area:
+                    best_area = other["abs_area"]
+                    best_parent = j
+        parents[i] = best_parent
+
+    depths = [0 for _ in loop_data]
+    for i in range(len(loop_data)):
+        depth = 0
+        parent = parents[i]
+        while parent != -1:
+            depth += 1
+            parent = parents[parent]
+        depths[i] = depth
+
+    children: Dict[int, List[int]] = {i: [] for i in range(len(loop_data))}
+    for idx, parent in enumerate(parents):
+        if parent != -1:
+            children[parent].append(idx)
+
+    islands: List[Island2D] = []
+    for i, data in enumerate(loop_data):
+        if depths[i] % 2 != 0:
+            continue
+        outer = ensure_winding(data["loop"], clockwise=True)
+        if not outer:
+            continue
+        holes: List[Polygon2D] = []
+        for child in children.get(i, []):
+            if depths[child] % 2 == 1:
+                hole = ensure_winding(loop_data[child]["loop"], clockwise=False)
+                if hole:
+                    holes.append(hole)
+        islands.append((outer, holes))
+
+    return islands
 
 def islands_difference(subject: Sequence[Island2D],
                        clip: Sequence[Island2D]) -> List[Island2D]:
@@ -507,7 +554,9 @@ def point_in_polygon(point: Point2D, polygon: Sequence[Point2D]) -> bool:
     base = _normalize_polygon(polygon)
     if len(base) < 3:
         return False
-    return pc.PointInPolygon(point, base) > 0
+    path = _to_clip_path(base)
+    pt = (int(round(point[0] * _CLIPPER_SCALE)), int(round(point[1] * _CLIPPER_SCALE)))
+    return pc.PointInPolygon(pt, path) > 0
 
 def point_in_island(point: Point2D, island: Island2D) -> bool:
     pc = _require_pyclipper()
@@ -566,13 +615,33 @@ def thin_wall_lines(islands: Sequence[Island2D],
     lines: List[LineSegment2D] = []
     for outer, holes in islands:
         offset = offset_polygon(outer, -width)
-        if not offset:
+        if offset:
+            lines.extend(_loops_to_lines(offset))
+        else:
             center = offset_polygon(outer, -width * 0.5)
             if center:
                 lines.extend(_loops_to_lines(center))
+            else:
+                base = _normalize_polygon(outer)
+                if base:
+                    xs = [p[0] for p in base]
+                    ys = [p[1] for p in base]
+                    min_x, max_x = min(xs), max(xs)
+                    min_y, max_y = min(ys), max(ys)
+                    span_x = max_x - min_x
+                    span_y = max_y - min_y
+                    if min(span_x, span_y) <= width and max(span_x, span_y) > 0.0:
+                        if span_x <= span_y:
+                            x = (min_x + max_x) / 2.0
+                            lines.append(((x, min_y), (x, max_y)))
+                        else:
+                            y = (min_y + max_y) / 2.0
+                            lines.append(((min_x, y), (max_x, y)))
         for hole in holes:
             offset_hole = offset_polygon(hole, -width)
-            if not offset_hole:
+            if offset_hole:
+                lines.extend(_loops_to_lines(offset_hole))
+            else:
                 center = offset_polygon(hole, -width * 0.5)
                 if center:
                     lines.extend(_loops_to_lines(center))
@@ -597,13 +666,17 @@ def gap_fill_lines(islands: Sequence[Island2D],
     lines: List[LineSegment2D] = []
     for outer, holes in gaps:
         offset = offset_polygon(outer, -width)
-        if not offset:
+        if offset:
+            lines.extend(_loops_to_lines(offset))
+        else:
             center = offset_polygon(outer, -width * 0.5)
             if center:
                 lines.extend(_loops_to_lines(center))
         for hole in holes:
             offset_hole = offset_polygon(hole, -width)
-            if not offset_hole:
+            if offset_hole:
+                lines.extend(_loops_to_lines(offset_hole))
+            else:
                 center = offset_polygon(hole, -width * 0.5)
                 if center:
                     lines.extend(_loops_to_lines(center))

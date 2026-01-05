@@ -77,12 +77,19 @@ class MainController(QtCore.QObject):
 
     def _connect_signals(self):
         self.model_panel.model_selected.connect(self._on_model_selected)
+        self.model_panel.selection_changed.connect(self._on_model_selection_changed)
         self.model_panel.request_remove.connect(self._on_model_remove)
         self.model_panel.duplicate_requested.connect(self._on_duplicate_requested)
+        if hasattr(self.model_panel, "select_all_requested"):
+            self.model_panel.select_all_requested.connect(self._select_all_models)
+        if hasattr(self.model_panel, "deselect_all_requested"):
+            self.model_panel.deselect_all_requested.connect(self._deselect_all_models)
         self.job_queue_panel.add_btn.clicked.connect(self._add_current_model_to_queue)
         self.viewer.modelPicked.connect(self._on_viewer_model_picked)
         self.viewer.modelMoved.connect(self._on_viewer_model_moved)
         self.viewer.modelRotated.connect(self._on_viewer_model_rotated)
+        if hasattr(self.viewer, "selectionChanged"):
+            self.viewer.selectionChanged.connect(self._on_viewer_selection_changed)
 
     def dragEnterEvent(self, a0: QtGui.QDragEnterEvent):
         event = a0
@@ -110,12 +117,36 @@ class MainController(QtCore.QObject):
 
     # -------------------------------------------------- Model selection/removal
     def _on_model_selected(self, model_id: int):
+        if model_id is None:
+            return
         self.current_model_id = model_id
-        self.viewer.set_selected_model(model_id)
+        selected = self._selected_model_ids()
+        if model_id not in selected:
+            selected = [model_id]
+        self.viewer.set_selected_models(selected, emit_signal=False)
+        if len(selected) == 1:
+            name = self.viewer.get_model_name(model_id) or "Model"
+            self.statusBar().showMessage(f"Selected {name}")
+        else:
+            self.statusBar().showMessage(f"Selected {len(selected)} models")
+        self.viewer.set_gizmo_mode("move")
+        self._sync_popups()
 
-        name = self.viewer.get_model_name(model_id) or "Model"
-        self.statusBar().showMessage(f"Selected {name}")
-
+    def _on_model_selection_changed(self, model_ids: list):
+        ids = [int(mid) for mid in model_ids] if model_ids else []
+        if not ids:
+            self.current_model_id = None
+            self.viewer.set_selected_models([], emit_signal=False)
+            self.statusBar().showMessage("Selection cleared")
+            self._sync_popups()
+            return
+        self.current_model_id = ids[0]
+        self.viewer.set_selected_models(ids, emit_signal=False)
+        if len(ids) == 1:
+            name = self.viewer.get_model_name(ids[0]) or "Model"
+            self.statusBar().showMessage(f"Selected {name}")
+        else:
+            self.statusBar().showMessage(f"Selected {len(ids)} models")
         self.viewer.set_gizmo_mode("move")
         self._sync_popups()
 
@@ -244,25 +275,41 @@ class MainController(QtCore.QObject):
 
     # ------------------------------------------------------------ transforms (viewer -> panel)
     def _on_viewer_model_picked(self, model_id: int):
-        # Make viewer click behave like selecting in the Models panel
-        self.current_model_id = model_id
-        self.viewer.set_selected_model(model_id)
+        _ = model_id
+        selected = self.viewer.get_selected_model_ids() if hasattr(self.viewer, "get_selected_model_ids") else []
+        if not selected:
+            selected = [model_id]
+        self._sync_selection_from_viewer(selected)
+        self.viewer.set_gizmo_mode("move")
 
-        # Select in model panel list (without emitting loops)
+    def _on_viewer_selection_changed(self, model_ids: list):
+        self._sync_selection_from_viewer(model_ids)
+
+    def _sync_selection_from_viewer(self, model_ids: list):
+        ids = [int(mid) for mid in model_ids] if model_ids else []
+        self.current_model_id = ids[0] if ids else None
         lw = self.model_panel.list_widget
         block = lw.blockSignals(True)
         try:
+            lw.clearSelection()
             for row in range(lw.count()):
                 item = lw.item(row)
                 if item is None:
                     continue
-                if item.data(QtCore.Qt.UserRole) == model_id:
-                    lw.setCurrentItem(item)
-                    break
+                if item.data(QtCore.Qt.UserRole) in ids:
+                    item.setSelected(True)
+                    if item.data(QtCore.Qt.UserRole) == self.current_model_id:
+                        lw.setCurrentItem(item)
         finally:
             lw.blockSignals(block)
-
-        self.viewer.set_gizmo_mode("move")
+        if ids:
+            if len(ids) == 1:
+                name = self.viewer.get_model_name(ids[0]) or "Model"
+                self.statusBar().showMessage(f"Selected {name}")
+            else:
+                self.statusBar().showMessage(f"Selected {len(ids)} models")
+        else:
+            self.statusBar().showMessage("Selection cleared")
 
     def _on_viewer_model_moved(self, model_id: int, x: float, y: float):
         if self.current_model_id != model_id:
@@ -356,21 +403,60 @@ class MainController(QtCore.QObject):
         vertices, faces = mesh_data
         return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
 
+    def _get_plate_source_path(self):
+        model_ids = self.viewer.get_model_ids()
+        if not model_ids:
+            return None
+        for mid in model_ids:
+            path = self.viewer.get_model_path(mid)
+            if path:
+                return path
+        return "plate"
+
+    def _get_plate_mesh(self):
+        model_ids = self.viewer.get_model_ids()
+        if not model_ids:
+            return None
+        vertices_list = []
+        faces_list = []
+        vert_offset = 0
+        for mid in model_ids:
+            mesh_data = self.viewer.get_model_mesh_data(mid)
+            if not mesh_data:
+                continue
+            vertices, faces = mesh_data
+            vertices_list.append(np.asarray(vertices, dtype=float))
+            faces_list.append(np.asarray(faces, dtype=int) + vert_offset)
+            vert_offset += len(vertices)
+        if not vertices_list:
+            return None
+        combined_vertices = np.vstack(vertices_list)
+        combined_faces = np.vstack(faces_list) if faces_list else np.zeros((0, 3), dtype=int)
+        return trimesh.Trimesh(vertices=combined_vertices, faces=combined_faces, process=False)
+
     def _build_slice_signature(self, settings: SliceSettings):
-        if self.current_model_id is None:
+        model_ids = sorted(self.viewer.get_model_ids())
+        if not model_ids:
             return None
-        scale_offset = self.viewer.get_model_transform(self.current_model_id)
-        rotation = self.viewer.get_model_rotation(self.current_model_id)
-        if scale_offset is None or rotation is None:
+        models_payload = []
+        for mid in model_ids:
+            scale_offset = self.viewer.get_model_transform(mid)
+            rotation = self.viewer.get_model_rotation(mid)
+            if scale_offset is None or rotation is None:
+                continue
+            scale, offset = scale_offset
+            models_payload.append(
+                {
+                    "model_id": int(mid),
+                    "path": self.viewer.get_model_path(mid),
+                    "scale": [float(v) for v in np.asarray(scale).reshape(-1)],
+                    "offset": [float(v) for v in np.asarray(offset).reshape(-1)],
+                    "rotation": [float(v) for v in np.asarray(rotation).reshape(-1)],
+                }
+            )
+        if not models_payload:
             return None
-        scale, offset = scale_offset
-        payload = {
-            "model_id": int(self.current_model_id),
-            "scale": [float(v) for v in np.asarray(scale).reshape(-1)],
-            "offset": [float(v) for v in np.asarray(offset).reshape(-1)],
-            "rotation": [float(v) for v in np.asarray(rotation).reshape(-1)],
-            "settings": asdict(settings),
-        }
+        payload = {"models": models_payload, "settings": asdict(settings)}
         return json.dumps(payload, sort_keys=True, default=str)
 
     def _slice_model(self,
@@ -378,12 +464,12 @@ class MainController(QtCore.QObject):
                      activate_preview: bool,
                      show_dialog: bool,
                      show_errors: bool = True):
-        stl_path = self._get_current_stl_path()
-        if not stl_path:
+        source_path = self._get_plate_source_path()
+        if not source_path:
             if show_dialog:
-                QtWidgets.QMessageBox.warning(self.main, "No model", "Load and select an STL first.")
+                QtWidgets.QMessageBox.warning(self.main, "No model", "Load model(s) first.")
             return
-        mesh = self._get_current_mesh()
+        mesh = self._get_plate_mesh()
         if mesh is None:
             if show_dialog:
                 QtWidgets.QMessageBox.warning(self.main, "No model", "Model data unavailable for slicing.")
@@ -429,7 +515,7 @@ class MainController(QtCore.QObject):
                         mesh,
                         output_gcode_path=None,
                         settings=settings,
-                        source_path=stl_path)
+                        source_path=source_path)
         worker.signals.finished.connect(on_done)
         worker.signals.error.connect(on_err)
         self.pool.start(worker)
@@ -898,11 +984,45 @@ class MainController(QtCore.QObject):
         self._schedule_undo_snapshot()
 
     def _on_auto_orient_requested(self, mode: str):
-        _ = mode
-        QtWidgets.QMessageBox.information(self.main, "Auto Orient", "Auto orient is not implemented yet.")
+        model_ids = []
+        if self.current_model_id is not None:
+            model_ids = [self.current_model_id]
+        else:
+            model_ids = self.viewer.get_model_ids()
+        if not model_ids:
+            QtWidgets.QMessageBox.warning(self.main, "Auto Orient", "Load models first.")
+            return
+
+        overhang_angle = SliceSettings().overhang_angle
+        failed = []
+        for mid in model_ids:
+            ok = self.viewer.auto_orient_model(mid, mode=mode, overhang_angle=overhang_angle)
+            if not ok:
+                failed.append(mid)
+        if failed:
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                "Auto Orient",
+                "Unable to auto orient one or more models.",
+            )
+        self._sync_popups()
+        self._update_bed_warnings()
+        self._schedule_undo_snapshot()
 
     def _on_auto_orient_reset(self):
-        QtWidgets.QMessageBox.information(self.main, "Auto Orient", "Auto orient is not implemented yet.")
+        model_ids = []
+        if self.current_model_id is not None:
+            model_ids = [self.current_model_id]
+        else:
+            model_ids = self.viewer.get_model_ids()
+        if not model_ids:
+            QtWidgets.QMessageBox.warning(self.main, "Auto Orient", "Load models first.")
+            return
+        for mid in model_ids:
+            self.viewer.set_model_transform(mid, rotation_xyz=(0.0, 0.0, 0.0))
+        self._sync_popups()
+        self._update_bed_warnings()
+        self._schedule_undo_snapshot()
 
     def _on_arrange_requested(self):
         opts = self._popup_arrange.get_options()
@@ -1225,7 +1345,7 @@ class MainController(QtCore.QObject):
         self._active_mode = mode
 
     def _auto_slice_prepare(self):
-        if self.current_model_id is None:
+        if not self.viewer.get_model_ids():
             return
         settings = self.settings_panel.to_settings()
         signature = self._build_slice_signature(settings)
@@ -1269,7 +1389,7 @@ class MainController(QtCore.QObject):
             return
         model_id = item.data(QtCore.Qt.UserRole)
         self.current_model_id = model_id
-        self.viewer.set_selected_model(model_id)
+        self.viewer.set_selected_models(self._selected_model_ids(), emit_signal=False)
         self.statusBar().showMessage("Selected all models")
 
     def _selected_model_ids(self):
@@ -1368,9 +1488,9 @@ class MainController(QtCore.QObject):
             self.model_panel.add_model(payload["name"], model_id)
             new_ids.append(model_id)
         if new_ids:
-            self._select_model_in_panel(new_ids[-1])
-            self.current_model_id = new_ids[-1]
-            self.viewer.set_selected_model(new_ids[-1])
+            self._select_model_in_panel(new_ids)
+            self.current_model_id = new_ids[0]
+            self.viewer.set_selected_models(new_ids, emit_signal=False)
             self._sync_popups()
         return new_ids
 
@@ -1389,9 +1509,10 @@ class MainController(QtCore.QObject):
 
         remaining = self.viewer.get_model_ids()
         self.current_model_id = remaining[0] if remaining else None
-        self.viewer.set_selected_model(self.current_model_id)
-        if self.current_model_id is not None:
-            self._select_model_in_panel(self.current_model_id)
+        selected = [self.current_model_id] if self.current_model_id is not None else []
+        self.viewer.set_selected_models(selected, emit_signal=False)
+        if selected:
+            self._select_model_in_panel(selected)
         else:
             self.model_panel.list_widget.clearSelection()
         if len(model_ids) == 1:
@@ -1402,17 +1523,27 @@ class MainController(QtCore.QObject):
         self._push_undo_state()
         self._clear_preview()
 
-    def _select_model_in_panel(self, model_id: int):
+    def _select_model_in_panel(self, model_ids):
+        if model_ids is None:
+            ids = []
+        elif isinstance(model_ids, (list, tuple, set)):
+            ids = list(model_ids)
+        else:
+            ids = [model_ids]
         lw = self.model_panel.list_widget
         block = lw.blockSignals(True)
         try:
+            lw.clearSelection()
+            current_set = set(ids)
             for row in range(lw.count()):
                 item = lw.item(row)
                 if item is None:
                     continue
-                if item.data(QtCore.Qt.UserRole) == model_id:
-                    lw.setCurrentItem(item)
-                    break
+                mid = item.data(QtCore.Qt.UserRole)
+                if mid in current_set:
+                    item.setSelected(True)
+                    if mid == (ids[0] if ids else None):
+                        lw.setCurrentItem(item)
         finally:
             lw.blockSignals(block)
 
@@ -1587,7 +1718,7 @@ class MainController(QtCore.QObject):
 
     def _deselect_all_models(self):
         self.current_model_id = None
-        self.viewer.set_selected_model(None)
+        self.viewer.set_selected_models([], emit_signal=False)
         self.model_panel.list_widget.clearSelection()
         self._sync_popups()
 

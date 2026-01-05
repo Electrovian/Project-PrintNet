@@ -9,7 +9,8 @@ try:
 except Exception:  # pragma: no cover - optional dependency in type checkers
     pyclipper = None  # type: ignore[assignment]
 
-from .geometry import Island2D, LineSegment2D, Point2D, offset_islands, polygons_with_holes
+from .geometry import (Island2D, LineSegment2D, Point2D, offset_islands,
+                       point_in_polygon, polygons_with_holes)
 from .gcode import SliceSettings
 from .mesh import MeshModel
 from . import infill
@@ -55,12 +56,10 @@ def overhang_mask(mesh: MeshModel, overhang_angle: float) -> List[Island2D]:
 
 def _point_in_island(point: Point2D, island: Island2D) -> bool:
     outer, holes = island
-    if pyclipper is None:
-        raise RuntimeError("pyclipper is required for support point-in-polygon checks.")
-    if pyclipper.PointInPolygon(point, outer) <= 0:
+    if not point_in_polygon(point, outer):
         return False
     for hole in holes:
-        if pyclipper.PointInPolygon(point, hole) > 0:
+        if point_in_polygon(point, hole):
             return False
     return True
 
@@ -232,10 +231,21 @@ def generate_tree_supports(mesh: MeshModel,
                     moved_points.append((cx, cy))
             parent_x = sum(p[0] for p in moved_points) / len(moved_points)
             parent_y = sum(p[1] for p in moved_points) / len(moved_points)
-            parent = _TreeNode(x=parent_x, y=parent_y, z=next_level * step)
+            needs_split = False
             for node in cluster:
-                node.parent = parent
-            nodes_by_level.setdefault(next_level, []).append(parent)
+                if math.hypot(parent_x - node.x, parent_y - node.y) > max_dx + 1e-6:
+                    needs_split = True
+                    break
+            if needs_split:
+                for node, (px, py) in zip(cluster, moved_points):
+                    parent = _TreeNode(x=px, y=py, z=next_level * step)
+                    node.parent = parent
+                    nodes_by_level.setdefault(next_level, []).append(parent)
+            else:
+                parent = _TreeNode(x=parent_x, y=parent_y, z=next_level * step)
+                for node in cluster:
+                    node.parent = parent
+                nodes_by_level.setdefault(next_level, []).append(parent)
 
     branches: List[TreeSupportBranch] = []
     seen: set = set()

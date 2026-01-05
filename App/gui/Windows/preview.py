@@ -2,6 +2,7 @@ import math
 from PyQt5 import QtWidgets, QtCore, QtGui
 
 from ..theme import theme_css, theme_qcolor
+from ..preview_utils import play_interval_ms
 
 
 class PreviewView(QtCore.QObject):
@@ -12,6 +13,9 @@ class PreviewView(QtCore.QObject):
         self._preview_data = None
         self._play_timer = QtCore.QTimer(self.main)
         self._play_timer.timeout.connect(self._on_play_tick)
+        self._play_base_interval_ms = 30
+        self._play_speed = 1.0
+        self._play_timer.setInterval(self._play_base_interval_ms)
         self._is_playing = False
         self._line_type_updating = False
         self._line_type_map = []
@@ -184,10 +188,24 @@ class PreviewView(QtCore.QObject):
 
         controls_row = QtWidgets.QHBoxLayout()
         self._play_btn = QtWidgets.QToolButton(self._timeline_panel)
-        self._play_btn.setText("Play")
-        self._play_btn.setObjectName("PreviewButton")
+        self._play_btn.setObjectName("PreviewPlayButton")
         self._play_btn.setCheckable(True)
+        self._play_btn.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
+        self._play_btn.setFixedSize(48, 32)
+        self._play_btn.setIconSize(QtCore.QSize(18, 18))
+        self._play_btn.setCursor(QtCore.Qt.PointingHandCursor)
         controls_row.addWidget(self._play_btn)
+
+        controls_row.addWidget(QtWidgets.QLabel("Speed"))
+        self._play_speed_spin = QtWidgets.QDoubleSpinBox(self._timeline_panel)
+        self._play_speed_spin.setRange(0.25, 4.0)
+        self._play_speed_spin.setSingleStep(0.25)
+        self._play_speed_spin.setDecimals(2)
+        self._play_speed_spin.setValue(self._play_speed)
+        self._play_speed_spin.setSuffix("x")
+        self._play_speed_spin.setFixedWidth(70)
+        self._play_speed_spin.setToolTip("Playback speed")
+        controls_row.addWidget(self._play_speed_spin)
 
         controls_row.addWidget(QtWidgets.QLabel("Steps"))
         self._steps_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self._timeline_panel)
@@ -214,6 +232,7 @@ class PreviewView(QtCore.QObject):
         layer_layout.addWidget(self._layer_slider, 1)
         layer_layout.addWidget(self._layer_bottom)
 
+        self._refresh_play_icons()
         self._populate_line_types()
         self._wire_toggles()
         self._populate_printers()
@@ -263,6 +282,7 @@ class PreviewView(QtCore.QObject):
         self._steps_spin.valueChanged.connect(self._on_step_spin_changed)
         self._line_type_combo.currentTextChanged.connect(self._on_color_mode_changed)
         self._play_btn.toggled.connect(self._on_play_toggled)
+        self._play_speed_spin.valueChanged.connect(self._on_play_speed_changed)
         self._line_table.itemChanged.connect(self._on_line_type_changed)
         self._platform_check.toggled.connect(self._on_platform_toggled)
         self._nozzle_check.toggled.connect(self._on_nozzle_toggled)
@@ -383,6 +403,18 @@ class PreviewView(QtCore.QObject):
             "QLabel, QToolButton {"
             f"  color: {panel_text};"
             "}"
+            "QToolButton#PreviewPlayButton {"
+            f"  background: {theme_css('rotate_reset')};"
+            f"  border: 1px solid {theme_qcolor('rotate_reset').darker(115).name()};"
+            "  border-radius: 10px;"
+            "  padding: 2px 10px;"
+            "}"
+            "QToolButton#PreviewPlayButton:hover {"
+            f"  background: {theme_qcolor('rotate_reset').lighter(108).name()};"
+            "}"
+            "QToolButton#PreviewPlayButton:pressed {"
+            f"  background: {theme_qcolor('rotate_reset').darker(120).name()};"
+            "}"
             "QLabel#PreviewNozzleInfo {"
             f"  color: {panel_text};"
             "  font-weight: 600;"
@@ -400,6 +432,7 @@ class PreviewView(QtCore.QObject):
             "}"
         )
         self._autosize_panel()
+        self._refresh_play_icons()
 
     def position_panels(self):
         margin = 16
@@ -460,10 +493,25 @@ class PreviewView(QtCore.QObject):
         top = max(0, count - 1)
         self._layer_slider.setRange(0, top)
         self._layer_slider.setValue(top)
-        self._layer_top.setText(str(top))
+        self._update_layer_label(top)
         self._layer_bottom.setText("0")
         if count > 0:
             self._update_steps_for_layer(top)
+
+    def _update_layer_label(self, value: int | None = None):
+        if self._layer_slider is None or self._layer_top is None:
+            return
+        max_index = int(self._layer_slider.maximum())
+        if value is None:
+            current = int(self._layer_slider.value())
+        else:
+            current = int(value)
+        current = max(0, min(current, max_index))
+        self._layer_top.setText(str(current))
+        if max_index > 0:
+            self._layer_top.setToolTip(f"Layer {current} / {max_index}")
+        else:
+            self._layer_top.setToolTip("Layer 0")
 
     def show(self):
         self._preview_panel.show()
@@ -487,6 +535,7 @@ class PreviewView(QtCore.QObject):
         if hasattr(self.viewer, "set_preview_layer_index"):
             self.viewer.set_preview_layer_index(int(value))
         self._update_steps_for_layer(int(value))
+        self._update_layer_label(int(value))
         self._update_nozzle_info()
 
     def _on_step_changed(self, value: int):
@@ -502,18 +551,22 @@ class PreviewView(QtCore.QObject):
 
     def _on_play_toggled(self, checked: bool):
         if self._preview_data is None or not getattr(self._preview_data, "layers", None):
-            self._play_btn.setChecked(False)
+            if checked:
+                self._play_btn.setChecked(False)
+            self._is_playing = False
+            self._play_timer.stop()
+            self._update_play_button_state(False)
             return
         if checked:
             if self._steps_slider.value() >= self._steps_slider.maximum():
                 self._steps_slider.setValue(0)
-            self._play_btn.setText("Pause")
             self._is_playing = True
-            self._play_timer.start(30)
+            self._update_play_timer_interval()
+            self._play_timer.start()
         else:
-            self._play_btn.setText("Play")
             self._is_playing = False
             self._play_timer.stop()
+        self._update_play_button_state(checked)
 
     def _on_play_tick(self):
         if self._steps_slider.maximum() <= 0:
@@ -649,3 +702,66 @@ class PreviewView(QtCore.QObject):
         self._nozzle_info.setText(
             f"X: {pos[0]:.3f}  Y: {pos[1]:.3f}  Z: {pos[2]:.3f}  Speed: {speed_text} ({mode})"
         )
+
+    def _play_icon_pixmap(self, color: QtGui.QColor) -> QtGui.QPixmap:
+        size = 18
+        pm = QtGui.QPixmap(size, size)
+        pm.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(pm)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(QtGui.QBrush(color))
+        margin = 3
+        points = [
+            QtCore.QPointF(margin, margin),
+            QtCore.QPointF(margin, size - margin),
+            QtCore.QPointF(size - margin, size / 2),
+        ]
+        painter.drawPolygon(QtGui.QPolygonF(points))
+        painter.end()
+        return pm
+
+    def _pause_icon_pixmap(self, color: QtGui.QColor) -> QtGui.QPixmap:
+        size = 18
+        pm = QtGui.QPixmap(size, size)
+        pm.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(pm)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(QtGui.QBrush(color))
+        bar_width = 4
+        gap = 4
+        left = (size - (bar_width * 2 + gap)) // 2
+        top = 3
+        height = size - 6
+        painter.drawRoundedRect(left, top, bar_width, height, 1.5, 1.5)
+        painter.drawRoundedRect(left + bar_width + gap, top, bar_width, height, 1.5, 1.5)
+        painter.end()
+        return pm
+
+    def _refresh_play_icons(self):
+        color = QtGui.QColor(20, 20, 20)
+        self._play_icon = QtGui.QIcon(self._play_icon_pixmap(color))
+        self._pause_icon = QtGui.QIcon(self._pause_icon_pixmap(color))
+        self._update_play_button_state(self._is_playing)
+
+    def _update_play_button_state(self, playing: bool):
+        if not hasattr(self, "_play_btn") or self._play_btn is None:
+            return
+        if playing:
+            self._play_btn.setIcon(self._pause_icon)
+            self._play_btn.setToolTip("Pause preview")
+        else:
+            self._play_btn.setIcon(self._play_icon)
+            self._play_btn.setToolTip("Play preview")
+
+    def _update_play_timer_interval(self):
+        interval = play_interval_ms(self._play_base_interval_ms, self._play_speed)
+        self._play_timer.setInterval(interval)
+
+    def _on_play_speed_changed(self, value: float):
+        try:
+            self._play_speed = float(value)
+        except (TypeError, ValueError):
+            self._play_speed = 1.0
+        self._update_play_timer_interval()

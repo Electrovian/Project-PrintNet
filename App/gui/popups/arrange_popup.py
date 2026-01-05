@@ -18,7 +18,7 @@ class ArrangePopup(BasePopup):
         layout = self.content_layout()
 
         spacing_row = QtWidgets.QHBoxLayout()
-        spacing_row.addWidget(QtWidgets.QLabel("Spacing"))
+        spacing_row.addWidget(QtWidgets.QLabel("Extra spacing (mm)"))
         self.spacing_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         arrange_cfg = DEFAULTS["popups"]["arrange"]
         popup_cfg = DEFAULTS["popups"]
@@ -32,10 +32,13 @@ class ArrangePopup(BasePopup):
         self.spacing_spin.setDecimals(2)
         self.spacing_spin.setSingleStep(0.5)
         self.spacing_spin.setFixedWidth(popup_cfg["spin_width"])
+        self.spacing_spin.setSuffix(" mm")
+        self.spacing_spin.setValue(float(arrange_cfg["spacing_default"]))
         spacing_row.addWidget(self.spacing_spin)
         layout.addLayout(spacing_row)
 
-        hint = QtWidgets.QLabel("0 means auto spacing.")
+        base_spacing = float(arrange_cfg.get("spacing_base", 3.0))
+        hint = QtWidgets.QLabel(f"Minimum clearance is {base_spacing:.0f} mm; spacing adds on top.")
         hint.setObjectName("Muted")
         layout.addWidget(hint)
 
@@ -93,6 +96,6 @@ class ArrangePopup(BasePopup):
     def _emit_reset(self):
         self.spacing_slider.setValue(DEFAULTS["popups"]["arrange"]["spacing_default"])
         self.auto_rotate.setChecked(False)
-        self.multi_filament.setChecked(False)
+        self.multi_filament.setChecked(True)
         self.align_y.setChecked(False)
         self.reset_requested.emit()
