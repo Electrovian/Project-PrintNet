@@ -1,2 +1,3 @@
 .venv/
 /App/.venv/
+/App/Tests/test objects
