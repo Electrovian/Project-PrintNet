@@ -1,9 +1,8 @@
 import unittest
 
 try:
-    from PyQt5 import QtCore, QtWidgets
+    from PyQt5 import QtWidgets
 except Exception:  # pragma: no cover - optional dependency in tests
-    QtCore = None
     QtWidgets = None
 
 from slicer.gcode import SliceSettings

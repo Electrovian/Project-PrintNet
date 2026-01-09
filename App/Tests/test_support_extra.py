@@ -2,7 +2,6 @@ import os
 import sys
 import unittest
 
-import trimesh
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
@@ -14,7 +13,6 @@ if TESTS not in sys.path:
 from slicer import geometry
 from slicer import support
 from slicer.gcode import SliceSettings
-from slicer.mesh import MeshModel
 from harness import BaseTestCase, square_points
 
 

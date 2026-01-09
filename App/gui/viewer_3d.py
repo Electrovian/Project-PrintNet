@@ -117,9 +117,11 @@ class Viewer3D(gl.GLViewWidget):
         self._preview_layer_index = None
         self._preview_color_mode = "feature"
         self._preview_items: Dict[str, Optional[gl.GLLinePlotItem]] = {
-            "extrude": None,
             "travel": None,
         }
+        self._preview_extrude_items: List[gl.GLLinePlotItem] = []
+        self._preview_extrude_bins: List[Tuple[float, float, int]] = []
+        self._preview_base_width = 0.4
         self._preview_feature_filter: Optional[set[str]] = None
         self._preview_step_index = None
         self._preview_step_layer = None
@@ -136,13 +138,12 @@ class Viewer3D(gl.GLViewWidget):
         try:
             self.opts["distance"] = float(d) # pyright: ignore[reportArgumentType]
             return
-        except Exception:
-            pass
-        try:
-            self.opts["distance"] = float(d[0])  # type: ignore[index]
-            return
-        except Exception:
-            self.opts["distance"] = 300.0 # pyright: ignore[reportArgumentType]
+        except (TypeError, ValueError):
+            try:
+                self.opts["distance"] = float(d[0])  # type: ignore[index]
+                return
+            except (TypeError, ValueError, IndexError):
+                self.opts["distance"] = 300.0 # pyright: ignore[reportArgumentType]
 
     def _coerce_float(self, value, default: float) -> float:
         try:
@@ -153,6 +154,18 @@ class Viewer3D(gl.GLViewWidget):
         except Exception:
             return float(default)
         return float(default)
+
+    def _safe_gl_update(self, func, *args, **kwargs) -> bool:
+        try:
+            func(*args, **kwargs)
+        except Exception:
+            return False
+        return True
+
+    def _update_gl_line(self, item, color):
+        pos = item.pos if item.pos is not None else np.zeros((0, 3), dtype=float)
+        color_arr = self._color_array(color, len(pos))
+        item.setData(pos=pos, color=color_arr, width=item.width)
 
     def paintGL(self, *args, **kwargs):
         self._coerce_distance()
@@ -204,41 +217,20 @@ class Viewer3D(gl.GLViewWidget):
         for axis, key in (("x", "gizmo_x"), ("y", "gizmo_y"), ("z", "gizmo_z")):
             line = self._gizmo_move_lines.get(axis)
             if line is not None:
-                try:
-                    pos = line.pos if line.pos is not None else np.zeros((0, 3), dtype=float)
-                    color = self._color_array(theme_value(key), len(pos))
-                    line.setData(pos=pos, color=color, width=line.width)
-                except Exception:
-                    pass
+                self._safe_gl_update(self._update_gl_line, line, theme_value(key))
             cone = self._gizmo_move_cones.get(axis)
             if cone is not None:
-                try:
-                    cone.setColor(theme_value(key))
-                except Exception:
-                    pass
+                self._safe_gl_update(cone.setColor, theme_value(key))
 
             ring = self._gizmo_rotate_rings.get(axis)
             if ring is not None:
-                try:
-                    pos = ring.pos if ring.pos is not None else np.zeros((0, 3), dtype=float)
-                    color = self._color_array(theme_value(key), len(pos))
-                    ring.setData(pos=pos, color=color, width=ring.width)
-                except Exception:
-                    pass
+                self._safe_gl_update(self._update_gl_line, ring, theme_value(key))
             ticks = self._gizmo_rotate_ticks.get(axis)
             if ticks is not None:
-                try:
-                    pos = ticks.pos if ticks.pos is not None else np.zeros((0, 3), dtype=float)
-                    color = self._color_array(theme_value("gizmo_tick"), len(pos))
-                    ticks.setData(pos=pos, color=color, width=ticks.width)
-                except Exception:
-                    pass
+                self._safe_gl_update(self._update_gl_line, ticks, theme_value("gizmo_tick"))
             arrows = self._gizmo_rotate_arrows.get(axis)
             if arrows is not None:
-                try:
-                    arrows.setColor(theme_value(key))
-                except Exception:
-                    pass
+                self._safe_gl_update(arrows.setColor, theme_value(key))
 
         for m in self.models.values():
             self._apply_model_color(m)
@@ -263,9 +255,34 @@ class Viewer3D(gl.GLViewWidget):
             self._preview_step_layer = None
             self._update_preview_lines()
             return
+        self._preview_extrude_bins = []
+        self._clear_preview_extrude_items()
         self._preview_layer_index = len(preview.layers) - 1
         self._preview_step_index = None
         self._preview_step_layer = self._preview_layer_index
+        self._update_preview_lines()
+
+    def set_preview_settings(self, settings):
+        if settings is None:
+            return
+        base_width = self._preview_base_width
+        try:
+            base_width = float(settings.extrusion_width)
+        except (TypeError, ValueError, AttributeError):
+            base_width = self._preview_base_width
+        if base_width <= 0.0:
+            try:
+                base_width = float(settings.nozzle_diameter)
+            except (TypeError, ValueError, AttributeError):
+                base_width = self._preview_base_width
+        if base_width <= 0.0:
+            base_width = self._preview_base_width
+        if abs(base_width - self._preview_base_width) < 1e-6:
+            return
+        self._preview_base_width = base_width
+        self._preview_extrude_bins = []
+        self._clear_preview_extrude_items()
+        self._ensure_preview_items()
         self._update_preview_lines()
 
     def set_models_visible(self, visible: bool):
@@ -295,6 +312,8 @@ class Viewer3D(gl.GLViewWidget):
         for item in self._preview_items.values():
             if item is not None:
                 item.setVisible(self._preview_visible)
+        for item in self._preview_extrude_items:
+            item.setVisible(self._preview_visible)
 
     def get_preview_nozzle_state(self):
         seg = self._preview_segment_for_nozzle()
@@ -388,7 +407,7 @@ class Viewer3D(gl.GLViewWidget):
 
     def set_preview_color_mode(self, mode: str):
         mode = (mode or "").strip().lower()
-        if mode not in ("feature", "speed", "flow"):
+        if mode not in ("feature", "speed", "flow", "width"):
             mode = "feature"
         if self._preview_color_mode == mode:
             return
@@ -403,18 +422,71 @@ class Viewer3D(gl.GLViewWidget):
         self._update_preview_lines()
 
     def _ensure_preview_items(self):
-        if self._preview_items["extrude"] is None:
-            item = gl.GLLinePlotItem(pos=np.zeros((0, 3), dtype=float), mode="lines", width=2)
-            item.setGLOptions("opaque")
-            self.addItem(item)
-            item.setVisible(self._preview_visible)
-            self._preview_items["extrude"] = item
         if self._preview_items["travel"] is None:
             item = gl.GLLinePlotItem(pos=np.zeros((0, 3), dtype=float), mode="lines", width=1)
             item.setGLOptions("translucent")
             self.addItem(item)
             item.setVisible(self._preview_visible)
             self._preview_items["travel"] = item
+        if not self._preview_extrude_bins:
+            self._preview_extrude_bins = self._preview_width_bins()
+        if not self._preview_extrude_items or \
+                len(self._preview_extrude_items) != len(self._preview_extrude_bins):
+            self._clear_preview_extrude_items()
+            for _min_w, _max_w, line_width in self._preview_extrude_bins:
+                item = gl.GLLinePlotItem(pos=np.zeros((0, 3), dtype=float),
+                                         mode="lines",
+                                         width=line_width)
+                item.setGLOptions("opaque")
+                self.addItem(item)
+                item.setVisible(self._preview_visible)
+                self._preview_extrude_items.append(item)
+
+    def _preview_width_bins(self) -> List[Tuple[float, float, int]]:
+        base = self._preview_base_width if self._preview_base_width > 0.0 else 0.4
+        preview = self._preview_data
+        min_width = float(getattr(preview, "min_width", 0.0) or 0.0)
+        max_width = float(getattr(preview, "max_width", 0.0) or 0.0)
+
+        def line_width_for(width_value: float) -> int:
+            if base <= 0.0:
+                return 2
+            scale = max(1.0, (width_value / base) * 2.0)
+            return max(1, min(8, int(round(scale))))
+
+        if min_width <= 0.0 or max_width <= 0.0 or max_width <= min_width:
+            return [
+                (0.0, base * 0.75, 1),
+                (base * 0.75, base * 1.05, 2),
+                (base * 1.05, base * 1.4, 3),
+                (base * 1.4, float("inf"), 4),
+            ]
+
+        span = max(max_width - min_width, base * 0.25)
+        step = span / 4.0
+        edges = [min_width + step * i for i in range(5)]
+        bins: List[Tuple[float, float, int]] = []
+        for idx in range(4):
+            low = edges[idx]
+            high = edges[idx + 1] if idx < 3 else float("inf")
+            mid = (edges[idx] + edges[idx + 1]) / 2.0 if idx < 3 else max_width
+            bins.append((low, high, line_width_for(mid)))
+        return bins
+
+    def _bucket_for_width(self, width: float) -> int:
+        bins = self._preview_extrude_bins or self._preview_width_bins()
+        for idx, (min_w, max_w, _line_width) in enumerate(bins):
+            if width >= min_w and width < max_w:
+                return idx
+        return max(0, len(bins) - 1)
+
+    def _clear_preview_extrude_items(self):
+        for item in self._preview_extrude_items:
+            try:
+                self.removeItem(item)
+            except Exception:
+                continue
+        self._preview_extrude_items = []
 
     def _preview_feature_color(self, feature: str):
         colors = {
@@ -482,6 +554,8 @@ class Viewer3D(gl.GLViewWidget):
             for item in self._preview_items.values():
                 if item is not None:
                     item.setData(pos=np.zeros((0, 3), dtype=float))
+            for item in self._preview_extrude_items:
+                item.setData(pos=np.zeros((0, 3), dtype=float))
             self._update_nozzle_position()
             return
 
@@ -492,8 +566,12 @@ class Viewer3D(gl.GLViewWidget):
         layer_index = max(0, min(layer_index, len(self._preview_data.layers) - 1))
         self._update_nozzle_position(layer_index)
 
-        extrude_points = []
-        extrude_colors = []
+        extrude_points: List[List[Tuple[float, float, float]]] = [
+            [] for _ in self._preview_extrude_bins
+        ]
+        extrude_colors: List[List[Tuple[float, float, float, float]]] = [
+            [] for _ in self._preview_extrude_bins
+        ]
         travel_points = []
         travel_colors = []
 
@@ -511,6 +589,14 @@ class Viewer3D(gl.GLViewWidget):
                     color = self._preview_color_from_scalar(seg.speed,
                                                             self._preview_data.min_speed,
                                                             self._preview_data.max_speed)
+                elif self._preview_color_mode == "width":
+                    if seg.is_extrude:
+                        width_value = seg.width if seg.width > 0.0 else self._preview_base_width
+                        color = self._preview_color_from_scalar(width_value,
+                                                                self._preview_data.min_width,
+                                                                self._preview_data.max_width)
+                    else:
+                        color = self._preview_feature_color("travel")
                 else:
                     if seg.is_extrude:
                         color = self._preview_color_from_scalar(seg.flow,
@@ -520,22 +606,23 @@ class Viewer3D(gl.GLViewWidget):
                         color = self._preview_feature_color("travel")
 
                 if seg.is_extrude:
-                    extrude_points.extend([seg.start, seg.end])
-                    extrude_colors.extend([color, color])
+                    width_value = seg.width if seg.width > 0.0 else self._preview_base_width
+                    bucket = self._bucket_for_width(width_value)
+                    extrude_points[bucket].extend([seg.start, seg.end])
+                    extrude_colors[bucket].extend([color, color])
                 else:
                     travel_points.extend([seg.start, seg.end])
                     travel_colors.extend([color, color])
 
-        extrude_item = self._preview_items["extrude"]
         travel_item = self._preview_items["travel"]
-        if extrude_item is not None:
-            if extrude_points and extrude_colors:
-                extrude_item.setData(
-                    pos=np.array(extrude_points, dtype=float),
-                    color=np.array(extrude_colors, dtype=float),
+        for item, points, colors in zip(self._preview_extrude_items, extrude_points, extrude_colors):
+            if points and colors:
+                item.setData(
+                    pos=np.array(points, dtype=float),
+                    color=np.array(colors, dtype=float),
                 )
             else:
-                extrude_item.setData(
+                item.setData(
                     pos=np.zeros((0, 3), dtype=float),
                     color=np.zeros((0, 4), dtype=float),
                 )
@@ -924,10 +1011,7 @@ class Viewer3D(gl.GLViewWidget):
             return
         size_x = float(self._bed_size[0]) if self._bed_size else 0.0
         size_y = float(self._bed_size[1]) if self._bed_size else 0.0
-        try:
-            self._grid_item.setSize(size_x, size_y, 0)
-        except Exception:
-            pass
+        self._safe_gl_update(self._grid_item.setSize, size_x, size_y, 0)
 
     def get_out_of_bounds_models(self) -> List[int]:
         return [mid for mid, model in self.models.items() if model.get("out_of_bounds")]
@@ -966,10 +1050,7 @@ class Viewer3D(gl.GLViewWidget):
         base_color = theme_value("mesh_color", (0.0, 0.9, 0.4, 0.9))
         warn_color = theme_value("mesh_warning", (1.0, 0.25, 0.2, 0.95))
         color = warn_color if model.get("out_of_bounds") else base_color
-        try:
-            item.setColor(color)
-        except Exception:
-            pass
+        self._safe_gl_update(item.setColor, color)
 
     def _model_volume(self, model: dict):
         base = model.get("base_volume")
@@ -1170,9 +1251,7 @@ class Viewer3D(gl.GLViewWidget):
         model_id = self._next_model_id
         self._next_model_id += 1
 
-        safe_name = (name or "").strip()
-        if not safe_name:
-            safe_name = os.path.basename(path) or f"Model {model_id}"
+        safe_name = (name or "").strip() or os.path.basename(path) or f"Model {model_id}"
 
         v = np.asarray(vertices, dtype=float)
         f = np.asarray(faces, dtype=int)
@@ -1633,10 +1712,7 @@ class Viewer3D(gl.GLViewWidget):
             m["item"] = item
         else:
             item.setMeshData(meshdata=md)
-            try:
-                self._apply_model_color(m)
-            except Exception:
-                pass
+            self._apply_model_color(m)
             item.setVisible(self._models_visible)
 
     def _compute_transformed_vertices(self, model: dict):
@@ -2343,10 +2419,7 @@ class Viewer3D(gl.GLViewWidget):
             verts = verts + base
             md = gl.MeshData(vertexes=verts, faces=faces)
             self._gizmo_move_cones[axis].setMeshData(meshdata=md)
-            try:
-                self._gizmo_move_cones[axis].setColor(color)
-            except Exception:
-                pass
+            self._safe_gl_update(self._gizmo_move_cones[axis].setColor, color)
 
     def _update_rotate_gizmo(self):
         self._gizmo_ring_points = {}
@@ -2394,10 +2467,7 @@ class Viewer3D(gl.GLViewWidget):
         faces_1 = faces + len(verts0)
         all_faces = np.vstack([faces, faces_1])
         arrows.setMeshData(meshdata=gl.MeshData(vertexes=all_verts, faces=all_faces))
-        try:
-            arrows.setColor(color)
-        except Exception:
-            pass
+        self._safe_gl_update(arrows.setColor, color)
 
 
     def _axis_rotation_matrix(self, axis: str):

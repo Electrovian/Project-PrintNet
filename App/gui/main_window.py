@@ -1,17 +1,24 @@
 # gui/main_window.py
 import os
+from typing import Optional, TYPE_CHECKING
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 
 from .Windows.prepare import PrepareView
 from .Windows.preview import PreviewView
 from .Windows.device import DeviceView
+from .Windows.files import FilesView
+from .Windows.activity import ActivityView
 from .Windows.shared_view import SharedView
 from .Windows.controller import MainController
 from config.defaults import DEFAULTS
 from config.performance import resolve_performance_limits
 
 from integrations.printer_manager import PrinterManager
+
+if TYPE_CHECKING:
+    from .activity_logger import ActivityLogger
+    from .crash_reporter import CrashReporter
 
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
 
@@ -31,6 +38,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printers = printers
         self.airtable_cfg = airtable_cfg
         self.printer_manager = PrinterManager(printers=self.printers, airtable_cfg=self.airtable_cfg)
+        self.activity_logger: Optional["ActivityLogger"] = None
+        self.crash_reporter: Optional["CrashReporter"] = None
 
         self.pool = QtCore.QThreadPool.globalInstance()
         limits = resolve_performance_limits(DEFAULTS.get("performance"))
@@ -53,6 +62,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.device_view.set_printers(self.printers)
         self._central_stack.addWidget(self.device_view)
 
+        self.files_view = FilesView(self)
+        self._central_stack.addWidget(self.files_view)
+
+        self.activity_view = ActivityView(self)
+        self._central_stack.addWidget(self.activity_view)
+
         self.setCentralWidget(self._central_stack)
 
         self.preview_view = PreviewView(self, self.viewer)
@@ -63,6 +78,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.shared_view.build_shortcut_actions()
         self.device_view.send_requested.connect(self.controller._on_device_send_requested)
         self.device_view.save_requested.connect(self.controller._on_device_save_requested)
+        self.files_view.add_files_requested.connect(self.open_stl_dialog)
         self.controller.initialize()
 
 

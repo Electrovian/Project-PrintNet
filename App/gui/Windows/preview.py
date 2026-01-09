@@ -245,9 +245,14 @@ class PreviewView(QtCore.QObject):
             self._printer_combo.setEnabled(False)
             return
         self._printer_combo.setEnabled(True)
-        for printer in printers:
+        dummy_index = None
+        for idx, printer in enumerate(printers):
             name = printer.get("name") if isinstance(printer, dict) else None
             self._printer_combo.addItem(name or "Printer")
+            if str(name or "").strip().lower() == "dummy printer":
+                dummy_index = idx
+        if dummy_index is not None:
+            self._printer_combo.setCurrentIndex(dummy_index)
 
     def _populate_line_types(self):
         self._line_type_map = [
@@ -668,6 +673,8 @@ class PreviewView(QtCore.QObject):
             selected = "speed"
         elif mode in ("flow", "filament"):
             selected = "flow"
+        elif mode in ("line width", "width"):
+            selected = "width"
         else:
             selected = "feature"
         if hasattr(self.viewer, "set_preview_color_mode"):

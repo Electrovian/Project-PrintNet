@@ -287,7 +287,9 @@ def _to_clip_path(points: Sequence[Point2D]) -> List[Tuple[int, int]]:
 def _from_clip_path(path: Iterable[Tuple[int, int]]) -> Polygon2D:
     return [(x / _CLIPPER_SCALE, y / _CLIPPER_SCALE) for x, y in path]
 
-def slice_mesh(mesh: trimesh.Trimesh | _MeshLike, z_height: float) -> List[Polygon2D]:
+def slice_mesh(mesh: trimesh.Trimesh | _MeshLike,
+               z_height: float,
+               tolerance: float = _CLIPPER_EPS) -> List[Polygon2D]:
     """Slice a mesh at a Z plane and return closed 2D loops in XY."""
     mesh_obj = cast(_MeshLike, mesh).mesh if hasattr(mesh, "mesh") else mesh
     if not isinstance(mesh_obj, trimesh.Trimesh):
@@ -299,7 +301,11 @@ def slice_mesh(mesh: trimesh.Trimesh | _MeshLike, z_height: float) -> List[Polyg
         return []
 
     planar, _ = section.to_planar()
-    return clean_polygons(planar.discrete, tolerance=_CLIPPER_EPS)
+    try:
+        tol = max(0.0, float(tolerance))
+    except (TypeError, ValueError):
+        tol = _CLIPPER_EPS
+    return clean_polygons(planar.discrete, tolerance=tol or _CLIPPER_EPS)
 
 def polygons_with_holes(polygons: Sequence[Sequence[Point2D]]) -> List[Island2D]:
     """Group loops into islands with holes using nesting."""

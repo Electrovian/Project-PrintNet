@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 
 def spacing_with_base(base_spacing: float, extra_spacing: float) -> float:

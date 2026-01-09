@@ -359,12 +359,13 @@ def bridge_direction(island: Island2D) -> float:
 
 def generate_bridge_infill(islands: List[Island2D],
                            layer_index: int,
-                           extrusion_width: float) -> List[BridgeRegion]:
+                           extrusion_width: float,
+                           density: float = 1.0) -> List[BridgeRegion]:
     regions: List[BridgeRegion] = []
     for island in islands:
         angle = bridge_direction(island)
         lines = infill.rectilinear_infill([island],
-                                          density=1.0,
+                                          density=density,
                                           angle_deg=angle,
                                           layer_index=layer_index,
                                           extrusion_width=extrusion_width,

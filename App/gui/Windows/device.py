@@ -93,8 +93,14 @@ class DeviceView(QtWidgets.QWidget):
             self._printer_combo.setEnabled(False)
         else:
             self._printer_combo.setEnabled(True)
-            for printer in self._printers:
-                self._printer_combo.addItem(printer.get("name", "Printer"))
+            dummy_index = None
+            for idx, printer in enumerate(self._printers):
+                name = printer.get("name", "Printer")
+                self._printer_combo.addItem(name)
+                if str(name or "").strip().lower() == "dummy printer":
+                    dummy_index = idx
+            if dummy_index is not None:
+                self._printer_combo.setCurrentIndex(dummy_index)
         self._update_details()
 
     def current_printer(self):

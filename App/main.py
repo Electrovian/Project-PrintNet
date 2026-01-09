@@ -3,10 +3,17 @@ from PyQt5 import QtWidgets, QtCore
 from gui.main_window import MainWindow
 from gui.Windows.splash import SplashScreen
 from config.printer_config import load_printer_config
+from gui.activity_logger import ActivityLogger
+from gui.crash_reporter import CrashReporter
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("OpenSlicer")
+
+    activity_logger = ActivityLogger()
+    activity_logger.install(app)
+    crash_reporter = CrashReporter(activity_logger=activity_logger)
+    crash_reporter.install()
 
     splash = SplashScreen()
     screen = app.primaryScreen()
@@ -24,6 +31,9 @@ def main():
     timer.start()
     printers, airtable_cfg = load_printer_config()
     window = MainWindow(printers=printers, airtable_cfg=airtable_cfg)
+    window.activity_logger = activity_logger
+    window.crash_reporter = crash_reporter
+    activity_logger.track_widget_tree(window)
 
     remaining = 3000 - int(timer.elapsed())
     if remaining > 0:

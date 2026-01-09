@@ -4,11 +4,6 @@ from dataclasses import dataclass
 import math
 from typing import Dict, List, Optional, Sequence, Tuple
 
-try:
-    import pyclipper  # type: ignore[import-not-found]
-except Exception:  # pragma: no cover - optional dependency in type checkers
-    pyclipper = None  # type: ignore[assignment]
-
 from .geometry import (Island2D, LineSegment2D, Point2D, offset_islands,
                        point_in_polygon, polygons_with_holes)
 from .gcode import SliceSettings

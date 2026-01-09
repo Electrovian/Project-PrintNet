@@ -1,0 +1,1 @@
+{"ts": "2026-01-09T19:13:00.353Z", "event": "action", "action": "crash", "log_path": "C:\\Users\\User\\OneDrive\\Desktop\\Git\\Project-PrintNet\\logs\\crash_20260109_141300.log", "exc_type": "AttributeError", "message": "MainController has no attribute 'viewer'"}

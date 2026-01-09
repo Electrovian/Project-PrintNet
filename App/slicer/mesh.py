@@ -12,12 +12,12 @@ class MeshModel:
     """Simple wrapper around a trimesh mesh."""
     path: str
     mesh: trimesh.Trimesh
-    _slice_cache: OrderedDict[float, List[Island2D]] = field(default_factory=OrderedDict,
-                                                      init=False,
-                                                      repr=False)
-    _slice_cache_bytes: Dict[float, int] = field(default_factory=dict,
-                                                 init=False,
-                                                 repr=False)
+    _slice_cache: OrderedDict[Tuple[float, float], List[Island2D]] = field(default_factory=OrderedDict,
+                                                            init=False,
+                                                            repr=False)
+    _slice_cache_bytes: Dict[Tuple[float, float], int] = field(default_factory=dict,
+                                                               init=False,
+                                                               repr=False)
     _slice_cache_total_bytes: int = field(default=0,
                                           init=False,
                                           repr=False)
@@ -74,15 +74,19 @@ class MeshModel:
                               tuple(v2.tolist())))
         return triangles
 
-    def slice_layer(self, z_height: float) -> List[Island2D]:
+    def slice_layer(self, z_height: float, tolerance: float = 0.0) -> List[Island2D]:
         """Return islands + holes for a single Z plane, cached by Z."""
-        key = round(float(z_height), 6)
+        try:
+            tol = float(tolerance)
+        except (TypeError, ValueError):
+            tol = 0.0
+        key = (round(float(z_height), 6), round(tol, 6))
         cached = self._slice_cache.get(key)
         if cached is not None:
             self._slice_cache.move_to_end(key)
             return cached
 
-        loops = slice_mesh(self.mesh, z_height)
+        loops = slice_mesh(self.mesh, z_height, tolerance=tol)
         islands = polygons_with_holes(loops)
         self._slice_cache[key] = islands
         self._slice_cache.move_to_end(key)
@@ -93,9 +97,11 @@ class MeshModel:
         self._enforce_cache_limit()
         return islands
 
-    def slice_layers(self, z_heights: Iterable[float]) -> Dict[float, List[Island2D]]:
+    def slice_layers(self,
+                     z_heights: Iterable[float],
+                     tolerance: float = 0.0) -> Dict[float, List[Island2D]]:
         """Slice multiple Z planes and return a dict of cached results."""
-        return {float(z): self.slice_layer(float(z)) for z in z_heights}
+        return {float(z): self.slice_layer(float(z), tolerance=tolerance) for z in z_heights}
 
     def set_slice_cache_limit(self, max_mb: float | None):
         if max_mb is None:

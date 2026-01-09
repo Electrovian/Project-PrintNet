@@ -55,7 +55,23 @@ class SliceSettings:
     min_layer_height: float = 0.1
     max_layer_height: float = 0.3
     seam_position: str = "aligned"
+    staggered_inner_seams: bool = False
+    seam_gap: float = 0.0
+    scarf_joint_seam: str = "none"
+    wipe_use_base_speed: bool = True
+    wipe_speed_percent: float = 80.0
+    wipe_on_loops: bool = False
+    wipe_before_external_loop: bool = False
     precise_wall: bool = False
+    slice_gap_closing_radius: float = 0.0
+    resolution: float = 0.0
+    arc_fitting: bool = False
+    xy_hole_compensation: float = 0.0
+    xy_contour_compensation: float = 0.0
+    elephant_foot_compensation: float = 0.0
+    elephant_foot_compensation_layers: int = 0
+    convert_holes_to_polyholes: bool = False
+    precise_z_height: bool = False
     only_one_wall_top: bool = False
     only_one_wall_first_layer: bool = False
     firmware_flavor: str = "marlin"
@@ -75,12 +91,44 @@ class SliceSettings:
     bridge_speed: float = 30.0
     nozzle_diameter: float = 0.4
     extrusion_width: float = 0.4
+    first_layer_line_width: float = 0.0
+    outer_wall_line_width: float = 0.0
+    inner_wall_line_width: float = 0.0
+    top_surface_line_width: float = 0.0
+    sparse_infill_line_width: float = 0.0
+    internal_solid_infill_line_width: float = 0.0
+    support_line_width: float = 0.0
     bridge_extrusion_width: float = 0.5
+    bridge_flow_ratio: float = 0.9
+    internal_bridge_flow_ratio: float = 1.0
+    bridge_density: float = 100.0
+    thick_bridges: bool = False
+    thick_internal_bridges: bool = True
+    bridge_filter_mode: str = "disabled"
+    bridge_counterbore_holes: str = "none"
     filament_diameter: float = 1.75
     extrusion_multiplier: float = 1.0
     perimeter_count: int = 1
     top_layers: int = 3
     bottom_layers: int = 3
+    wall_generator: str = "classic"
+    wall_transition_angle: float = 10.0
+    wall_transition_filter_margin: float = 25.0
+    wall_transition_length: float = 100.0
+    wall_distribution_count: int = 1
+    first_layer_min_wall_width: float = 85.0
+    min_wall_width: float = 85.0
+    min_feature_size: float = 25.0
+    min_wall_length: float = 0.5
+    wall_printing_order: str = "inner_outer"
+    print_infill_first: bool = False
+    wall_loop_direction: str = "auto"
+    top_surface_flow_ratio: float = 1.0
+    bottom_surface_flow_ratio: float = 1.0
+    one_wall_threshold: float = 0.0
+    avoid_crossing_walls: bool = False
+    small_area_flow_compensation: bool = False
+    smooth_wall_speed_z: bool = False
     support_enabled: bool = False
     support_type: str = "normal"
     overhang_angle: float = 45.0
@@ -98,12 +146,18 @@ class SliceSettings:
     retract_distance: float = 1.0
     retract_speed: float = 25.0
     z_hop_height: float = 0.2
+    ironing_type: str = "no_ironing"
     ironing_speed: float = 20.0
     ironing_flow: float = 0.1
     ironing_enabled: bool = True
     adaptive_overhang_enabled: bool = False
     adaptive_overhang_threshold: float = 0.3
     adaptive_overhang_height: float = 0.1
+    detect_overhang_walls: bool = True
+    make_overhangs_printable: bool = False
+    extra_perimeters_on_overhangs: bool = False
+    reverse_overhang_on_odd: bool = False
+    overhang_optimization: bool = False
     layer_height_ranges: Optional[List[Tuple[float, float, float]]] = None
     brim_width: float = 0.0
     brim_type: str = "auto"
@@ -142,8 +196,34 @@ class SliceSettings:
         if self.supports_arcs is None:
             self.supports_arcs = profile.supports_arcs
         self.supports_arcs = bool(self.supports_arcs)
+
+        def _width_or_default(value: float, fallback: float) -> float:
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                return float(fallback)
+            return float(fallback) if numeric <= 0.0 else float(numeric)
+
         self.seam_position = str(self.seam_position).strip().lower() or "aligned"
+        self.staggered_inner_seams = bool(self.staggered_inner_seams)
+        self.seam_gap = max(0.0, min(100.0, float(self.seam_gap)))
+        self.scarf_joint_seam = str(self.scarf_joint_seam).strip().lower() or "none"
+        if self.scarf_joint_seam not in ("none", "contour", "contour_hole"):
+            self.scarf_joint_seam = "none"
+        self.wipe_use_base_speed = bool(self.wipe_use_base_speed)
+        self.wipe_speed_percent = max(0.0, min(200.0, float(self.wipe_speed_percent)))
+        self.wipe_on_loops = bool(self.wipe_on_loops)
+        self.wipe_before_external_loop = bool(self.wipe_before_external_loop)
         self.precise_wall = bool(self.precise_wall)
+        self.slice_gap_closing_radius = max(0.0, float(self.slice_gap_closing_radius))
+        self.resolution = max(0.0, float(self.resolution))
+        self.arc_fitting = bool(self.arc_fitting)
+        self.xy_hole_compensation = float(self.xy_hole_compensation)
+        self.xy_contour_compensation = float(self.xy_contour_compensation)
+        self.elephant_foot_compensation = max(0.0, float(self.elephant_foot_compensation))
+        self.elephant_foot_compensation_layers = max(0, int(self.elephant_foot_compensation_layers))
+        self.convert_holes_to_polyholes = bool(self.convert_holes_to_polyholes)
+        self.precise_z_height = bool(self.precise_z_height)
         self.only_one_wall_top = bool(self.only_one_wall_top)
         self.only_one_wall_first_layer = bool(self.only_one_wall_first_layer)
         self.filament_name = str(self.filament_name or "").strip() or "Hyper PLA"
@@ -158,11 +238,65 @@ class SliceSettings:
         if self.infill_density is None:
             self.infill_density = self.infill_percent / 100.0
         self.infill_density = max(0.0, min(1.0, float(self.infill_density)))
-        if self.bridge_extrusion_width <= 0.0:
-            self.bridge_extrusion_width = self.extrusion_width
+        self.extrusion_width = max(0.01, float(self.extrusion_width))
+        self.first_layer_line_width = _width_or_default(self.first_layer_line_width,
+                                                        self.extrusion_width)
+        self.outer_wall_line_width = _width_or_default(self.outer_wall_line_width,
+                                                       self.extrusion_width)
+        self.inner_wall_line_width = _width_or_default(self.inner_wall_line_width,
+                                                       self.extrusion_width)
+        self.top_surface_line_width = _width_or_default(self.top_surface_line_width,
+                                                        self.extrusion_width)
+        self.sparse_infill_line_width = _width_or_default(self.sparse_infill_line_width,
+                                                          self.extrusion_width)
+        self.internal_solid_infill_line_width = _width_or_default(
+            self.internal_solid_infill_line_width,
+            self.extrusion_width,
+        )
+        self.support_line_width = _width_or_default(self.support_line_width,
+                                                    self.extrusion_width)
+        self.bridge_extrusion_width = _width_or_default(self.bridge_extrusion_width,
+                                                        self.extrusion_width)
+        self.bridge_flow_ratio = max(0.0, float(self.bridge_flow_ratio))
+        self.internal_bridge_flow_ratio = max(0.0, float(self.internal_bridge_flow_ratio))
+        self.bridge_density = max(0.0, min(100.0, float(self.bridge_density)))
+        self.thick_bridges = bool(self.thick_bridges)
+        self.thick_internal_bridges = bool(self.thick_internal_bridges)
+        self.bridge_filter_mode = str(self.bridge_filter_mode).strip().lower() or "disabled"
+        if self.bridge_filter_mode not in ("disabled", "limited", "none"):
+            self.bridge_filter_mode = "disabled"
+        self.bridge_counterbore_holes = str(self.bridge_counterbore_holes).strip().lower() or "none"
+        if self.bridge_counterbore_holes not in ("none", "partial", "sacrificial"):
+            self.bridge_counterbore_holes = "none"
         self.perimeter_count = max(1, int(self.perimeter_count))
         self.top_layers = max(0, int(self.top_layers))
         self.bottom_layers = max(0, int(self.bottom_layers))
+        self.wall_generator = str(self.wall_generator).strip().lower() or "classic"
+        if self.wall_generator not in ("classic", "arachne"):
+            self.wall_generator = "classic"
+        self.wall_transition_angle = max(0.0, min(90.0, float(self.wall_transition_angle)))
+        self.wall_transition_filter_margin = max(0.0, min(200.0,
+                                                          float(self.wall_transition_filter_margin)))
+        self.wall_transition_length = max(0.0, min(500.0, float(self.wall_transition_length)))
+        self.wall_distribution_count = max(1, int(self.wall_distribution_count))
+        self.first_layer_min_wall_width = max(1.0, min(400.0, float(self.first_layer_min_wall_width)))
+        self.min_wall_width = max(1.0, min(400.0, float(self.min_wall_width)))
+        self.min_feature_size = max(1.0, min(400.0, float(self.min_feature_size)))
+        self.min_wall_length = max(0.0, float(self.min_wall_length))
+        self.wall_printing_order = str(self.wall_printing_order).strip().lower() or "inner_outer"
+        if self.wall_printing_order not in ("inner_outer", "outer_inner", "inner_outer_inner",
+                                            "adaptive_outer_inner"):
+            self.wall_printing_order = "inner_outer"
+        self.print_infill_first = bool(self.print_infill_first)
+        self.wall_loop_direction = str(self.wall_loop_direction).strip().lower() or "auto"
+        if self.wall_loop_direction not in ("auto", "clockwise", "counter_clockwise"):
+            self.wall_loop_direction = "auto"
+        self.top_surface_flow_ratio = max(0.0, min(2.0, float(self.top_surface_flow_ratio)))
+        self.bottom_surface_flow_ratio = max(0.0, min(2.0, float(self.bottom_surface_flow_ratio)))
+        self.one_wall_threshold = max(0.0, float(self.one_wall_threshold))
+        self.avoid_crossing_walls = bool(self.avoid_crossing_walls)
+        self.small_area_flow_compensation = bool(self.small_area_flow_compensation)
+        self.smooth_wall_speed_z = bool(self.smooth_wall_speed_z)
         self.support_enabled = bool(self.support_enabled)
         self.support_type = str(self.support_type).strip().lower() or "normal"
         self.support_build_plate_only = bool(self.support_build_plate_only)
@@ -176,6 +310,11 @@ class SliceSettings:
         self.tree_merge_distance = max(0.1, float(self.tree_merge_distance))
         self.retract_distance = max(0.0, float(self.retract_distance))
         self.retract_speed = max(1.0, float(self.retract_speed))
+        self.ironing_type = str(self.ironing_type).strip().lower() or "no_ironing"
+        if self.ironing_type not in ("no_ironing", "all_top_surfaces",
+                                      "topmost_surface_only", "all_solid_layers"):
+            self.ironing_type = "no_ironing"
+        self.ironing_enabled = self.ironing_type != "no_ironing"
         self.brim_width = max(0.0, float(self.brim_width))
         self.brim_type = str(self.brim_type).strip().lower() or "auto"
         self.skirt_loops = max(0, int(self.skirt_loops))
@@ -194,12 +333,21 @@ class SliceSettings:
         self.z_hop_height = max(0.0, float(self.z_hop_height))
         self.ironing_speed = max(1.0, float(self.ironing_speed))
         self.ironing_flow = max(0.0, min(1.0, float(self.ironing_flow)))
-        self.adaptive_overhang_enabled = bool(self.adaptive_overhang_enabled)
+        self.detect_overhang_walls = bool(self.detect_overhang_walls)
+        self.make_overhangs_printable = bool(self.make_overhangs_printable)
+        self.extra_perimeters_on_overhangs = bool(self.extra_perimeters_on_overhangs)
+        self.reverse_overhang_on_odd = bool(self.reverse_overhang_on_odd)
+        self.overhang_optimization = bool(self.overhang_optimization)
+        self.adaptive_overhang_enabled = bool(self.adaptive_overhang_enabled or self.overhang_optimization
+                                              or self.make_overhangs_printable)
         self.adaptive_overhang_threshold = max(0.0,
                                                min(1.0, float(self.adaptive_overhang_threshold)))
         self.adaptive_overhang_height = max(self.min_layer_height,
                                             min(float(self.adaptive_overhang_height),
                                                 self.max_layer_height))
+        if self.make_overhangs_printable:
+            self.adaptive_overhang_height = min(self.adaptive_overhang_height,
+                                                self.min_layer_height)
         if self.layer_height_ranges is None:
             self.layer_height_ranges = []
         else:
@@ -252,6 +400,10 @@ class GCodeWriter:
         if distance > 0.0 and self.has_extruded:
             self.retract()
         self.add(f"G0 X{x:.3f} Y{y:.3f} Z{z:.3f} F{f * 60:.0f}")
+        self.position = (x, y, z)
+
+    def move_wipe(self, x: float, y: float, z: float, speed: float):
+        self.add(f"G1 X{x:.3f} Y{y:.3f} Z{z:.3f} F{speed * 60:.0f}")
         self.position = (x, y, z)
 
     def move_extrude(self, x: float, y: float, z: float, speed: float, extrusion: float):
@@ -315,13 +467,25 @@ class GCodeWriter:
             return 0.0
         return (volume / filament_area) * flow
 
-    def perimeter_loop(self, points: Iterable[Tuple[float, float]], z: float, speed: float):
+    def perimeter_loop(self,
+                       points: Iterable[Tuple[float, float]],
+                       z: float,
+                       speed: float,
+                       width: Optional[float] = None,
+                       multiplier: Optional[float] = None,
+                       seam_gap: float = 0.0,
+                       wipe_distance: float = 0.0,
+                       wipe_speed: Optional[float] = None):
         pts = list(points)
         if not pts:
             return
+        if pts[0] != pts[-1]:
+            pts.append(pts[0])
         x0, y0 = pts[0]
         self.move_travel(x0, y0, z, self.settings.travel_speed)
-        if self.settings.supports_arcs and len(pts) >= 5:
+        line_width = self.settings.extrusion_width if width is None else float(width)
+        flow = self.settings.extrusion_multiplier if multiplier is None else float(multiplier)
+        if self.settings.supports_arcs and self.settings.arc_fitting and len(pts) >= 5:
             try:
                 from . import path_planner
             except Exception:
@@ -338,7 +502,9 @@ class GCodeWriter:
                         mid = (cx + radius * math.cos(mid_angle),
                                cy + radius * math.sin(mid_angle))
                         half_length = math.pi * radius
-                        extrusion = self.extrusion_for_length(half_length)
+                        extrusion = self.extrusion_for_length(half_length,
+                                                              width=line_width,
+                                                              multiplier=flow)
                         self.move_arc_extrude(mid[0], mid[1], z, speed, extrusion,
                                               center_xy=(cx, cy),
                                               clockwise=fit.clockwise)
@@ -346,12 +512,50 @@ class GCodeWriter:
                                               center_xy=(cx, cy),
                                               clockwise=fit.clockwise)
                         return
+        segments = []
+        total_length = 0.0
         px, py = x0, y0
         for x, y in pts[1:]:
             length = math.hypot(x - px, y - py)
-            extrusion = self.extrusion_for_length(length)
-            self.move_extrude(x, y, z, speed, extrusion=extrusion)
+            segments.append((px, py, x, y, length))
+            total_length += length
             px, py = x, y
+
+        gap_length = 0.0
+        if seam_gap > 0.0 and total_length > 0.0:
+            gap_length = max(0.0, min(total_length, total_length * (seam_gap / 100.0)))
+        remaining_gap = gap_length
+        last_seg = None
+        for px, py, x, y, length in segments:
+            last_seg = (px, py, x, y, length)
+            if length <= 0.0:
+                continue
+            if remaining_gap > 0.0:
+                if remaining_gap >= length:
+                    self.move_wipe(x, y, z, speed if wipe_speed is None else wipe_speed)
+                    remaining_gap -= length
+                    continue
+                ratio = (length - remaining_gap) / length
+                mid_x = px + (x - px) * ratio
+                mid_y = py + (y - py) * ratio
+                extrusion = self.extrusion_for_length(length - remaining_gap,
+                                                      width=line_width,
+                                                      multiplier=flow)
+                self.move_extrude(mid_x, mid_y, z, speed, extrusion=extrusion)
+                self.move_wipe(x, y, z, speed if wipe_speed is None else wipe_speed)
+                remaining_gap = 0.0
+                continue
+            extrusion = self.extrusion_for_length(length, width=line_width, multiplier=flow)
+            self.move_extrude(x, y, z, speed, extrusion=extrusion)
+
+        if wipe_distance > 0.0 and last_seg is not None:
+            px, py, x, y, length = last_seg
+            if length > 1e-6:
+                dist = min(wipe_distance, length)
+                ratio = 1.0 - (dist / length)
+                wx = px + (x - px) * ratio
+                wy = py + (y - py) * ratio
+                self.move_wipe(wx, wy, z, speed if wipe_speed is None else wipe_speed)
 
     def extrude_lines(self,
                       lines: Iterable[Tuple[Tuple[float, float], Tuple[float, float]]],
@@ -375,6 +579,7 @@ class PreviewSegment:
     speed: float
     extrusion: float
     flow: float
+    width: float
     feature: str
     is_extrude: bool
 
@@ -396,6 +601,8 @@ class GCodePreview:
     max_speed: float
     min_flow: float
     max_flow: float
+    min_width: float
+    max_width: float
 
 def _arc_center_from_radius(start: Tuple[float, float],
                             end: Tuple[float, float],
@@ -449,7 +656,6 @@ def _arc_points(start: Tuple[float, float],
                 clockwise: bool,
                 segments: int) -> List[Tuple[float, float]]:
     sx, sy = start
-    ex, ey = end
     cx, cy = center
     radius = math.hypot(sx - cx, sy - cy)
     if radius <= 0.0 or segments <= 1:
@@ -465,7 +671,8 @@ def _arc_points(start: Tuple[float, float],
     points[-1] = end
     return points
 
-def parse_gcode_preview(lines: Iterable[str]) -> GCodePreview:
+def parse_gcode_preview(lines: Iterable[str],
+                        settings: Optional[SliceSettings] = None) -> GCodePreview:
     position = [0.0, 0.0, 0.0]
     e_position = 0.0
     feed_rate = None
@@ -479,6 +686,40 @@ def parse_gcode_preview(lines: Iterable[str]) -> GCodePreview:
     max_speed = 0.0
     min_flow = float("inf")
     max_flow = 0.0
+    min_width = float("inf")
+    max_width = 0.0
+
+    filament_area = None
+    layer_height = None
+    width_cap = None
+    if settings is not None:
+        try:
+            filament_area = math.pi * (float(settings.filament_diameter) / 2.0) ** 2
+        except (TypeError, ValueError):
+            filament_area = None
+        try:
+            layer_height = max(0.0, float(settings.layer_height))
+        except (TypeError, ValueError):
+            layer_height = None
+        try:
+            base_width = max(0.0, float(settings.extrusion_width))
+        except (TypeError, ValueError):
+            base_width = 0.0
+        width_cap = base_width * 5.0 if base_width > 0.0 else None
+
+    def segment_width(dist: float, extrusion: float) -> float:
+        if dist <= 1e-9 or extrusion <= 0.0:
+            return 0.0
+        if filament_area is None or layer_height is None:
+            return 0.0
+        if filament_area <= 0.0 or layer_height <= 0.0:
+            return 0.0
+        width = (extrusion * filament_area) / (dist * layer_height)
+        if not math.isfinite(width) or width <= 0.0:
+            return 0.0
+        if width_cap is not None and width_cap > 0.0:
+            width = min(width, width_cap)
+        return width
 
     def ensure_layer(z_val: float) -> PreviewLayer:
         nonlocal current_layer, current_z
@@ -489,7 +730,7 @@ def parse_gcode_preview(lines: Iterable[str]) -> GCodePreview:
         return current_layer
 
     def add_segment(seg: PreviewSegment):
-        nonlocal min_speed, max_speed, min_flow, max_flow
+        nonlocal min_speed, max_speed, min_flow, max_flow, min_width, max_width
         layer = ensure_layer(seg.end[2])
         layer.segments.append(seg)
         group = layer.features.setdefault(seg.feature, PreviewFeatureGroup())
@@ -503,6 +744,9 @@ def parse_gcode_preview(lines: Iterable[str]) -> GCodePreview:
         if seg.flow > 0:
             min_flow = min(min_flow, seg.flow)
             max_flow = max(max_flow, seg.flow)
+        if seg.width > 0.0:
+            min_width = min(min_width, seg.width)
+            max_width = max(max_width, seg.width)
 
     def feature_from_comment(comment: str, current: str) -> str:
         if not comment:
@@ -590,7 +834,7 @@ def parse_gcode_preview(lines: Iterable[str]) -> GCodePreview:
                     try:
                         e_position = float(part[1:])
                     except ValueError:
-                        pass
+                        continue
             continue
         if cmd not in ("G0", "G1", "G2", "G3"):
             continue
@@ -654,7 +898,6 @@ def parse_gcode_preview(lines: Iterable[str]) -> GCodePreview:
             elif r_val is not None:
                 center = _arc_center_from_radius(start_xy, end_xy, r_val, clockwise)
             if center is not None:
-                radius = math.hypot(start_xy[0] - center[0], start_xy[1] - center[1])
                 delta = _arc_delta(start_xy, end_xy, center, clockwise)
                 segments = max(4, int(abs(delta) / (math.pi / 8.0)))
                 points = _arc_points(start_xy, end_xy, center, clockwise, segments)
@@ -664,12 +907,14 @@ def parse_gcode_preview(lines: Iterable[str]) -> GCodePreview:
                     seg_end = points[idx + 1]
                     dist = math.hypot(seg_end[0] - seg_start[0], seg_end[1] - seg_start[1])
                     flow = per_seg_e / dist if dist > 0 and delta_e > 0.0 else 0.0
+                    width = segment_width(dist, per_seg_e)
                     segment = PreviewSegment(
                         start=(seg_start[0], seg_start[1], position[2]),
                         end=(seg_end[0], seg_end[1], new_pos[2]),
                         speed=speed,
                         extrusion=per_seg_e,
                         flow=flow,
+                        width=width,
                         feature=feature,
                         is_extrude=is_extrude,
                     )
@@ -682,12 +927,14 @@ def parse_gcode_preview(lines: Iterable[str]) -> GCodePreview:
             position = new_pos
             continue
         flow = delta_e / dist if dist > 0 and delta_e > 0.0 else 0.0
+        width = segment_width(dist, delta_e)
         segment = PreviewSegment(
             start=(position[0], position[1], position[2]),
             end=(new_pos[0], new_pos[1], new_pos[2]),
             speed=speed,
             extrusion=delta_e,
             flow=flow,
+            width=width,
             feature=feature,
             is_extrude=is_extrude,
         )
@@ -698,17 +945,21 @@ def parse_gcode_preview(lines: Iterable[str]) -> GCodePreview:
         layers.append(PreviewLayer(z=0.0))
     min_speed = 0.0 if min_speed == float("inf") else min_speed
     min_flow = 0.0 if min_flow == float("inf") else min_flow
+    min_width = 0.0 if min_width == float("inf") else min_width
     return GCodePreview(
         layers=layers,
         min_speed=min_speed,
         max_speed=max_speed,
         min_flow=min_flow,
         max_flow=max_flow,
+        min_width=min_width,
+        max_width=max_width,
     )
 
-def parse_gcode_preview_file(path: str) -> GCodePreview:
+def parse_gcode_preview_file(path: str,
+                             settings: Optional[SliceSettings] = None) -> GCodePreview:
     with open(path, "r", encoding="utf-8", errors="ignore") as handle:
-        return parse_gcode_preview(handle)
+        return parse_gcode_preview(handle, settings=settings)
 
 def _format_duration(seconds: float) -> str:
     if seconds <= 0:
@@ -760,7 +1011,7 @@ def estimate_gcode_stats(lines: Iterable[str], settings: SliceSettings) -> Dict[
                     try:
                         e_position = float(part[1:])
                     except ValueError:
-                        pass
+                        continue
             continue
         if cmd not in ("G0", "G1", "G2", "G3"):
             continue

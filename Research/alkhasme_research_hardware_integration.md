@@ -20,7 +20,7 @@ Many university makerspaces and community labs typically connect printers using 
 
 Most shared 3D printer labs commonly use:
 
-- Consumer 3D printers (e.g., Creality, Prusa, etc.)
+- Consumer 3D printers (e.g., Prusa, etc.)
 - A small computer per printer (often a Raspberry Pi)
 - USB connection from Pi → printer
 - Local network access (Wi-Fi or Ethernet)

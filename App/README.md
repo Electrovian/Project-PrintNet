@@ -10,7 +10,7 @@ production slicer.
 
 ## Features
 
-- Dark UI inspired by modern slicers (Creality / Bambu style).
+- Dark UI inspired by modern slicers (Bambu style).
 - Drag‑and‑drop STL loading.
 - 3D preview of the model.
 - Basic slicing demo that writes a simple square outline G‑code.

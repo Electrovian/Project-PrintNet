@@ -3,6 +3,7 @@ from typing import List, Tuple, Dict
 
 import pandas as pd
 
+from .defaults import DEFAULTS
 from .printers_catalog import PRINTER_CATALOG
 
 EXCEL_FILE = "Printer Information.xlsx"
@@ -64,14 +65,20 @@ def load_printer_config() -> Tuple[List[Dict], Dict]:
             printers.append(dict(entry))
             existing.add(name.lower())
 
-    if not printers:
-        printers.append({
-            "name": "Dummy M3",
-            "octoprint_url": "http://localhost",
-            "octoprint_api_key": "",
-            "bed_x": 200.0,
-            "bed_y": 200.0,
-            "bed_z": 200.0,
-        })
+    printer_defaults = DEFAULTS.get("printer", {})
+    bed_size = printer_defaults.get("bed_size", (200, 200))
+    bed_x = float(bed_size[0]) if len(bed_size) > 0 else 200.0
+    bed_y = float(bed_size[1]) if len(bed_size) > 1 else 200.0
+    bed_z = float(printer_defaults.get("max_height", 200.0))
+    dummy_printer = {
+        "name": "Dummy printer",
+        "octoprint_url": "http://localhost",
+        "octoprint_api_key": "",
+        "bed_x": bed_x,
+        "bed_y": bed_y,
+        "bed_z": bed_z,
+    }
+    printers = [p for p in printers if str(p.get("name", "")).strip().lower() != "dummy printer"]
+    printers.insert(0, dummy_printer)
 
     return printers, airtable_cfg

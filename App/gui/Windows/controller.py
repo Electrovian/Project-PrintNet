@@ -1,5 +1,4 @@
 import json
-import json
 import math
 import os
 from dataclasses import asdict
@@ -39,6 +38,7 @@ class MainController(QtCore.QObject):
         self._device_status_timer = QtCore.QTimer(self)
         self._device_status_timer.setInterval(750)
         self._device_status_timer.timeout.connect(self._update_device_status)
+        self._workers = set()
 
     def __getattr__(self, name):
         main = self.__dict__.get("main")
@@ -97,6 +97,16 @@ class MainController(QtCore.QObject):
         self.viewer.modelRotated.connect(self._on_viewer_model_rotated)
         if hasattr(self.viewer, "selectionChanged"):
             self.viewer.selectionChanged.connect(self._on_viewer_selection_changed)
+
+    def _start_worker(self, worker: Worker):
+        self._workers.add(worker)
+
+        def _cleanup(*_args):
+            self._workers.discard(worker)
+
+        worker.signals.finished.connect(_cleanup)
+        worker.signals.error.connect(_cleanup)
+        self.pool.start(worker)
 
     def dragEnterEvent(self, a0: QtGui.QDragEnterEvent):
         event = a0
@@ -184,7 +194,7 @@ class MainController(QtCore.QObject):
         rows = max(1, int(rows))
         cols = max(1, int(cols))
         if rows * cols < count:
-            rows = int(math.ceil(count / cols))
+            cols = int(math.ceil(count / rows))
 
         base_offset = np.array(payload["offset"], dtype=float)
         name = payload.get("name", "Model")
@@ -215,6 +225,7 @@ class MainController(QtCore.QObject):
             self._sync_popups()
             self._update_bed_warnings()
             self._push_undo_state()
+            self._refresh_files_view()
 
     def _clear_all_models(self):
         model_ids = self.viewer.get_model_ids()
@@ -386,6 +397,7 @@ class MainController(QtCore.QObject):
             self.statusBar().showMessage(f"Loaded {payload['name']}")
             self._update_bed_warnings()
             self._push_undo_state()
+            self._refresh_files_view()
 
         def on_err(msg):
             dlg.close()
@@ -393,7 +405,7 @@ class MainController(QtCore.QObject):
 
         worker.signals.finished.connect(on_done)
         worker.signals.error.connect(on_err)
-        self.pool.start(worker)
+        self._start_worker(worker)
 
     # ----------------------------------------------------------- slice/print
     def _get_current_stl_path(self):
@@ -525,7 +537,7 @@ class MainController(QtCore.QObject):
                         source_path=source_path)
         worker.signals.finished.connect(on_done)
         worker.signals.error.connect(on_err)
-        self.pool.start(worker)
+        self._start_worker(worker)
 
     def slice_current_model(self):
         settings = self.settings_panel.to_settings()
@@ -565,7 +577,7 @@ class MainController(QtCore.QObject):
 
         worker.signals.finished.connect(on_done)
         worker.signals.error.connect(on_err)
-        self.pool.start(worker)
+        self._start_worker(worker)
 
     def export_gcode(self):
         stl_path = self._get_current_stl_path()
@@ -612,7 +624,7 @@ class MainController(QtCore.QObject):
 
         worker.signals.finished.connect(on_done)
         worker.signals.error.connect(on_err)
-        self.pool.start(worker)
+        self._start_worker(worker)
 
     def _on_device_send_requested(self, printer):
         gcode_path = self._last_gcode_path
@@ -647,7 +659,7 @@ class MainController(QtCore.QObject):
 
         worker.signals.finished.connect(on_done)
         worker.signals.error.connect(on_err)
-        self.pool.start(worker)
+        self._start_worker(worker)
 
     def _read_gcode_preview(self, path: str, max_lines: int = 600) -> tuple[str, int]:
         try:
@@ -675,7 +687,10 @@ class MainController(QtCore.QObject):
         self.preview_view.update_stats(stats)
         if hasattr(self.viewer, "set_print_stats"):
             self.viewer.set_print_stats(stats)
-        preview = parse_gcode_preview_file(gcode_path)
+        settings = self.settings_panel.to_settings() if hasattr(self, "settings_panel") else None
+        preview = parse_gcode_preview_file(gcode_path, settings=settings)
+        if hasattr(self.viewer, "set_preview_settings"):
+            self.viewer.set_preview_settings(settings)
         if hasattr(self.viewer, "set_gcode_preview"):
             self.viewer.set_gcode_preview(preview)
         self.preview_view.set_preview_data(preview)
@@ -839,6 +854,10 @@ class MainController(QtCore.QObject):
             self.preview_view.apply_theme()
         if hasattr(self, "device_view"):
             self.device_view.apply_theme()
+        if hasattr(self, "files_view"):
+            self.files_view.apply_theme()
+        if hasattr(self, "activity_view"):
+            self.activity_view.apply_theme()
         if hasattr(self, "shared_view"):
             self.shared_view.apply_theme()
 
@@ -1280,6 +1299,7 @@ class MainController(QtCore.QObject):
         self._undo_stack.clear()
         self._redo_stack.clear()
         self._push_undo_state()
+        self._refresh_files_view()
 
         if missing:
             QtWidgets.QMessageBox.warning(
@@ -1386,9 +1406,42 @@ class MainController(QtCore.QObject):
                 self.viewer.set_print_stats_visible(False)
             if hasattr(self.viewer, "set_preview_object_visible"):
                 self.viewer.set_preview_object_visible(False)
+        elif mode == "files":
+            self.prepare_view.hide()
+            self.preview_view.hide()
+            self._central_stack.setCurrentWidget(self.files_view)
+            if hasattr(self.viewer, "set_interaction_enabled"):
+                self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_preview_visible"):
+                self.viewer.set_preview_visible(False)
+            if hasattr(self.viewer, "set_models_visible"):
+                self.viewer.set_models_visible(False)
+            if hasattr(self.viewer, "set_print_stats_visible"):
+                self.viewer.set_print_stats_visible(False)
+            if hasattr(self.viewer, "set_preview_object_visible"):
+                self.viewer.set_preview_object_visible(False)
+            self._refresh_files_view()
+        elif mode == "activity":
+            self.prepare_view.hide()
+            self.preview_view.hide()
+            self._central_stack.setCurrentWidget(self.activity_view)
+            if hasattr(self.viewer, "set_interaction_enabled"):
+                self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_preview_visible"):
+                self.viewer.set_preview_visible(False)
+            if hasattr(self.viewer, "set_models_visible"):
+                self.viewer.set_models_visible(False)
+            if hasattr(self.viewer, "set_print_stats_visible"):
+                self.viewer.set_print_stats_visible(False)
+            if hasattr(self.viewer, "set_preview_object_visible"):
+                self.viewer.set_preview_object_visible(False)
         else:
             return
         self._active_mode = mode
+
+    def _refresh_files_view(self):
+        if hasattr(self, "files_view") and hasattr(self.files_view, "refresh_from_viewer"):
+            self.files_view.refresh_from_viewer(self.viewer)
 
     def _auto_slice_prepare(self):
         if not self.viewer.get_model_ids():
@@ -1538,6 +1591,7 @@ class MainController(QtCore.QObject):
             self.current_model_id = new_ids[0]
             self.viewer.set_selected_models(new_ids, emit_signal=False)
             self._sync_popups()
+        self._refresh_files_view()
         return new_ids
 
     def _remove_models(self, model_ids):
@@ -1568,6 +1622,7 @@ class MainController(QtCore.QObject):
         self._sync_popups()
         self._push_undo_state()
         self._clear_preview()
+        self._refresh_files_view()
 
     def _select_model_in_panel(self, model_ids):
         if model_ids is None:
@@ -1729,6 +1784,7 @@ class MainController(QtCore.QObject):
         finally:
             self._undo_in_progress = False
         self._update_undo_redo_state()
+        self._refresh_files_view()
 
     def _undo(self):
         if len(self._undo_stack) <= 1:

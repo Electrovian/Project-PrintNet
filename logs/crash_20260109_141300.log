@@ -1,0 +1,16 @@
+timestamp: 2026-01-09T19:13:00.321Z
+python: 3.12.3 (tags/v3.12.3:f6650f9, Apr  9 2024, 14:05:25) [MSC v.1938 64 bit (AMD64)]
+platform: Windows-11-10.0.26200-SP0
+thread: main
+argv: ['main.py']
+activity_log: C:\Users\User\OneDrive\Desktop\Git\Project-PrintNet\logs\activity_20260109_141259.log
+
+Traceback (most recent call last):
+  File "C:\Users\User\OneDrive\Desktop\Git\Project-PrintNet\App\gui\settings_panel.py", line 1951, in _on_printer_changed
+    main._update_bed_warnings()
+  File "C:\Users\User\OneDrive\Desktop\Git\Project-PrintNet\App\gui\Windows\controller.py", line 352, in _update_bed_warnings
+    if not hasattr(self.viewer, "get_out_of_bounds_models"):
+                   ^^^^^^^^^^^
+  File "C:\Users\User\OneDrive\Desktop\Git\Project-PrintNet\App\gui\Windows\controller.py", line 50, in __getattr__
+    raise AttributeError(f"{type(self).__name__} has no attribute {name!r}")
+AttributeError: MainController has no attribute 'viewer'

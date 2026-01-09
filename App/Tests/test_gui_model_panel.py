@@ -1,16 +1,18 @@
 import unittest
 
 try:
-    from PyQt5 import QtWidgets, QtCore
+    from PyQt5 import QtWidgets
 except Exception:  # pragma: no cover - optional dependency in tests
     QtWidgets = None
-    QtCore = None
 
 
 @unittest.skipIf(QtWidgets is None, "PyQt5 not available")
 class ModelPanelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        if QtWidgets is None:
+            raise unittest.SkipTest("PyQt5 not available")
+        assert QtWidgets is not None
         cls._app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
     def test_add_remove_and_select(self):
@@ -26,8 +28,12 @@ class ModelPanelTests(unittest.TestCase):
         panel.add_model("Second", 2)
         self.assertEqual(panel.list_widget.count(), 2)
 
-        panel.list_widget.item(0).setSelected(True)
-        panel.list_widget.item(1).setSelected(True)
+        item0 = panel.list_widget.item(0)
+        item1 = panel.list_widget.item(1)
+        assert item0 is not None
+        assert item1 is not None
+        item0.setSelected(True)
+        item1.setSelected(True)
         panel.list_widget.setCurrentRow(1)
 
         self.assertTrue(current)
