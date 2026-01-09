@@ -2,3 +2,4 @@
 /App/.venv/
 /App/Tests/test objects
 logs
+/logs
