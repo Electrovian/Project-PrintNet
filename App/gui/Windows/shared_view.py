@@ -182,7 +182,7 @@ class SharedView(QtCore.QObject):
 
         mode_tabs = []
         mode_group = QtWidgets.QButtonGroup(self.main)
-        for label in ("Files", "Activity", "Prepare", "Preview", "Device"):
+        for label in ("Files", "Activity", "Prepare", "Preview", "Device", "Control"):
             btn = QtWidgets.QToolButton(topbar)
             btn.setText(label)
             btn.setCheckable(True)

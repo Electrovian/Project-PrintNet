@@ -316,7 +316,7 @@ def generate_layer_perimeters(mesh: MeshModel,
     layers: List[LayerPerimeters] = []
     for layer_index, z in enumerate(z_heights):
         z_value = float(z)
-        tolerance = settings.resolution if settings.resolution > 0.0 else None
+        tolerance = settings.resolution if settings.resolution > 0.0 else 0.0
         base_islands = mesh.slice_layer(z_value, tolerance=tolerance)
         if settings.slice_gap_closing_radius > 0.0 and base_islands:
             base_islands = _close_gap_islands(base_islands, settings.slice_gap_closing_radius)

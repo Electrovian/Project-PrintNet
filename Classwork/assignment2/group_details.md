@@ -1,3 +1,7 @@
+# Group details
+
+Source: `Group details`
+
 Team Name: PrintNet
 Team Members Mitchell Koski – Computer Science, University of Cincinnati- Koskima@mai.uc.edu Muhanad Al-Khasawneh – Computer Science, University of Cincinnati - alkhasmr@mail.uc.edu
 Muneer Al-Khasawneh – Computer Science, University of Cincinnati - alkhasme@mail.uc.edu

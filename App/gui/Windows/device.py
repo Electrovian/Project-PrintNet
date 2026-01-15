@@ -1,11 +1,14 @@
 from PyQt5 import QtWidgets, QtCore
 
 from ..theme import theme_css
+from config.defaults import DEFAULTS
 
 
 class DeviceView(QtWidgets.QWidget):
     send_requested = QtCore.pyqtSignal(object)
     save_requested = QtCore.pyqtSignal()
+    email_requested = QtCore.pyqtSignal()
+    printer_changed = QtCore.pyqtSignal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -32,6 +35,26 @@ class DeviceView(QtWidgets.QWidget):
         self._printer_details.setObjectName("DeviceDetails")
         self._printer_details.setWordWrap(True)
         layout.addWidget(self._printer_details)
+
+        content_row = QtWidgets.QHBoxLayout()
+        content_row.setSpacing(16)
+
+        left_col = QtWidgets.QVBoxLayout()
+        left_col.setSpacing(16)
+
+        camera_frame = QtWidgets.QFrame(self)
+        camera_frame.setObjectName("DeviceCamera")
+        camera_layout = QtWidgets.QVBoxLayout(camera_frame)
+        camera_layout.setContentsMargins(12, 12, 12, 12)
+        camera_layout.setSpacing(8)
+        camera_title = QtWidgets.QLabel("Live preview", camera_frame)
+        camera_title.setObjectName("DeviceSectionTitle")
+        camera_layout.addWidget(camera_title)
+        camera_placeholder = QtWidgets.QLabel("Camera feed not connected", camera_frame)
+        camera_placeholder.setObjectName("DeviceCameraPlaceholder")
+        camera_placeholder.setAlignment(QtCore.Qt.AlignCenter)
+        camera_layout.addWidget(camera_placeholder, 1)
+        left_col.addWidget(camera_frame, 1)
 
         status_frame = QtWidgets.QFrame(self)
         status_frame.setObjectName("DeviceStatus")
@@ -69,19 +92,41 @@ class DeviceView(QtWidgets.QWidget):
         grid.addWidget(self._pla_status_value, 2, 1)
 
         status_layout.addLayout(grid)
-        layout.addWidget(status_frame)
+        left_col.addWidget(status_frame)
 
         btn_row = QtWidgets.QHBoxLayout()
         self._send_btn = QtWidgets.QPushButton("Send to printer")
         self._save_btn = QtWidgets.QPushButton("Save G-code")
+        self._email_btn = QtWidgets.QPushButton("Send email")
         btn_row.addWidget(self._send_btn)
         btn_row.addWidget(self._save_btn)
-        layout.addLayout(btn_row)
+        btn_row.addWidget(self._email_btn)
+        left_col.addLayout(btn_row)
+        left_col.addStretch(1)
+
+        content_row.addLayout(left_col, 3)
+
+        queue_frame = QtWidgets.QFrame(self)
+        queue_frame.setObjectName("DeviceQueue")
+        queue_layout = QtWidgets.QVBoxLayout(queue_frame)
+        queue_layout.setContentsMargins(12, 12, 12, 12)
+        queue_layout.setSpacing(8)
+        queue_title = QtWidgets.QLabel("Queue", queue_frame)
+        queue_title.setObjectName("DeviceSectionTitle")
+        queue_layout.addWidget(queue_title)
+        queue_placeholder = QtWidgets.QLabel("No queued jobs yet.", queue_frame)
+        queue_placeholder.setObjectName("DeviceQueuePlaceholder")
+        queue_placeholder.setAlignment(QtCore.Qt.AlignCenter)
+        queue_layout.addWidget(queue_placeholder, 1)
+        content_row.addWidget(queue_frame, 2)
+
+        layout.addLayout(content_row, 1)
         layout.addStretch(1)
 
-        self._printer_combo.currentIndexChanged.connect(self._update_details)
+        self._printer_combo.currentIndexChanged.connect(lambda _idx: self._update_details())
         self._send_btn.clicked.connect(self._emit_send)
         self._save_btn.clicked.connect(self.save_requested.emit)
+        self._email_btn.clicked.connect(self.email_requested.emit)
 
         self.apply_theme()
 
@@ -93,14 +138,15 @@ class DeviceView(QtWidgets.QWidget):
             self._printer_combo.setEnabled(False)
         else:
             self._printer_combo.setEnabled(True)
-            dummy_index = None
+            default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+            default_index = None
             for idx, printer in enumerate(self._printers):
                 name = printer.get("name", "Printer")
                 self._printer_combo.addItem(name)
-                if str(name or "").strip().lower() == "dummy printer":
-                    dummy_index = idx
-            if dummy_index is not None:
-                self._printer_combo.setCurrentIndex(dummy_index)
+                if default_name and str(name or "").strip().lower() == default_name:
+                    default_index = idx
+            if default_index is not None:
+                self._printer_combo.setCurrentIndex(default_index)
         self._update_details()
 
     def current_printer(self):
@@ -111,7 +157,23 @@ class DeviceView(QtWidgets.QWidget):
             return None
         return self._printers[index]
 
-    def _update_details(self):
+    def select_printer_by_name(self, name: str, emit: bool = True):
+        target = str(name or "").strip().lower()
+        if not target:
+            return
+        idx = None
+        for row in range(self._printer_combo.count()):
+            if self._printer_combo.itemText(row).strip().lower() == target:
+                idx = row
+                break
+        if idx is None:
+            return
+        block = self._printer_combo.blockSignals(True)
+        self._printer_combo.setCurrentIndex(idx)
+        self._printer_combo.blockSignals(block)
+        self._update_details(emit_signal=emit)
+
+    def _update_details(self, emit_signal: bool = True):
         printer = self.current_printer()
         if not printer:
             self._printer_details.setText("No printer selected.")
@@ -126,6 +188,8 @@ class DeviceView(QtWidgets.QWidget):
             desc.append(f"OctoPrint: {url}")
         self._printer_details.setText("\n".join(desc))
         self._send_btn.setEnabled(True)
+        if emit_signal:
+            self.printer_changed.emit(printer)
 
     def _emit_send(self):
         printer = self.current_printer()
@@ -196,6 +260,20 @@ class DeviceView(QtWidgets.QWidget):
             f"  border: 1px solid {theme_css('action_panel_border')};"
             f"  background: {theme_css('action_panel_bg')};"
             "  border-radius: 8px;"
+            "}"
+            "QFrame#DeviceCamera, QFrame#DeviceQueue {"
+            f"  border: 1px solid {theme_css('action_panel_border')};"
+            f"  background: {theme_css('action_panel_bg')};"
+            "  border-radius: 8px;"
+            "}"
+            "QLabel#DeviceSectionTitle {"
+            "  font-size: 13px;"
+            "  font-weight: 600;"
+            "}"
+            "QLabel#DeviceCameraPlaceholder, QLabel#DeviceQueuePlaceholder {"
+            f"  color: {theme_css('popup_muted_text')};"
+            "  background: #0b0c0e;"
+            "  border-radius: 6px;"
             "}"
             "QLabel#DeviceStatusTitle {"
             "  font-size: 13px;"

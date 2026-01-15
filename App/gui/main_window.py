@@ -7,6 +7,7 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 from .Windows.prepare import PrepareView
 from .Windows.preview import PreviewView
 from .Windows.device import DeviceView
+from .Windows.control import ControlView
 from .Windows.files import FilesView
 from .Windows.activity import ActivityView
 from .Windows.shared_view import SharedView
@@ -61,6 +62,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.device_view = DeviceView(self)
         self.device_view.set_printers(self.printers)
         self._central_stack.addWidget(self.device_view)
+
+        self.control_view = ControlView(self)
+        self.control_view.set_printers(self.printers)
+        self._central_stack.addWidget(self.control_view)
 
         self.files_view = FilesView(self)
         self._central_stack.addWidget(self.files_view)

@@ -83,8 +83,8 @@ production slicer.
 
    Place your `Printer Information.xlsx` file in the `App` folder
    (next to `main.py`).  
-   The loader is tolerant; if the file is missing it will just create a
-   dummy printer configuration.
+   The loader is tolerant; if the file is missing it will create a
+   default MakerGear M3-SE configuration.
 
 8. **Run the app**
 

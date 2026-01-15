@@ -1,0 +1,76 @@
+# Mitchell Koski
+
+Source: `Mitchell Koski.pdf`
+Original file: `_attachments/mitchell_koski.pdf`
+
+Mitchell Koski 
+9/11/25 
+ 
+Individual Capstone Assessment Essay  
+Our senior design project, Project “PrintNet”, is a web-based 3D Printing Lab 
+Management Platform designed to modernize the UC 3D Print Farm. The platform draws 
+inspiration from 3D Print OS but is customized to fit UC’s environment, including features 
+such as an in-browser slicer, self-help tutorials, printer maintenance support, and UC 
+email authentication with role-based access. Students will benefit from a streamlined 
+submission process, while lab managers will be able to approve jobs, adjust slicer settings, 
+and conduct maintenance tasks on printers ranging from Maker Gear Series 2 to Bambu 
+Lab models. Administrators will have oversight capabilities, including toggling cost visibility 
+and managing lab access. From my perspective as a Computer Science major, this project 
+represents the integration of my academic studies, my professional experiences, and my 
+leadership in UC’s 3D Design & Automation Club. 
+ 
+My coursework at UC has prepared me well for this challenge by building a 
+foundation across algorithms, systems, software engineering, and networking. In CS 
+1021C: Computer Science I and CS 2028C: Data Structures, I developed skills in 
+programming fundamentals and efficient data handling—knowledge that will help in 
+structuring print queues and workflows. CS 2011: Introduction to Computer Systems 
+provided me with a deeper understanding of low-level computation and operating system
+
+concepts, which are important for handling concurrent requests and hardware integration. 
+CS 2071: Discrete Structures strengthened my ability to reason about logic and formal 
+systems, essential when building reliable authentication and access control mechanisms. 
+Advanced courses such as CS 4071: Design and Analysis of Algorithms and EECE 4029: 
+Operating Systems & Systems Programming will be directly applied when optimizing 
+scheduling across multiple printers. Likewise, CS 4033: Database Design and 
+Development and CS 4065: Computer Networks gave me the tools to design robust 
+schemas, build relational workflows, and ensure reliable communication between the 
+frontend, backend, and printer hardware. I also gained valuable experience in EECE 3093C: 
+Software Engineering, where I worked in teams to design, test, and deliver software 
+projects—preparing me to collaborate effectively with my teammates on this capstone. 
+ 
+Equally important are the experiences I gained through my co-op rotations at GE 
+Appliances (SmartHQ / Connected Home Cloud). There, I worked as a Software and Cloud 
+Engineer on AWS microservices, developing expertise with DynamoDB, Lambda, Kinesis, 
+and CloudFormation. I regularly troubleshot Maven builds, dependency conflicts, and 
+CI/CD pipelines—skills that will directly apply to setting up backend infrastructure and 
+deployment pipelines for PrintNet. I also worked on embedded software and mobile 
+integration, which taught me how to bridge user-facing interfaces with physical devices—
+similar to linking slicer outputs and printer controllers in this project. Beyond technical 
+work, my co-op emphasized soft skills such as communication, documentation, and agile 
+collaboration. These experiences gave me the ability to not only write code but also ensure
+
+that the project is well-managed and can be transitioned to future lab managers after my 
+graduation. 
+ 
+I am especially motivated to work on this project because I have direct experience 
+managing UC’s 3D printing lab and have seen firsthand how challenging it is to keep 
+workflows efficient at scale. Existing tools like OctoPrint are useful for maintenance but 
+lack the tracking and eligibility features needed in a student environment. Project PrintNet 
+provides an opportunity to design a system that is not only technically strong but also 
+tailored for the daily realities of UC students and managers. My approach will be modular: 
+a student-facing portal with integrated slicing and help tools, a backend for job tracking 
+and authentication, and a flexible workflow system powered by Airtable or an internal 
+solution. I will also prioritize compatibility with both legacy and modern printers to future-
+proof the system. 
+ 
+The expected outcome is a platform that is reliable, scalable, and user-friendly. 
+Students should be able to submit jobs quickly and track their status, managers should 
+have the tools to monitor and maintain printers effectively, and administrators should be 
+able to oversee access, costs, and analytics. My personal contributions will focus on the 
+critical integrations: authentication, printer compatibility, workflow management, and 
+backend deployment. I will evaluate my success by testing system performance under 
+multiple users, verifying maintenance features on different printer models, and ensuring
+
+that role-based access functions securely. Ultimately, I will know I have succeeded when 
+the system runs smoothly without constant oversight, enabling the UC 3D Print Farm to 
+scale efficiently for future students and managers.

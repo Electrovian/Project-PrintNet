@@ -9,6 +9,7 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 
 from ..workers import Worker
 from ..theme import export_theme, get_theme_name, register_theme, set_theme
+from .simplify import SimplifyDialog
 from config.defaults import DEFAULTS
 from slicer.slicer import slice_trimesh
 from slicer.gcode import SliceSettings, estimate_gcode_file, parse_gcode_preview_file
@@ -97,6 +98,20 @@ class MainController(QtCore.QObject):
         self.viewer.modelRotated.connect(self._on_viewer_model_rotated)
         if hasattr(self.viewer, "selectionChanged"):
             self.viewer.selectionChanged.connect(self._on_viewer_selection_changed)
+        if hasattr(self.viewer, "simplifyRequested"):
+            self.viewer.simplifyRequested.connect(self._open_simplify_dialog)
+        if hasattr(self, "device_view") and hasattr(self.device_view, "printer_changed"):
+            self.device_view.printer_changed.connect(
+                lambda printer: self._apply_printer_profile(printer, source="device")
+            )
+        if hasattr(self, "control_view") and hasattr(self.control_view, "printer_changed"):
+            self.control_view.printer_changed.connect(
+                lambda printer: self._apply_printer_profile(printer, source="control")
+            )
+        if hasattr(self, "preview_view") and hasattr(self.preview_view, "printer_changed"):
+            self.preview_view.printer_changed.connect(
+                lambda printer: self._apply_printer_profile(printer, source="preview")
+            )
 
     def _start_worker(self, worker: Worker):
         self._workers.add(worker)
@@ -368,10 +383,60 @@ class MainController(QtCore.QObject):
         self.statusBar().showMessage(msg)
         self._bed_warning_active = True
 
+    def _apply_printer_profile(self, printer: dict | None, source: str | None = None):
+        if printer is None:
+            return
+        if hasattr(self, "printer_manager"):
+            self.printer_manager.set_active_printer(printer)
+
+        defaults = DEFAULTS.get("printer", {})
+        bed_defaults = defaults.get("bed_size", (200, 200))
+
+        def _float_or(value, fallback):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return float(fallback)
+
+        bed_x = _float_or(printer.get("bed_x"), bed_defaults[0] if bed_defaults else 200)
+        bed_y = _float_or(printer.get("bed_y"), bed_defaults[1] if len(bed_defaults) > 1 else 200)
+        bed_z = _float_or(printer.get("bed_z"), defaults.get("max_height", 200))
+        name = str(printer.get("name", defaults.get("name", ""))).strip()
+        DEFAULTS.setdefault("printer", {})["bed_size"] = (bed_x, bed_y)
+        DEFAULTS["printer"]["max_height"] = bed_z
+        if name:
+            DEFAULTS["printer"]["name"] = name
+
+        viewer = getattr(self, "viewer", None)
+        if viewer is not None and hasattr(viewer, "set_bed_limits"):
+            viewer.set_bed_limits((bed_x, bed_y), bed_z)
+        if viewer is not None:
+            self._update_bed_warnings()
+        self._sync_printer_selection(printer, source=source)
+
+    def _sync_printer_selection(self, printer: dict, source: str | None = None):
+        name = str(printer.get("name", "")).strip()
+        if not name:
+            return
+        if source != "settings" and hasattr(self, "settings_panel"):
+            self.settings_panel.select_printer_by_name(name, emit=False)
+        if source != "device" and hasattr(self, "device_view"):
+            self.device_view.select_printer_by_name(name, emit=False)
+        if source != "control" and hasattr(self, "control_view"):
+            self.control_view.select_printer_by_name(name, emit=False)
+        if source != "preview" and hasattr(self, "preview_view"):
+            self.preview_view.select_printer_by_name(name, emit=False)
+
     # ------------------------------------------------------------- async load
     def _add_model_from_path_async(self, path: str):
-        dlg = self._busy_dialog("Loading", f"Loading STL:\n{os.path.basename(path)}")
+        filename = os.path.basename(path)
+        dlg = self._loading_dialog(filename)
         dlg.show()
+        cancelled = {"value": False}
+
+        def on_cancel():
+            cancelled["value"] = True
+            self.statusBar().showMessage("Load canceled")
 
         def load_mesh(p):
             mesh = trimesh.load(p, force="mesh")
@@ -388,6 +453,8 @@ class MainController(QtCore.QObject):
 
         def on_done(payload):
             dlg.close()
+            if cancelled["value"]:
+                return
             model_id = self.viewer.add_model_from_data(payload["name"], payload["path"], payload["v"], payload["f"])
             self.model_panel.add_model(payload["name"], model_id)
 
@@ -401,7 +468,73 @@ class MainController(QtCore.QObject):
 
         def on_err(msg):
             dlg.close()
+            if cancelled["value"]:
+                return
             QtWidgets.QMessageBox.critical(self.main, "Load error", msg)
+
+        worker.signals.finished.connect(on_done)
+        worker.signals.error.connect(on_err)
+        dlg.canceled.connect(on_cancel)
+        self._start_worker(worker)
+
+    def _open_simplify_dialog(self, model_id: int):
+        model = self.viewer.models.get(model_id) if hasattr(self.viewer, "models") else None
+        if not model:
+            return
+        name = (model.get("name") or "").strip() or f"Model {model_id}"
+        faces = model.get("faces")
+        triangles = int(len(faces)) if faces is not None else 0
+        if triangles <= 0:
+            return
+        dlg = SimplifyDialog(name, triangles, parent=self.main)
+        prev_wireframe = bool(model.get("wireframe"))
+        dlg.wireframeChanged.connect(lambda enabled: self.viewer.set_model_wireframe(model_id, enabled))
+        dlg.applyRequested.connect(lambda target: self._simplify_model(model_id, target))
+        dlg.finished.connect(lambda _result: self.viewer.set_model_wireframe(model_id, prev_wireframe))
+        self.viewer.set_model_wireframe(model_id, dlg.wireframe_enabled())
+        dlg.exec_()
+
+    def _simplify_model(self, model_id: int, target_faces: int):
+        model = self.viewer.models.get(model_id) if hasattr(self.viewer, "models") else None
+        if not model:
+            return
+        faces = model.get("faces")
+        vertices = model.get("base_vertices")
+        if faces is None or vertices is None:
+            return
+        current_faces = int(len(faces))
+        target_faces = max(4, min(int(target_faces), current_faces))
+        if target_faces >= current_faces:
+            return
+
+        dlg = self._busy_dialog("Simplify", "Simplifying mesh...\nPlease wait.")
+        dlg.show()
+
+        def decimate(v, f, target):
+            mesh = trimesh.Trimesh(vertices=np.asarray(v, dtype=float),
+                                   faces=np.asarray(f, dtype=int),
+                                   process=False)
+            simplified = mesh.simplify_quadratic_decimation(int(target))
+            if simplified is None:
+                raise RuntimeError("Simplification failed.")
+            return {
+                "v": np.asarray(simplified.vertices, dtype=float),
+                "f": np.asarray(simplified.faces, dtype=int),
+            }
+
+        worker = Worker(decimate, vertices, faces, target_faces)
+
+        def on_done(payload):
+            dlg.close()
+            replaced = self.viewer.replace_model_mesh(model_id, payload["v"], payload["f"])
+            if replaced:
+                self.statusBar().showMessage(f"Simplified to {len(payload['f'])} triangles")
+                self._update_bed_warnings()
+                self._push_undo_state()
+
+        def on_err(msg):
+            dlg.close()
+            QtWidgets.QMessageBox.critical(self.main, "Simplify error", msg)
 
         worker.signals.finished.connect(on_done)
         worker.signals.error.connect(on_err)
@@ -1406,6 +1539,20 @@ class MainController(QtCore.QObject):
                 self.viewer.set_print_stats_visible(False)
             if hasattr(self.viewer, "set_preview_object_visible"):
                 self.viewer.set_preview_object_visible(False)
+        elif mode == "control":
+            self.prepare_view.hide()
+            self.preview_view.hide()
+            self._central_stack.setCurrentWidget(self.control_view)
+            if hasattr(self.viewer, "set_interaction_enabled"):
+                self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_preview_visible"):
+                self.viewer.set_preview_visible(False)
+            if hasattr(self.viewer, "set_models_visible"):
+                self.viewer.set_models_visible(False)
+            if hasattr(self.viewer, "set_print_stats_visible"):
+                self.viewer.set_print_stats_visible(False)
+            if hasattr(self.viewer, "set_preview_object_visible"):
+                self.viewer.set_preview_object_visible(False)
         elif mode == "files":
             self.prepare_view.hide()
             self.preview_view.hide()
@@ -1861,6 +2008,18 @@ class MainController(QtCore.QObject):
         dlg.setAutoClose(True)
         dlg.setAutoReset(True)
         dlg.setRange(0, 0)
+        return dlg
+
+    def _loading_dialog(self, filename: str):
+        dlg = QtWidgets.QProgressDialog(self.main)
+        dlg.setWindowTitle("Loading...")
+        dlg.setLabelText(f"Loading file: {filename}")
+        dlg.setCancelButtonText("Cancel")
+        dlg.setWindowModality(QtCore.Qt.ApplicationModal)
+        dlg.setAutoClose(False)
+        dlg.setAutoReset(False)
+        dlg.setRange(0, 0)
+        dlg.setMinimumDuration(0)
         return dlg
 
     def resizeEvent(self, a0: QtGui.QResizeEvent):

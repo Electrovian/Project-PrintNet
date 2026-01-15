@@ -1,3 +1,7 @@
+# MK_BIO
+
+Source: `MK_BIO`
+
 # Professional Biography
 
 My name is **Mitchell Koski**, and I am a 22-year-old senior Computer Science major at the University of Cincinnati. I enjoy coding as both a career path and a hobby, and in my free time I like to go fishing as a way to recharge. Academically, I am finishing out my senior year with a focus on **cloud systems**, **embedded systems**, and **AI safety**. One of my long-term career goals is to gain a full-stack understanding of computing—from the low-level operations of the CPU up to the high-level software systems that power modern applications.  

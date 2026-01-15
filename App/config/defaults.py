@@ -6,14 +6,15 @@ DEFAULTS = {
     },
     "viewer": {
         "default_view": {"distance": 300.0, "elevation": 30.0, "azimuth": -45.0},
-        "grid_size": (200, 250, 0),
+        "grid_size": (250, 200, 0),
         "grid_spacing": (10, 10, 1),
         "snap_enabled": False,
         "snap_step": 1.0,
     },
     "printer": {
-        "bed_size": (200, 250),
-        "max_height": 300,
+        "name": "MakerGear M3-SE",
+        "bed_size": (250, 200),
+        "max_height": 200,
         "nozzle_clearance": 10,
     },
     "ui": {

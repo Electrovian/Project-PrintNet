@@ -3,9 +3,11 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 
 from ..theme import theme_css, theme_qcolor
 from ..preview_utils import play_interval_ms
+from config.defaults import DEFAULTS
 
 
 class PreviewView(QtCore.QObject):
+    printer_changed = QtCore.pyqtSignal(object)
     def __init__(self, main_window, viewer):
         super().__init__(main_window)
         self.main = main_window
@@ -245,14 +247,44 @@ class PreviewView(QtCore.QObject):
             self._printer_combo.setEnabled(False)
             return
         self._printer_combo.setEnabled(True)
-        dummy_index = None
+        default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+        default_index = None
         for idx, printer in enumerate(printers):
             name = printer.get("name") if isinstance(printer, dict) else None
             self._printer_combo.addItem(name or "Printer")
-            if str(name or "").strip().lower() == "dummy printer":
-                dummy_index = idx
-        if dummy_index is not None:
-            self._printer_combo.setCurrentIndex(dummy_index)
+            if default_name and str(name or "").strip().lower() == default_name:
+                default_index = idx
+        if default_index is not None:
+            self._printer_combo.setCurrentIndex(default_index)
+        self._printer_combo.currentIndexChanged.connect(self._emit_printer_changed)
+
+    def select_printer_by_name(self, name: str, emit: bool = True):
+        target = str(name or "").strip().lower()
+        if not target:
+            return
+        idx = None
+        for row in range(self._printer_combo.count()):
+            if self._printer_combo.itemText(row).strip().lower() == target:
+                idx = row
+                break
+        if idx is None:
+            return
+        block = self._printer_combo.blockSignals(True)
+        self._printer_combo.setCurrentIndex(idx)
+        self._printer_combo.blockSignals(block)
+        if emit:
+            self._emit_printer_changed(idx)
+
+    def _emit_printer_changed(self, _index: int):
+        printers = getattr(self.main, "printers", []) or []
+        if not printers:
+            return
+        idx = self._printer_combo.currentIndex()
+        if idx < 0 or idx >= len(printers):
+            return
+        printer = printers[idx]
+        if isinstance(printer, dict):
+            self.printer_changed.emit(printer)
 
     def _populate_line_types(self):
         self._line_type_map = [

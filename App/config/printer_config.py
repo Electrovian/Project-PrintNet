@@ -1,4 +1,5 @@
 import os
+import os
 from typing import List, Tuple, Dict
 
 import pandas as pd
@@ -21,6 +22,8 @@ def load_printer_config() -> Tuple[List[Dict], Dict]:
         (printers, airtable_cfg)
     """
     printers = []
+    printer_defaults = DEFAULTS.get("printer", {})
+    base_name = str(printer_defaults.get("name", "MakerGear M3-SE")).strip() or "MakerGear M3-SE"
     airtable_cfg = {
         "api_key": "",
         "base_id": "",
@@ -35,7 +38,7 @@ def load_printer_config() -> Tuple[List[Dict], Dict]:
             df = xls.parse(xls.sheet_names[0])
             for _, row in df.iterrows():
                 printers.append({
-                    "name": str(row.get("Name", "MakerGear M3")),
+                    "name": str(row.get("Name", base_name)),
                     "octoprint_url": str(row.get("OctoPrintURL", "http://localhost")),
                     "octoprint_api_key": str(row.get("OctoPrintAPIKey", "")),
                     "bed_x": float(row.get("BedX", 200)),
@@ -65,20 +68,29 @@ def load_printer_config() -> Tuple[List[Dict], Dict]:
             printers.append(dict(entry))
             existing.add(name.lower())
 
-    printer_defaults = DEFAULTS.get("printer", {})
     bed_size = printer_defaults.get("bed_size", (200, 200))
     bed_x = float(bed_size[0]) if len(bed_size) > 0 else 200.0
     bed_y = float(bed_size[1]) if len(bed_size) > 1 else 200.0
     bed_z = float(printer_defaults.get("max_height", 200.0))
-    dummy_printer = {
-        "name": "Dummy printer",
+    base_printer = {
+        "name": base_name,
         "octoprint_url": "http://localhost",
         "octoprint_api_key": "",
         "bed_x": bed_x,
         "bed_y": bed_y,
         "bed_z": bed_z,
     }
-    printers = [p for p in printers if str(p.get("name", "")).strip().lower() != "dummy printer"]
-    printers.insert(0, dummy_printer)
+    existing_base = None
+    remaining = []
+    for printer in printers:
+        if str(printer.get("name", "")).strip().lower() == base_name.lower():
+            if existing_base is None:
+                existing_base = printer
+            else:
+                remaining.append(printer)
+        else:
+            remaining.append(printer)
+    printers = remaining
+    printers.insert(0, existing_base or base_printer)
 
     return printers, airtable_cfg

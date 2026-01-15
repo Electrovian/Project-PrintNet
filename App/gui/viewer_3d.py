@@ -30,6 +30,7 @@ class Viewer3D(gl.GLViewWidget):
     modelMoved = QtCore.pyqtSignal(int, float, float)
     modelRotated = QtCore.pyqtSignal(int, float, float, float)
     selectionChanged = QtCore.pyqtSignal(list)
+    simplifyRequested = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -62,6 +63,11 @@ class Viewer3D(gl.GLViewWidget):
         self._preview_object_panel = None
         self._preview_object_label = None
         self._preview_object_visible = False
+        self._simplify_warning = None
+        self._simplify_warning_label = None
+        self._simplify_warning_btn = None
+        self._simplify_warning_close = None
+        self._simplify_warning_model_id = None
         self._marquee_band = None
         self._marquee_active = False
         self._marquee_origin = None
@@ -112,6 +118,7 @@ class Viewer3D(gl.GLViewWidget):
         self._build_selection_info()
         self._build_print_stats_panel()
         self._build_preview_object_panel()
+        self._build_simplify_warning()
 
         self._preview_data = None
         self._preview_layer_index = None
@@ -186,6 +193,7 @@ class Viewer3D(gl.GLViewWidget):
         self._update_selection_info()
         if self._preview_object_visible:
             self._update_preview_object_label()
+        self._update_simplify_warning()
         if emit_signal:
             self.selectionChanged.emit(list(self._selected_model_ids))
 
@@ -241,6 +249,7 @@ class Viewer3D(gl.GLViewWidget):
         self._update_selection_info_style()
         self._update_print_stats_style()
         self._update_preview_object_style()
+        self._update_simplify_warning_style()
         self._update_marquee_style()
         self._update_gizmo()
         self._update_preview_lines()
@@ -265,7 +274,6 @@ class Viewer3D(gl.GLViewWidget):
     def set_preview_settings(self, settings):
         if settings is None:
             return
-        base_width = self._preview_base_width
         try:
             base_width = float(settings.extrusion_width)
         except (TypeError, ValueError, AttributeError):
@@ -779,6 +787,42 @@ class Viewer3D(gl.GLViewWidget):
         self._update_preview_object_style()
         panel.hide()
 
+    def _build_simplify_warning(self):
+        panel = QtWidgets.QFrame(self)
+        panel.setObjectName("SimplifyWarning")
+        layout = QtWidgets.QHBoxLayout(panel)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(8)
+
+        label = QtWidgets.QLabel(panel)
+        label.setObjectName("SimplifyWarningLabel")
+        label.setWordWrap(True)
+        layout.addWidget(label, 1)
+
+        link = QtWidgets.QToolButton(panel)
+        link.setObjectName("SimplifyWarningLink")
+        link.setText("Simplify model")
+        link.setCursor(QtCore.Qt.PointingHandCursor)
+        link.setAutoRaise(True)
+        layout.addWidget(link)
+
+        close_btn = QtWidgets.QToolButton(panel)
+        close_btn.setObjectName("SimplifyWarningClose")
+        close_btn.setText("×")
+        close_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        close_btn.setAutoRaise(True)
+        layout.addWidget(close_btn)
+
+        link.clicked.connect(self._emit_simplify_warning)
+        close_btn.clicked.connect(self._hide_simplify_warning)
+
+        self._simplify_warning = panel
+        self._simplify_warning_label = label
+        self._simplify_warning_btn = link
+        self._simplify_warning_close = close_btn
+        self._update_simplify_warning_style()
+        panel.hide()
+
     def _update_selection_info_style(self):
         if not hasattr(self, "_selection_info") or self._selection_info is None:
             return
@@ -841,6 +885,36 @@ class Viewer3D(gl.GLViewWidget):
             "}"
         )
 
+    def _update_simplify_warning_style(self):
+        if self._simplify_warning is None:
+            return
+        bg = theme_qcolor("popup_bg")
+        border = theme_qcolor("popup_border")
+        text = theme_qcolor("popup_text")
+        accent = theme_qcolor("topbar_accent")
+        muted = theme_qcolor("popup_muted_text")
+        self._simplify_warning.setStyleSheet(
+            "QFrame#SimplifyWarning {"
+            f"background-color: {self._rgba_css(bg, 240)};"
+            f"border: 1px solid {self._rgba_css(border, 240)};"
+            f"border-left: 4px solid {self._rgba_css(accent, 255)};"
+            "border-radius: 8px;"
+            "}"
+            "QLabel#SimplifyWarningLabel {"
+            f"color: {self._rgba_css(text, 255)};"
+            "}"
+            "QToolButton#SimplifyWarningLink {"
+            f"color: {self._rgba_css(accent, 255)};"
+            "font-weight: 600;"
+            "padding: 2px 6px;"
+            "}"
+            "QToolButton#SimplifyWarningClose {"
+            f"color: {self._rgba_css(muted, 255)};"
+            "font-size: 16px;"
+            "padding: 0 6px;"
+            "}"
+        )
+
     def _position_selection_info(self):
         self._position_bottom_left_panels()
 
@@ -861,6 +935,11 @@ class Viewer3D(gl.GLViewWidget):
             self._selection_info.adjustSize()
             y = max(margin, y - self._selection_info.height())
             self._selection_info.move(margin, y)
+            y -= margin
+        if self._simplify_warning is not None and self._simplify_warning.isVisible():
+            self._simplify_warning.adjustSize()
+            y = max(margin, y - self._simplify_warning.height())
+            self._simplify_warning.move(margin, y)
 
     def set_labels_visible(self, visible: bool):
         self._labels_enabled = bool(visible)
@@ -937,7 +1016,58 @@ class Viewer3D(gl.GLViewWidget):
             )
         )
         self._selection_info.setVisible(True)
+        self._update_simplify_warning()
         self._position_bottom_left_panels()
+
+    def _model_triangle_count(self, model: dict) -> int:
+        faces = model.get("faces")
+        if faces is None:
+            return 0
+        try:
+            return int(np.asarray(faces).shape[0])
+        except Exception:
+            return 0
+
+    def _update_simplify_warning(self):
+        if self._simplify_warning is None or self._simplify_warning_label is None:
+            return
+        model_id = self._selected_model_id
+        if model_id is None and self.models:
+            model_id = next(iter(self.models.keys()))
+        if model_id is None:
+            self._simplify_warning.setVisible(False)
+            return
+        model = self.models.get(model_id)
+        if model is None:
+            self._simplify_warning.setVisible(False)
+            return
+        triangles = self._model_triangle_count(model)
+        if triangles <= 100000:
+            self._simplify_warning.setVisible(False)
+            return
+        name = (model.get("name") or "").strip() or f"Model {model_id}"
+        if triangles >= 1000000:
+            msg = (f"Processing model '{name}' with more than 1M triangles could be slow. "
+                   "It is highly recommended to simplify the model.")
+        else:
+            msg = (f"Model '{name}' has {triangles:,} triangles. "
+                   "Simplifying can improve performance.")
+        self._simplify_warning_label.setText(msg)
+        self._simplify_warning_model_id = model_id
+        self._simplify_warning.setVisible(True)
+        self._position_bottom_left_panels()
+
+    def _emit_simplify_warning(self):
+        model_id = self._simplify_warning_model_id
+        if model_id is None:
+            return
+        self.simplifyRequested.emit(int(model_id))
+
+    def _hide_simplify_warning(self):
+        if self._simplify_warning is None:
+            return
+        self._simplify_warning_model_id = None
+        self._simplify_warning.setVisible(False)
 
     def set_print_stats(self, stats: dict | None):
         if self._print_stats_panel is None:
@@ -1274,6 +1404,7 @@ class Viewer3D(gl.GLViewWidget):
             "pivot": np.array(pivot, dtype=float),
             "bounds": None,
             "out_of_bounds": False,
+            "wireframe": False,
         }
 
         self._create_or_update_mesh_item(model_id)
@@ -1288,6 +1419,22 @@ class Viewer3D(gl.GLViewWidget):
         self._coerce_distance()
         self.update()
         return model_id
+
+    def replace_model_mesh(self, model_id: int, vertices, faces) -> bool:
+        m = self.models.get(model_id)
+        if not m:
+            return False
+        v = np.asarray(vertices, dtype=float)
+        f = np.asarray(faces, dtype=int)
+        if v.size == 0 or f.size == 0:
+            return False
+        m["base_vertices"] = v
+        m["faces"] = f
+        m["base_volume"] = None
+        self._create_or_update_mesh_item(model_id)
+        self._update_selection_info()
+        self.update()
+        return True
 
     def remove_model(self, model_id: int):
         m = self.models.get(model_id)
@@ -1340,6 +1487,18 @@ class Viewer3D(gl.GLViewWidget):
         if rot is None:
             return np.array([0.0, 0.0, 0.0], dtype=float)
         return np.array(rot, dtype=float)
+
+    def set_model_wireframe(self, model_id: int, enabled: bool):
+        m = self.models.get(model_id)
+        if m is None:
+            return
+        item = m.get("item")
+        if item is None:
+            return
+        m["wireframe"] = bool(enabled)
+        item.opts["drawEdges"] = bool(enabled)
+        item.opts["drawFaces"] = True
+        item.update()
 
     def get_model_mesh_data(self, model_id: int):
         m = self.models.get(model_id)
@@ -1714,6 +1873,9 @@ class Viewer3D(gl.GLViewWidget):
             item.setMeshData(meshdata=md)
             self._apply_model_color(m)
             item.setVisible(self._models_visible)
+        if m.get("wireframe"):
+            item.opts["drawEdges"] = True
+            item.opts["drawFaces"] = True
 
     def _compute_transformed_vertices(self, model: dict):
         v0 = model.get("base_vertices")

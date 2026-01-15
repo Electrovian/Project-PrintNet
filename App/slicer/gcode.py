@@ -828,13 +828,35 @@ def parse_gcode_preview(lines: Iterable[str],
         if cmd == "M83":
             extruder_absolute = False
             continue
+        if cmd == "G28":
+            axes = {part[0].upper() for part in parts[1:] if part}
+            if not axes:
+                position = [0.0, 0.0, 0.0]
+            else:
+                if "X" in axes:
+                    position[0] = 0.0
+                if "Y" in axes:
+                    position[1] = 0.0
+                if "Z" in axes:
+                    position[2] = 0.0
+            continue
         if cmd == "G92":
             for part in parts[1:]:
-                if part.startswith("E"):
-                    try:
-                        e_position = float(part[1:])
-                    except ValueError:
-                        continue
+                if not part:
+                    continue
+                axis = part[0].upper()
+                try:
+                    value = float(part[1:])
+                except ValueError:
+                    continue
+                if axis == "E":
+                    e_position = value
+                elif axis == "X":
+                    position[0] = value
+                elif axis == "Y":
+                    position[1] = value
+                elif axis == "Z":
+                    position[2] = value
             continue
         if cmd not in ("G0", "G1", "G2", "G3"):
             continue
@@ -1005,13 +1027,35 @@ def estimate_gcode_stats(lines: Iterable[str], settings: SliceSettings) -> Dict[
         if cmd == "M83":
             extruder_absolute = False
             continue
+        if cmd == "G28":
+            axes = {part[0].upper() for part in parts[1:] if part}
+            if not axes:
+                position = [0.0, 0.0, 0.0]
+            else:
+                if "X" in axes:
+                    position[0] = 0.0
+                if "Y" in axes:
+                    position[1] = 0.0
+                if "Z" in axes:
+                    position[2] = 0.0
+            continue
         if cmd == "G92":
             for part in parts[1:]:
-                if part.startswith("E"):
-                    try:
-                        e_position = float(part[1:])
-                    except ValueError:
-                        continue
+                if not part:
+                    continue
+                axis = part[0].upper()
+                try:
+                    value = float(part[1:])
+                except ValueError:
+                    continue
+                if axis == "E":
+                    e_position = value
+                elif axis == "X":
+                    position[0] = value
+                elif axis == "Y":
+                    position[1] = value
+                elif axis == "Z":
+                    position[2] = value
             continue
         if cmd not in ("G0", "G1", "G2", "G3"):
             continue

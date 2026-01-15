@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, TYPE_CHECKING, cast
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from slicer.gcode import SliceSettings
 from config.defaults import DEFAULTS
 from .theme import theme_css
+
+if TYPE_CHECKING:
+    from .main_window import MainWindow
 
 
 class SettingsTooltip(QtWidgets.QFrame):
@@ -1982,14 +1985,15 @@ class SettingsPanel(QtWidgets.QWidget):
             self._printer_combo.setEnabled(False)
             return
         self._printer_combo.setEnabled(True)
-        dummy_index = None
+        default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+        default_index = None
         for idx, printer in enumerate(self._printers):
             name = printer.get("name") if isinstance(printer, dict) else None
             self._printer_combo.addItem(name or "Printer")
-            if str(name or "").strip().lower() == "dummy printer":
-                dummy_index = idx
-        if dummy_index is not None:
-            self._printer_combo.setCurrentIndex(dummy_index)
+            if default_name and str(name or "").strip().lower() == default_name:
+                default_index = idx
+        if default_index is not None:
+            self._printer_combo.setCurrentIndex(default_index)
         self._on_printer_changed(self._printer_combo.currentIndex())
 
     def current_printer(self):
@@ -2000,32 +2004,33 @@ class SettingsPanel(QtWidgets.QWidget):
             return None
         return self._printers[idx]
 
+    def select_printer_by_name(self, name: str, emit: bool = True):
+        if not hasattr(self, "_printer_combo"):
+            return
+        target = str(name or "").strip().lower()
+        if not target:
+            return
+        idx = None
+        for row in range(self._printer_combo.count()):
+            if self._printer_combo.itemText(row).strip().lower() == target:
+                idx = row
+                break
+        if idx is None:
+            return
+        block = self._printer_combo.blockSignals(True)
+        self._printer_combo.setCurrentIndex(idx)
+        self._printer_combo.blockSignals(block)
+        if emit:
+            self._on_printer_changed(idx)
+
     def _on_printer_changed(self, _index: int):
         printer = self.current_printer()
         if printer is None:
             return
-        main = self.parent()
-        if hasattr(main, "printer_manager"):
-            main.printer_manager.set_active_printer(printer)
-        defaults = DEFAULTS.get("printer", {})
-        bed_defaults = defaults.get("bed_size", (200, 200))
-
-        def _float_or(value, fallback):
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                return float(fallback)
-
-        bed_x = _float_or(printer.get("bed_x"), bed_defaults[0] if bed_defaults else 200)
-        bed_y = _float_or(printer.get("bed_y"), bed_defaults[1] if len(bed_defaults) > 1 else 200)
-        bed_z = _float_or(printer.get("bed_z"), defaults.get("max_height", 200))
-        DEFAULTS.setdefault("printer", {})["bed_size"] = (bed_x, bed_y)
-        DEFAULTS["printer"]["max_height"] = bed_z
-        viewer = getattr(main, "viewer", None)
-        if viewer is not None and hasattr(viewer, "set_bed_limits"):
-            viewer.set_bed_limits((bed_x, bed_y), bed_z)
-        if viewer is not None and hasattr(main, "_update_bed_warnings"):
-            main._update_bed_warnings()
+        main = cast("MainWindow", self.parent())
+        apply_printer = getattr(main, "_apply_printer_profile", None)
+        if callable(apply_printer):
+            apply_printer(printer, source="settings")
 
     def _on_filament_type_selected(self, name: str):
         name = (name or "").strip()
@@ -2099,8 +2104,6 @@ class SettingsPanel(QtWidgets.QWidget):
                 match = False
             elif not query:
                 match = True
-                if is_advanced and not show_advanced:
-                    match = False
             else:
                 match = query in label
             row.setVisible(match)
