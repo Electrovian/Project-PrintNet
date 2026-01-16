@@ -1,6 +1,6 @@
-# OpenSlicer (Prototype)
+# EON-OpenSlicer (Prototype)
 
-OpenSlicer is a **prototype** open‑source 3D printing slicer and print manager.
+EON-OpenSlicer is a **prototype** open‑source 3D printing slicer and print manager.
 
 This version is intentionally lightweight: it has a functional PyQt GUI,
 STL preview, a very simple demo slicer that generates a single‑layer
@@ -45,7 +45,7 @@ production slicer.
 3. **Open the folder in VS Code**
 
    - Start **Visual Studio Code**.
-   - `File -> Open Folder...` and select the `Project-PrintNet` folder.
+   - `File -> Open Folder...` and select the `Project-EON-OpenSlicer` folder.
 
 4. **Open a terminal and move into the app folder**
 
@@ -100,7 +100,7 @@ production slicer.
      python main.py
      ```
 
-   A window titled **OpenSlicer** should appear.  
+   A window titled **EON-OpenSlicer** should appear.  
    Drag an STL file onto the build plate area or use **File → Open STL**.
 
 ---

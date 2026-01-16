@@ -1,1 +1,1 @@
-"""GUI package for OpenSlicer prototype."""
+"""GUI package for EON-OpenSlicer prototype."""

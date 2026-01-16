@@ -1,19 +1,19 @@
 # Research Notes – Muneer Al-Khasawneh (alkhasme)
 
-This folder contains my individual research contributions for the PrintNet senior design project (CS 5001).
+This folder contains my individual research contributions for the EON-OpenSlicer senior design project (CS 5001).
 
 ## Files
 
 - `alkhasme_research_octoprint_overview.md`  
-  High-level overview of OctoPrint, how it works, and how it can fit into PrintNet as the per-printer controller layer.
+  High-level overview of OctoPrint, how it works, and how it can fit into EON-OpenSlicer as the per-printer controller layer.
 
 - `alkhasme_research_airtable_lab_database.md`  
   Proposal for using Airtable as our initial database backend, including a suggested schema for users, printers, jobs, and materials.
 
 - `alkhasme_research_3d_print_lab_platforms_and_requirements.md`  
-  Summary of existing 3D printing management platforms and an early requirements list for PrintNet based on those examples.
+  Summary of existing 3D printing management platforms and an early requirements list for EON-OpenSlicer based on those examples.
 
 - `alkhasme_research_hardware_integration.md`
-  Overview of printer hardware connectivity and how PrintNet communicates with physical devices.
+  Overview of printer hardware connectivity and how EON-OpenSlicer communicates with physical devices.
 
 These documents are meant to show my understanding of the technologies we are building on, and to define the data and integration layer that I am responsible for on the team.

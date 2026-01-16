@@ -19,7 +19,7 @@ These observations are based on general practices and may differ from UC’s spe
 - Difficulty managing multiple printers
 - Limited visibility for users
 
-## 4. How PrintNet Can Help
+## 4. How EON-OpenSlicer Can Help
 - Central dashboard
 - Job history tracking
 - Clear status visibility

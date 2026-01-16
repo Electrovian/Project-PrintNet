@@ -30,21 +30,21 @@ jobs:
       - name: Build (Windows)
         if: runner.os == 'Windows'
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name PrintNet --paths App --add-data "App/assets;assets" App/main.py
-          Compress-Archive -Path dist/PrintNet.exe -DestinationPath PrintNet-windows.zip
+          pyinstaller --noconfirm --clean --onefile --windowed --name EON-OpenSlicer --paths App --add-data "App/assets;assets" App/main.py
+          Compress-Archive -Path dist/EON-OpenSlicer.exe -DestinationPath EON-OpenSlicer-windows.zip
 
       - name: Build (Linux)
         if: runner.os == 'Linux'
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name PrintNet --paths App --add-data "App/assets:assets" App/main.py
-          chmod +x dist/PrintNet
-          zip -j PrintNet-linux.zip dist/PrintNet
+          pyinstaller --noconfirm --clean --onefile --windowed --name EON-OpenSlicer --paths App --add-data "App/assets:assets" App/main.py
+          chmod +x dist/EON-OpenSlicer
+          zip -j EON-OpenSlicer-linux.zip dist/EON-OpenSlicer
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: PrintNet-${{ runner.os }}
-          path: PrintNet-*.zip
+          name: EON-OpenSlicer-${{ runner.os }}
+          path: EON-OpenSlicer-*.zip
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -61,4 +61,4 @@ jobs:
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: dist-artifacts/**/PrintNet-*.zip
+          files: dist-artifacts/**/EON-OpenSlicer-*.zip

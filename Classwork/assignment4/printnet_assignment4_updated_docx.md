@@ -1,17 +1,17 @@
-# PrintNet Assignment 4 (DOCX)
+# EON-OpenSlicer Assignment 4 (DOCX)
 
-Source: `PrintNet_Assignment4_UPDATED.docx`
-Original file: `_attachments/printnet_assignment4_updated.docx`
+Source: `EON-OpenSlicer_Assignment4_UPDATED.docx`
+Original file: `_attachments/EON-OpenSlicer_assignment4_updated.docx`
 
-PrintNet – Assignment #4 (Updated): User Stories & Design Diagrams
+EON-OpenSlicer – Assignment #4 (Updated): User Stories & Design Diagrams
 
 Updated: 2025-09-22 19:25
 
 Design D0 — System Context
 
-Figure 1. D0 – System Context for PrintNet.
+Figure 1. D0 – System Context for EON-OpenSlicer.
 
-What this shows: who sends inputs to PrintNet (submissions, approvals, admin changes) and what outputs they get back (statuses, dashboards, reports, audits).
+What this shows: who sends inputs to EON-OpenSlicer (submissions, approvals, admin changes) and what outputs they get back (statuses, dashboards, reports, audits).
 
 Design D1 — Major Subsystems & Data Flow
 
@@ -47,4 +47,4 @@ IN pushes events/webhooks to UI; syncs with Airtable.
 
 ERD — Entities & Relationships
 
-Figure 4. ERD – Data Model for PrintNet.
+Figure 4. ERD – Data Model for EON-OpenSlicer.

@@ -1,6 +1,6 @@
 DEFAULTS = {
     "app": {
-        "title": "OpenSlicer",
+        "title": "EON-OpenSlicer",
         "size": (1280, 720),
         "status_ready": "Ready",
     },

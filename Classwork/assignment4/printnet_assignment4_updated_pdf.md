@@ -1,15 +1,15 @@
-# PrintNet Assignment 4 (PDF)
+# EON-OpenSlicer Assignment 4 (PDF)
 
-Source: `PrintNet_Assignment4_UPDATED.pdf`
-Original file: `_attachments/printnet_assignment4_updated.pdf`
+Source: `EON-OpenSlicer_Assignment4_UPDATED.pdf`
+Original file: `_attachments/EON-OpenSlicer_assignment4_updated.pdf`
 
-PrintNet – Assignment #4 (Updated): 
+EON-OpenSlicer – Assignment #4 (Updated): 
 User Stories & Design Diagrams  
 Updated: 2025-09-22 19:25 
 Design D0 — System Context 
  
-Figure 1. D0 – System Context for PrintNet. 
-What this shows: who sends inputs to PrintNet (submissions, approvals, admin changes) 
+Figure 1. D0 – System Context for EON-OpenSlicer. 
+What this shows: who sends inputs to EON-OpenSlicer (submissions, approvals, admin changes) 
 and what outputs they get back (statuses, dashboards, reports, audits).
 
 Design D1 — Major Subsystems & Data Flow 
@@ -40,4 +40,4 @@ MM.
 
 ERD — Entities & Relationships 
  
-Figure 4. ERD – Data Model for PrintNet.
+Figure 4. ERD – Data Model for EON-OpenSlicer.

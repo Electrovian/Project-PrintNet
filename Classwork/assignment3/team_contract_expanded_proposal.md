@@ -55,4 +55,4 @@ Our capstone project is a 3D Printing Lab Management Platform inspired by 3D Pri
 - Muneer Al-Khasawneh (Systems Engineer): Builds manager/admin dashboards, maintenance tools, fleet monitoring, and analytics modules.
 
 **Repository Information:**
-GitHub: https://github.com/Electrovian/Project-PrintNet
+GitHub: https://github.com/Electrovian/Project-EON-OpenSlicer

@@ -8,7 +8,7 @@ from gui.crash_reporter import CrashReporter
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
-    app.setApplicationName("OpenSlicer")
+    app.setApplicationName("EON-OpenSlicer")
 
     activity_logger = ActivityLogger()
     activity_logger.install(app)

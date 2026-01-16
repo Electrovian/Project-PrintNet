@@ -15,6 +15,7 @@ try:
 except Exception:  # pragma: no cover - optional dependency in type checkers
     pyclipper = None  # type: ignore[assignment]
 import trimesh
+from trimesh.transformations import transform_points
 
 if TYPE_CHECKING:
     class _MeshLike(Protocol):
@@ -301,12 +302,23 @@ def slice_mesh(mesh: trimesh.Trimesh | _MeshLike,
     if section is None:
         return []
 
-    planar, _ = section.to_planar()
+    if hasattr(section, "to_2D"):
+        planar, transform = section.to_2D()
+    else:
+        planar, transform = section.to_planar()
+    loops = []
+    for loop in planar.discrete:
+        coords = np.asarray(loop, dtype=float)
+        if coords.size == 0:
+            continue
+        coords3 = np.column_stack([coords, np.zeros(len(coords))])
+        world = transform_points(coords3, transform)
+        loops.append([(float(x), float(y)) for x, y, _z in world])
     try:
         tol = max(0.0, float(tolerance))
     except (TypeError, ValueError):
         tol = _CLIPPER_EPS
-    return clean_polygons(planar.discrete, tolerance=tol or _CLIPPER_EPS)
+    return clean_polygons(loops, tolerance=tol or _CLIPPER_EPS)
 
 def polygons_with_holes(polygons: Sequence[Sequence[Point2D]]) -> List[Island2D]:
     """Group loops into islands with holes using nesting."""

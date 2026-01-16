@@ -1,18 +1,18 @@
-# Hardware Integration for PrintNet  
+# Hardware Integration for EON-OpenSlicer  
 Author: Muneer Al-Khasawneh (alkhasme)  
 Course: CS 5001 – Senior Design  
 
 ## 1. Overview
 
 This document summarizes research related to connecting 3D printers to a central software system.  
-Since PrintNet aims to manage multiple printers, the hardware integration layer is important for:
+Since EON-OpenSlicer aims to manage multiple printers, the hardware integration layer is important for:
 
 - communicating with printers
 - collecting status data (temperatures, progress, errors)
 - starting and stopping prints
 - monitoring safety conditions
 
-Many university makerspaces and community labs typically connect printers using USB through small dedicated computers (e.g., Raspberry Pi) running controller software. PrintNet can build on similar approaches.
+Many university makerspaces and community labs typically connect printers using USB through small dedicated computers (e.g., Raspberry Pi) running controller software. EON-OpenSlicer can build on similar approaches.
 
 ---
 
@@ -25,7 +25,7 @@ Most shared 3D printer labs commonly use:
 - USB connection from Pi → printer
 - Local network access (Wi-Fi or Ethernet)
 
-The small computer handles communication with the printer firmware and exposes a network interface for software like PrintNet to interact with.
+The small computer handles communication with the printer firmware and exposes a network interface for software like EON-OpenSlicer to interact with.
 
 This avoids needing to physically plug SD cards into printers.
 
@@ -46,13 +46,13 @@ These systems typically provide:
 - Temperature and status reporting
 - Print start/stop controls
 
-PrintNet does not need to replace these components. Instead, it can communicate with them and provide a higher-level platform.
+EON-OpenSlicer does not need to replace these components. Instead, it can communicate with them and provide a higher-level platform.
 
 ---
 
-## 4. Hardware Integration Goals for PrintNet
+## 4. Hardware Integration Goals for EON-OpenSlicer
 
-From a PrintNet perspective, hardware integration includes:
+From a EON-OpenSlicer perspective, hardware integration includes:
 
 - Connecting to each printer’s controller software
 - Reading printer status (progress, temperatures, errors)
@@ -60,7 +60,7 @@ From a PrintNet perspective, hardware integration includes:
 - Handling communication failures safely
 - Logging data for analytics
 
-This allows PrintNet to manage printers without directly modifying firmware.
+This allows EON-OpenSlicer to manage printers without directly modifying firmware.
 
 ---
 
@@ -93,7 +93,7 @@ Based on team assignments, my responsibilities include:
 
 This research supports the hardware side by identifying:
 
-- how PrintNet will talk to printers
+- how EON-OpenSlicer will talk to printers
 - what data can be collected
 - what safety and control features are possible
 

@@ -380,7 +380,7 @@ class GCodeWriter:
                 self.add(line)
 
     def write_header(self):
-        self.add("; OpenSlicer demo G-code")
+        self.add("; EON-OpenSlicer demo G-code")
         self.add("G90 ; absolute positioning")
         self.add("M82 ; absolute extrusion")
         self.add("G28 ; home all axes")
@@ -395,7 +395,7 @@ class GCodeWriter:
         self.add("M140 S0 ; bed off")
         self.add("G28 X0 Y0 ; home XY")
         self.add("M84 ; disable motors")
-        self.add("; End of OpenSlicer demo")
+        self.add("; End of EON-OpenSlicer demo")
 
     def move_travel(self, x: float, y: float, z: float, f: float):
         distance = math.hypot(x - self.position[0], y - self.position[1])

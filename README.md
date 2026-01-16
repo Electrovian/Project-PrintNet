@@ -1,7 +1,7 @@
-# PrintNet – Final Design Report
+# EON-OpenSlicer – Final Design Report
 
 ## Team Name
-PrintNet
+EON-OpenSlicer
 
 ## Team Members
 - Mitchell Koski – Computer Science, University of Cincinnati – koskima@mail.uc.edu
@@ -18,7 +18,7 @@ Development of a web-based platform for the 3D Print Lab, with server integratio
 ---
 
 ## Project Abstract
-PrintNet is a centralized 3D printing lab management system designed to streamline the submission, tracking, and completion of print jobs. It improves workflow efficiency by organizing requests, managing printer resources, and providing clear communication between users and operators.
+EON-OpenSlicer is a centralized 3D printing lab management system designed to streamline the submission, tracking, and completion of print jobs. It improves workflow efficiency by organizing requests, managing printer resources, and providing clear communication between users and operators.
 
 ---
 
@@ -64,4 +64,4 @@ Work included coding, research, documentation, meetings, and communication throu
 
 ## Appendix
 Full code repository:  
-https://github.com/Electrovian/Project-PrintNet
+https://github.com/Electrovian/Project-EON-OpenSlicer

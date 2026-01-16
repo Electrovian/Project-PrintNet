@@ -39,7 +39,7 @@ class ProjectMixin:
         QtWidgets.QMessageBox.information(self.main, "Not implemented", "This feature is not implemented yet.")
 
     def _open_feedback(self):
-        url = "https://github.com/Electrovian/Project-PrintNet/issues"
+        url = "https://github.com/Electrovian/Project-EON-OpenSlicer/issues"
         reply = QtWidgets.QMessageBox.question(
             self.main,
             "User Feedback",
@@ -66,7 +66,7 @@ class ProjectMixin:
             self.main,
             "Save Project",
             suggested,
-            "OpenSlicer Project (*.osproj);;All files (*.*)",
+            "EON-OpenSlicer Project (*.osproj);;All files (*.*)",
         )
         if not out_path:
             return
@@ -82,7 +82,7 @@ class ProjectMixin:
             self.main,
             "Open Project",
             start_dir,
-            "OpenSlicer Project (*.osproj);;All files (*.*)",
+            "EON-OpenSlicer Project (*.osproj);;All files (*.*)",
         )
         if not path:
             return

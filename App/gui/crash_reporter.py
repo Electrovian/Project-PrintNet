@@ -37,7 +37,7 @@ class CrashReporter:
         self.log_dir = log_dir or self._default_log_dir()
         self.issue_url = (
             issue_url
-            or "https://github.com/Electrovian/Project-PrintNet/issues/new"
+            or "https://github.com/Electrovian/Project-EON-OpenSlicer/issues/new"
         )
         self._installed = False
         self._handling = False

@@ -1,9 +1,9 @@
-# UI/UX Design Principles for PrintNet
+# UI/UX Design Principles for EON-OpenSlicer
 Author: Mo Al-Khasawneh (alkhasmr)  
 Course: CS 5001 – Senior Design
 
 ## 1. Overview
-Since many students using the 3D print lab may be beginners, PrintNet’s interface must prioritize simplicity and clarity.
+Since many students using the 3D print lab may be beginners, EON-OpenSlicer’s interface must prioritize simplicity and clarity.
 
 These guidelines are based on common UI/UX principles used in educational and lab management systems.
 
@@ -42,5 +42,5 @@ Many students check status from their phones, so a responsive layout is benefici
 - Printer detail pages
 
 ## 5. Open Questions
-- Will PrintNet integrate slicing in the UI?
+- Will EON-OpenSlicer integrate slicing in the UI?
 - How much customization should users have?

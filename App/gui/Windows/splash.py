@@ -2,7 +2,7 @@ from PyQt5 import QtCore, QtWidgets
 
 
 class SplashScreen(QtWidgets.QDialog):
-    def __init__(self, title: str = "OpenSlicer", message: str = "Loading configuration...", parent=None):
+    def __init__(self, title: str = "EON-OpenSlicer", message: str = "Loading configuration...", parent=None):
         super().__init__(parent)
         self.setWindowFlags(
             QtCore.Qt.FramelessWindowHint
