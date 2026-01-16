@@ -1,1 +1,45 @@
+# Python
+*.py[cod]
+*$py.class
+*.so
+.Python
+__pycache__/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environments
 .venv/
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.gcode
+*.stl
+*.obj
+*.3mf
+
+# Logs
+*.log
+
+# Configuration files with secrets
+config/secrets.json
+config/local_config.json
+.env
+
+# Temporary files
+tmp/
+temp/
