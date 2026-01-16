@@ -35,6 +35,16 @@ class PrintMixin:
         def _activate_mode(self, mode: str) -> None: ...
         def __getattr__(self, name: str) -> Any: ...
     # ----------------------------------------------------------- slice/print
+    def _invalidate_slice_cache(self, clear_preview: bool = False) -> None:
+        self._last_gcode_path = None
+        self._last_slice_signature = None
+        self._last_gcode_stats = None
+        if clear_preview:
+            if hasattr(self, "preview_view") and hasattr(self.preview_view, "set_gcode_text"):
+                self.preview_view.set_gcode_text("")
+            if hasattr(self, "viewer") and hasattr(self.viewer, "clear_gcode_preview"):
+                self.viewer.clear_gcode_preview()
+
     def _get_current_stl_path(self):
         if self.current_model_id is None:
             return None

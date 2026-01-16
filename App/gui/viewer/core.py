@@ -24,9 +24,10 @@ from .gizmos import GizmoMixin
 from .panels import PanelMixin
 from .preview import PreviewMixin
 from .selection import SelectionMixin
+from .wireframe import WireframeMixin
 
 
-class Viewer3D(PreviewMixin, GizmoMixin, PanelMixin, SelectionMixin, gl.GLViewWidget):
+class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMixin, gl.GLViewWidget):
     modelPicked = QtCore.pyqtSignal(int)
     modelMoved = QtCore.pyqtSignal(int, float, float)
     modelRotated = QtCore.pyqtSignal(int, float, float, float)
@@ -127,14 +128,20 @@ class Viewer3D(PreviewMixin, GizmoMixin, PanelMixin, SelectionMixin, gl.GLViewWi
         self._preview_items: Dict[str, Optional[gl.GLLinePlotItem]] = {
             "travel": None,
         }
-        self._preview_extrude_items: List[gl.GLLinePlotItem] = []
-        self._preview_extrude_bins: List[Tuple[float, float, int]] = []
+        self._preview_extrude_items: List[gl.GLMeshItem] = []
+        self._preview_extrude_bins: List[Tuple[float, float, float]] = []
         self._preview_base_width = 0.4
+        self._preview_layer_height = float(
+            DEFAULTS.get("settings_panel", {})
+            .get("layer_height", {})
+            .get("default", 0.2)
+        )
         self._preview_feature_filter: Optional[set[str]] = None
         self._preview_step_index = None
         self._preview_step_layer = None
         self._preview_visible = False
         self._models_visible = True
+        self._wireframe_default = False
         self._platform_visible = True
         self._nozzle_visible = False
         self._nozzle = None
@@ -284,7 +291,7 @@ class Viewer3D(PreviewMixin, GizmoMixin, PanelMixin, SelectionMixin, gl.GLViewWi
             "pivot": np.array(pivot, dtype=float),
             "bounds": None,
             "out_of_bounds": False,
-            "wireframe": False,
+            "wireframe": self.get_wireframe_enabled(),
         }
 
         self._create_or_update_mesh_item(model_id)
@@ -367,21 +374,6 @@ class Viewer3D(PreviewMixin, GizmoMixin, PanelMixin, SelectionMixin, gl.GLViewWi
         if rot is None:
             return np.array([0.0, 0.0, 0.0], dtype=float)
         return np.array(rot, dtype=float)
-
-    def set_model_wireframe(self, model_id: int, enabled: bool):
-        m = self.models.get(model_id)
-        if m is None:
-            return
-        item = m.get("item")
-        if item is None:
-            return
-        enable_edges = bool(enabled)
-        m["wireframe"] = enable_edges
-        item.opts["drawEdges"] = enable_edges
-        item.opts["drawFaces"] = True
-        if enable_edges:
-            item.meshDataChanged()
-        item.update()
 
     def get_model_mesh_data(self, model_id: int):
         m = self.models.get(model_id)
@@ -756,10 +748,7 @@ class Viewer3D(PreviewMixin, GizmoMixin, PanelMixin, SelectionMixin, gl.GLViewWi
             item.setMeshData(meshdata=md)
             self._apply_model_color(m)
             item.setVisible(self._models_visible)
-        if m.get("wireframe"):
-            item.opts["drawEdges"] = True
-            item.opts["drawFaces"] = True
-            item.meshDataChanged()
+        self._apply_wireframe_to_item(item, bool(m.get("wireframe")), draw_faces=True)
 
     def _compute_transformed_vertices(self, model: dict):
         v0 = model.get("base_vertices")

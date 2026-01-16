@@ -114,6 +114,8 @@ def parse_gcode_preview(lines: Iterable[str],
     layers: List[PreviewLayer] = []
     current_layer: Optional[PreviewLayer] = None
     current_z = None
+    skip_start = True
+    start_segments: List[PreviewSegment] = []
     min_speed = float("inf")
     max_speed = 0.0
     min_flow = float("inf")
@@ -161,7 +163,7 @@ def parse_gcode_preview(lines: Iterable[str],
             current_z = z_val
         return current_layer
 
-    def add_segment(seg: PreviewSegment):
+    def add_segment_to_layers(seg: PreviewSegment):
         nonlocal min_speed, max_speed, min_flow, max_flow, min_width, max_width
         layer = ensure_layer(seg.end[2])
         layer.segments.append(seg)
@@ -179,6 +181,13 @@ def parse_gcode_preview(lines: Iterable[str],
         if seg.width > 0.0:
             min_width = min(min_width, seg.width)
             max_width = max(max_width, seg.width)
+
+    def add_segment(seg: PreviewSegment):
+        nonlocal skip_start
+        if skip_start:
+            start_segments.append(seg)
+            return
+        add_segment_to_layers(seg)
 
     def feature_from_comment(comment: str, current: str) -> str:
         if not comment:
@@ -229,6 +238,21 @@ def parse_gcode_preview(lines: Iterable[str],
             return "sparse_infill"
         return "other"
 
+    def is_layer_marker(comment: str) -> bool:
+        text = comment.strip()
+        if not text:
+            return False
+        lower = text.lower()
+        if lower.startswith("layer num/total_layer_count:"):
+            return True
+        if lower.startswith("layer:"):
+            return True
+        if lower.startswith("layer "):
+            return True
+        if lower.startswith("layer_change") and "gcode" not in lower:
+            return True
+        return False
+
     for raw in lines:
         if not raw:
             continue
@@ -237,6 +261,9 @@ def parse_gcode_preview(lines: Iterable[str],
             continue
         if ";" in line:
             code, comment = line.split(";", 1)
+            if skip_start and is_layer_marker(comment):
+                skip_start = False
+                start_segments.clear()
             current_feature = feature_from_comment(comment, current_feature)
         else:
             code = line
@@ -394,6 +421,11 @@ def parse_gcode_preview(lines: Iterable[str],
         )
         add_segment(segment)
         position = new_pos
+
+    if skip_start and start_segments:
+        skip_start = False
+        for seg in start_segments:
+            add_segment_to_layers(seg)
 
     if not layers:
         layers.append(PreviewLayer(z=0.0))

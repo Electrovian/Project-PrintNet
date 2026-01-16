@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
 import numpy as np
@@ -44,9 +45,17 @@ class PreviewMixin:
                 base_width = self._preview_base_width
         if base_width <= 0.0:
             base_width = self._preview_base_width
-        if abs(base_width - self._preview_base_width) < 1e-6:
+        try:
+            layer_height = float(settings.layer_height)
+        except (TypeError, ValueError, AttributeError):
+            layer_height = self._preview_layer_height
+        if layer_height <= 0.0:
+            layer_height = self._preview_layer_height
+        if abs(base_width - self._preview_base_width) < 1e-6 and \
+                abs(layer_height - self._preview_layer_height) < 1e-6:
             return
         self._preview_base_width = base_width
+        self._preview_layer_height = layer_height
         self._preview_extrude_bins = []
         self._clear_preview_extrude_items()
         self._ensure_preview_items()
@@ -60,17 +69,14 @@ class PreviewMixin:
                 wireframe = bool(m.get("wireframe"))
                 if self._models_visible:
                     item.setVisible(True)
-                    item.opts["drawFaces"] = True
-                    item.opts["drawEdges"] = wireframe
+                    self._apply_wireframe_to_item(item, wireframe, draw_faces=True)
                 else:
                     if wireframe:
                         item.setVisible(True)
-                        item.opts["drawFaces"] = False
-                        item.opts["drawEdges"] = True
-                        item.meshDataChanged()
+                        self._apply_wireframe_to_item(item, True, draw_faces=False)
                     else:
                         item.setVisible(False)
-                item.update()
+                        item.update()
 
     def set_platform_visible(self, visible: bool):
         self._platform_visible = bool(visible)
@@ -207,6 +213,7 @@ class PreviewMixin:
             item.setGLOptions("translucent")
             self.addItem(item)
             item.setVisible(self._preview_visible)
+            item._preview_width = 1
             self._preview_items["travel"] = item
         if not self._preview_extrude_bins:
             self._preview_extrude_bins = self._preview_width_bins()
@@ -214,43 +221,41 @@ class PreviewMixin:
                 len(self._preview_extrude_items) != len(self._preview_extrude_bins):
             self._clear_preview_extrude_items()
             for _min_w, _max_w, line_width in self._preview_extrude_bins:
-                item = gl.GLLinePlotItem(pos=np.zeros((0, 3), dtype=float),
-                                         mode="lines",
-                                         width=line_width)
-                item.setGLOptions("opaque")
+                md = gl.MeshData(
+                    vertexes=np.zeros((0, 3), dtype=float),
+                    faces=np.zeros((0, 3), dtype=np.int32),
+                )
+                item = gl.GLMeshItem(meshdata=md, smooth=False, drawFaces=True,
+                                     drawEdges=False, shader=None)
+                item.setGLOptions("translucent")
                 self.addItem(item)
                 item.setVisible(self._preview_visible)
+                item._preview_width = float(line_width)
                 self._preview_extrude_items.append(item)
 
-    def _preview_width_bins(self) -> List[Tuple[float, float, int]]:
+    def _preview_width_bins(self) -> List[Tuple[float, float, float]]:
         base = self._preview_base_width if self._preview_base_width > 0.0 else 0.4
         preview = self._preview_data
         min_width = float(getattr(preview, "min_width", 0.0) or 0.0)
         max_width = float(getattr(preview, "max_width", 0.0) or 0.0)
 
-        def line_width_for(width_value: float) -> int:
-            if base <= 0.0:
-                return 2
-            scale = max(1.0, (width_value / base) * 2.0)
-            return max(1, min(8, int(round(scale))))
-
         if min_width <= 0.0 or max_width <= 0.0 or max_width <= min_width:
             return [
-                (0.0, base * 0.75, 1),
-                (base * 0.75, base * 1.05, 2),
-                (base * 1.05, base * 1.4, 3),
-                (base * 1.4, float("inf"), 4),
+                (0.0, base * 0.75, base * 0.75),
+                (base * 0.75, base * 1.05, base),
+                (base * 1.05, base * 1.4, base * 1.2),
+                (base * 1.4, float("inf"), base * 1.4),
             ]
 
         span = max(max_width - min_width, base * 0.25)
         step = span / 4.0
         edges = [min_width + step * i for i in range(5)]
-        bins: List[Tuple[float, float, int]] = []
+        bins: List[Tuple[float, float, float]] = []
         for idx in range(4):
             low = edges[idx]
             high = edges[idx + 1] if idx < 3 else float("inf")
             mid = (edges[idx] + edges[idx + 1]) / 2.0 if idx < 3 else max_width
-            bins.append((low, high, line_width_for(mid)))
+            bins.append((low, high, float(mid)))
         return bins
 
     def _bucket_for_width(self, width: float) -> int:
@@ -339,6 +344,7 @@ class PreviewMixin:
             self._update_nozzle_position()
             return
 
+        self._preview_extrude_bins = self._preview_width_bins()
         self._ensure_preview_items()
         layer_index = self._preview_layer_index
         if layer_index is None:
@@ -346,10 +352,13 @@ class PreviewMixin:
         layer_index = max(0, min(layer_index, len(self._preview_data.layers) - 1))
         self._update_nozzle_position(layer_index)
 
-        extrude_points: List[List[Tuple[float, float, float]]] = [
+        extrude_points: List[List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]] = [
             [] for _ in self._preview_extrude_bins
         ]
         extrude_colors: List[List[Tuple[float, float, float, float]]] = [
+            [] for _ in self._preview_extrude_bins
+        ]
+        extrude_widths: List[List[float]] = [
             [] for _ in self._preview_extrude_bins
         ]
         travel_points = []
@@ -388,35 +397,108 @@ class PreviewMixin:
                 if seg.is_extrude:
                     width_value = seg.width if seg.width > 0.0 else self._preview_base_width
                     bucket = self._bucket_for_width(width_value)
-                    extrude_points[bucket].extend([seg.start, seg.end])
-                    extrude_colors[bucket].extend([color, color])
+                    extrude_points[bucket].append((seg.start, seg.end))
+                    extrude_colors[bucket].append(color)
+                    extrude_widths[bucket].append(width_value)
                 else:
                     travel_points.extend([seg.start, seg.end])
                     travel_colors.extend([color, color])
 
         travel_item = self._preview_items["travel"]
-        for item, points, colors in zip(self._preview_extrude_items, extrude_points, extrude_colors):
-            if points and colors:
-                item.setData(
-                    pos=np.array(points, dtype=float),
-                    color=np.array(colors, dtype=float),
-                )
-            else:
-                item.setData(
-                    pos=np.zeros((0, 3), dtype=float),
-                    color=np.zeros((0, 4), dtype=float),
-                )
+        for item, segments, colors, widths in zip(
+            self._preview_extrude_items, extrude_points, extrude_colors, extrude_widths
+        ):
+            meshdata = self._preview_mesh_for_segments(segments, widths, colors)
+            item.setMeshData(meshdata=meshdata)
+            item.setVisible(self._preview_visible and bool(segments))
         if travel_item is not None:
+            travel_width = getattr(travel_item, "_preview_width", getattr(travel_item, "width", 1))
             if travel_points and travel_colors:
                 travel_item.setData(
                     pos=np.array(travel_points, dtype=float),
                     color=np.array(travel_colors, dtype=float),
+                    width=travel_width,
                 )
             else:
                 travel_item.setData(
                     pos=np.zeros((0, 3), dtype=float),
                     color=np.zeros((0, 4), dtype=float),
+                    width=travel_width,
                 )
+
+    def _preview_mesh_for_segments(
+        self,
+        segments: Sequence[Tuple[Tuple[float, float, float], Tuple[float, float, float]]],
+        widths: Sequence[float],
+        colors: Sequence[Tuple[float, float, float, float]],
+    ) -> gl.MeshData:
+        if not segments:
+            return gl.MeshData(
+                vertexes=np.zeros((0, 3), dtype=float),
+                faces=np.zeros((0, 3), dtype=np.int32),
+            )
+
+        vertices: List[List[float]] = []
+        faces: List[List[int]] = []
+        face_colors: List[Tuple[float, float, float, float]] = []
+
+        for (start, end), width_value, color in zip(segments, widths, colors):
+            p0 = np.array(start, dtype=float)
+            p1 = np.array(end, dtype=float)
+            dxy = p1[:2] - p0[:2]
+            length = float(math.hypot(dxy[0], dxy[1]))
+            if length < 1e-8:
+                continue
+            width = float(width_value if width_value > 0.0 else self._preview_base_width)
+            height = float(self._preview_layer_height if self._preview_layer_height > 0.0 else 0.2)
+            half_w = max(width * 0.5, self._preview_base_width * 0.25)
+            half_h = max(height * 0.5, height * 0.25)
+            perp = np.array([-dxy[1], dxy[0]], dtype=float) / length * half_w
+
+            z0_low = float(p0[2] - half_h)
+            z0_high = float(p0[2] + half_h)
+            z1_low = float(p1[2] - half_h)
+            z1_high = float(p1[2] + half_h)
+
+            v0 = [float(p0[0] + perp[0]), float(p0[1] + perp[1]), z0_low]
+            v1 = [float(p0[0] - perp[0]), float(p0[1] - perp[1]), z0_low]
+            v2 = [float(p1[0] - perp[0]), float(p1[1] - perp[1]), z1_low]
+            v3 = [float(p1[0] + perp[0]), float(p1[1] + perp[1]), z1_low]
+            v4 = [float(p0[0] + perp[0]), float(p0[1] + perp[1]), z0_high]
+            v5 = [float(p0[0] - perp[0]), float(p0[1] - perp[1]), z0_high]
+            v6 = [float(p1[0] - perp[0]), float(p1[1] - perp[1]), z1_high]
+            v7 = [float(p1[0] + perp[0]), float(p1[1] + perp[1]), z1_high]
+
+            base = len(vertices)
+            vertices.extend([v0, v1, v2, v3, v4, v5, v6, v7])
+            faces.extend([
+                [base + 0, base + 1, base + 2],
+                [base + 0, base + 2, base + 3],
+                [base + 4, base + 6, base + 5],
+                [base + 4, base + 7, base + 6],
+                [base + 0, base + 3, base + 7],
+                [base + 0, base + 7, base + 4],
+                [base + 1, base + 2, base + 6],
+                [base + 1, base + 6, base + 5],
+                [base + 0, base + 4, base + 5],
+                [base + 0, base + 5, base + 1],
+                [base + 3, base + 2, base + 6],
+                [base + 3, base + 6, base + 7],
+            ])
+            face_colors.extend([color] * 12)
+
+        if not faces:
+            return gl.MeshData(
+                vertexes=np.zeros((0, 3), dtype=float),
+                faces=np.zeros((0, 3), dtype=np.int32),
+            )
+
+        mesh = gl.MeshData(
+            vertexes=np.array(vertices, dtype=float),
+            faces=np.array(faces, dtype=np.int32),
+        )
+        mesh.setFaceColors(np.array(face_colors, dtype=float))
+        return mesh
 
     def _ensure_nozzle_item(self):
         if self._nozzle is not None:

@@ -471,8 +471,13 @@ class SharedView(QtCore.QObject):
         self.main._view_menu.addSeparator()
 
         wireframe_action = QtWidgets.QAction("Show Wireframe", self.main)
-        wireframe_action.triggered.connect(self.main._not_implemented)
+        wireframe_action.setCheckable(True)
+        wireframe_action.setChecked(
+            bool(getattr(self.main.viewer, "get_wireframe_enabled", lambda: False)())
+        )
+        wireframe_action.toggled.connect(self.main._toggle_wireframe)
         self.main._view_menu.addAction(wireframe_action)
+        self.main._wireframe_action = wireframe_action
 
         gcode_action = QtWidgets.QAction("Show G-code Window", self.main)
         gcode_action.setEnabled(False)

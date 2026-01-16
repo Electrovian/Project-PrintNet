@@ -2,6 +2,7 @@
 # pyright: reportArgumentType=false
 from __future__ import annotations
 
+import importlib.util
 import os
 import threading
 
@@ -66,6 +67,46 @@ class _ProgressFile:
 
     def __exit__(self, exc_type, exc, tb):
         self.close()
+
+
+def _sanitize_mesh_arrays(vertices: np.ndarray, faces: np.ndarray):
+    v = np.asarray(vertices, dtype=float)
+    f = np.asarray(faces, dtype=int)
+    if v.ndim != 2 or v.shape[1] != 3:
+        raise ValueError("Invalid vertex array")
+    if f.ndim != 2 or f.shape[1] != 3:
+        raise ValueError("Invalid face array")
+    if v.size == 0 or f.size == 0:
+        raise ValueError("Empty mesh")
+
+    finite_mask = np.isfinite(v).all(axis=1)
+    if not finite_mask.all():
+        remap = np.full(len(v), -1, dtype=int)
+        remap[finite_mask] = np.arange(int(finite_mask.sum()))
+        f = remap[f]
+        v = v[finite_mask]
+
+    max_index = len(v)
+    valid = (f >= 0).all(axis=1) & (f < max_index).all(axis=1)
+    if valid.any():
+        f = f[valid]
+    else:
+        raise ValueError("All faces invalid")
+
+    non_degenerate = (f[:, 0] != f[:, 1]) & (f[:, 0] != f[:, 2]) & (f[:, 1] != f[:, 2])
+    f = f[non_degenerate]
+    if f.size == 0:
+        raise ValueError("Degenerate faces")
+
+    p0 = v[f[:, 0]]
+    p1 = v[f[:, 1]]
+    p2 = v[f[:, 2]]
+    area = np.linalg.norm(np.cross(p1 - p0, p2 - p0), axis=1)
+    f = f[area > 1e-12]
+    if f.size == 0:
+        raise ValueError("Zero-area faces")
+
+    return v, f
 
 
 class LoadMixin:
@@ -158,8 +199,13 @@ class LoadMixin:
             elif not isinstance(mesh, trimesh.Trimesh):
                 # fallback: concatenate any geometry collection into a Trimesh
                 mesh = trimesh.util.concatenate(mesh)  # type: ignore[arg-type]
+            try:
+                mesh.process(validate=True)
+            except Exception:
+                pass
             vertices = np.array(mesh.vertices, dtype=float)
             faces = np.array(mesh.faces, dtype=int)
+            vertices, faces = _sanitize_mesh_arrays(vertices, faces)
             return {"path": p, "name": os.path.basename(p), "v": vertices, "f": faces}
 
         def report_progress(value: int):
@@ -175,7 +221,16 @@ class LoadMixin:
             close_dialog()
             if cancelled["value"]:
                 return
-            model_id = self.viewer.add_model_from_data(payload["name"], payload["path"], payload["v"], payload["f"])
+            try:
+                model_id = self.viewer.add_model_from_data(
+                    payload["name"],
+                    payload["path"],
+                    payload["v"],
+                    payload["f"],
+                )
+            except Exception as exc:
+                on_err(str(exc))
+                return
             self.model_panel.add_model(payload["name"], model_id)
 
             self.current_model_id = model_id
@@ -250,9 +305,40 @@ class LoadMixin:
             mesh = trimesh.Trimesh(vertices=np.asarray(v, dtype=float),
                                    faces=np.asarray(f, dtype=int),
                                    process=False)
-            simplified = mesh.simplify_quadratic_decimation(int(target))
+            simplify_attr = None
+            if hasattr(mesh, "simplify_quadric_decimation"):
+                simplify_attr = "simplify_quadric_decimation"
+            elif hasattr(mesh, "simplify_quadratic_decimation"):
+                simplify_attr = "simplify_quadratic_decimation"
+            if simplify_attr is None:
+                raise RuntimeError("Simplification not supported by this trimesh build.")
+            if importlib.util.find_spec("fast_simplification") is None:
+                raise RuntimeError(
+                    "Simplification requires fast_simplification. "
+                    "Install it with: pip install fast_simplification"
+                )
+            simplify_fn = getattr(mesh, simplify_attr)
+            try:
+                sig = getattr(simplify_fn, "__signature__", None)
+            except Exception:
+                sig = None
+            kwargs = {}
+            if sig is None:
+                try:
+                    import inspect
+                    sig = inspect.signature(simplify_fn)
+                except Exception:
+                    sig = None
+            if sig is not None and "face_count" in sig.parameters:
+                kwargs["face_count"] = int(target)
+            else:
+                current = max(1, int(len(mesh.faces)))
+                kwargs["percent"] = max(0.0, min(1.0, float(target) / float(current)))
+            simplified = simplify_fn(**kwargs)
             if simplified is None:
                 raise RuntimeError("Simplification failed.")
+            if simplified.is_empty:
+                raise RuntimeError("Simplification produced an empty mesh.")
             return {
                 "v": np.asarray(simplified.vertices, dtype=float),
                 "f": np.asarray(simplified.faces, dtype=int),

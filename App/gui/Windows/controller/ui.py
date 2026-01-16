@@ -720,6 +720,7 @@ class UiMixin(UiMixinBase):
             self.prepare_view.hide()
             self.preview_view.show()
             self._central_stack.setCurrentWidget(self.viewer)
+            self._auto_slice_prepare()
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
             if hasattr(self.viewer, "set_labels_visible"):
@@ -1096,6 +1097,8 @@ class UiMixin(UiMixinBase):
             return
         self._pending_undo_snapshot = False
         self._push_undo_state()
+        if hasattr(self, "_invalidate_slice_cache"):
+            self._invalidate_slice_cache(clear_preview=True)
 
     def _restore_state(self, state):
         self._undo_in_progress = True
@@ -1199,6 +1202,13 @@ class UiMixin(UiMixinBase):
 
     def _toggle_view_cube(self, checked: bool):
         self.viewer.set_view_cube_visible(bool(checked))
+
+    def _toggle_wireframe(self, checked: bool):
+        enabled = bool(checked)
+        if hasattr(self.viewer, "set_wireframe_enabled"):
+            self.viewer.set_wireframe_enabled(enabled)
+        state = "on" if enabled else "off"
+        self.statusBar().showMessage(f"Wireframe {state}")
 
     def _reset_window_layout(self):
         if hasattr(self, "_model_dock"):
