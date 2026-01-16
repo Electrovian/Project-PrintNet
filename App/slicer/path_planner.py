@@ -234,29 +234,32 @@ def plan_travel(start: Point3D,
 def order_islands_nearest(islands: Sequence[Island2D],
                           start: Point2D) -> List[Island2D]:
     """Order islands by nearest neighbor using centroids."""
-    remaining = list(islands)
+    remaining: List[Tuple[Island2D, Optional[Point2D], Optional[Point2D]]] = []
+    for island in islands:
+        outer, _ = island
+        points = outer[:-1] if len(outer) > 1 else outer
+        if not points:
+            remaining.append((island, None, None))
+            continue
+        cx = sum(p[0] for p in points) / len(points)
+        cy = sum(p[1] for p in points) / len(points)
+        remaining.append((island, (cx, cy), (points[0][0], points[0][1])))
     ordered: List[Island2D] = []
     current = (float(start[0]), float(start[1]))
     while remaining:
         best_index = 0
         best_dist = float("inf")
-        for index, island in enumerate(remaining):
-            outer, _ = island
-            points = outer[:-1] if len(outer) > 1 else outer
-            if not points:
+        for index, (_island, centroid, _first_point) in enumerate(remaining):
+            if centroid is None:
                 continue
-            cx = sum(p[0] for p in points) / len(points)
-            cy = sum(p[1] for p in points) / len(points)
-            dist = (cx - current[0]) ** 2 + (cy - current[1]) ** 2
+            dist = (centroid[0] - current[0]) ** 2 + (centroid[1] - current[1]) ** 2
             if dist < best_dist:
                 best_dist = dist
                 best_index = index
-        chosen = remaining.pop(best_index)
-        ordered.append(chosen)
-        outer, _ = chosen
-        points = outer[:-1] if len(outer) > 1 else outer
-        if points:
-            current = (points[0][0], points[0][1])
+        island, _centroid, first_point = remaining.pop(best_index)
+        ordered.append(island)
+        if first_point is not None:
+            current = first_point
     return ordered
 
 def order_toolpaths(toolpaths: Sequence[Toolpath],

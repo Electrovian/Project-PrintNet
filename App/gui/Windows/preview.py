@@ -1,3 +1,4 @@
+import bisect
 import math
 from PyQt5 import QtWidgets, QtCore, QtGui
 
@@ -13,6 +14,8 @@ class PreviewView(QtCore.QObject):
         self.main = main_window
         self.viewer = viewer
         self._preview_data = None
+        self._layer_offsets = []
+        self._total_steps = 0
         self._play_timer = QtCore.QTimer(self.main)
         self._play_timer.timeout.connect(self._on_play_tick)
         self._play_base_interval_ms = 30
@@ -522,14 +525,13 @@ class PreviewView(QtCore.QObject):
         count = max(0, int(count))
         self._steps_slider.setRange(0, count)
         self._steps_spin.setRange(0, count)
-        self._steps_slider.setValue(count)
-        self._steps_spin.setValue(count)
+        self._set_steps_value(count)
 
     def set_layer_count(self, count: int):
         count = max(0, int(count))
         top = max(0, count - 1)
         self._layer_slider.setRange(0, top)
-        self._layer_slider.setValue(top)
+        self._set_layer_value(top)
         self._update_layer_label(top)
         self._layer_bottom.setText("0")
         if count > 0:
@@ -569,9 +571,10 @@ class PreviewView(QtCore.QObject):
         self._layer_panel.hide()
 
     def _on_layer_changed(self, value: int):
-        if hasattr(self.viewer, "set_preview_layer_index"):
-            self.viewer.set_preview_layer_index(int(value))
-        self._update_steps_for_layer(int(value))
+        step_value = self._step_value_for_layer(int(value))
+        if hasattr(self.viewer, "set_preview_step_index"):
+            self.viewer.set_preview_step_index(int(step_value))
+        self._set_steps_value(step_value)
         self._update_layer_label(int(value))
         self._update_nozzle_info()
 
@@ -579,7 +582,12 @@ class PreviewView(QtCore.QObject):
         if hasattr(self.viewer, "set_preview_step_index"):
             self.viewer.set_preview_step_index(int(value))
         if self._steps_spin.value() != value:
+            block = self._steps_spin.blockSignals(True)
             self._steps_spin.setValue(int(value))
+            self._steps_spin.blockSignals(block)
+        layer_index = self._layer_for_step(int(value))
+        self._set_layer_value(layer_index)
+        self._update_layer_label(layer_index)
         self._update_nozzle_info()
 
     def _on_step_spin_changed(self, value: int):
@@ -618,6 +626,8 @@ class PreviewView(QtCore.QObject):
 
     def set_preview_data(self, preview):
         self._preview_data = preview
+        self._layer_offsets = []
+        self._total_steps = 0
         if preview is None or not getattr(preview, "layers", None):
             self.set_layer_count(0)
             self.set_steps_count(0)
@@ -625,18 +635,63 @@ class PreviewView(QtCore.QObject):
             self._sync_feature_filter()
             self._update_nozzle_info()
             return
+        total = 0
+        for layer in preview.layers:
+            self._layer_offsets.append(total)
+            total += len(layer.segments)
+        self._total_steps = total
         self.set_layer_count(len(preview.layers))
+        self.set_steps_count(total)
         self._update_line_type_stats()
         self._sync_feature_filter()
         self._update_nozzle_info()
 
     def _update_steps_for_layer(self, layer_index: int):
-        count = 0
-        if self._preview_data is not None and getattr(self._preview_data, "layers", None):
-            idx = max(0, min(layer_index, len(self._preview_data.layers) - 1))
-            count = len(self._preview_data.layers[idx].segments)
-        self.set_steps_count(count)
+        step_value = self._step_value_for_layer(layer_index)
+        self._set_steps_value(step_value)
         self._update_nozzle_info()
+
+    def _step_value_for_layer(self, layer_index: int) -> int:
+        if self._preview_data is None or not getattr(self._preview_data, "layers", None):
+            return 0
+        layers = self._preview_data.layers
+        idx = max(0, min(int(layer_index), len(layers) - 1))
+        if not self._layer_offsets:
+            total = 0
+            for layer in layers:
+                self._layer_offsets.append(total)
+                total += len(layer.segments)
+            self._total_steps = total
+        return self._layer_offsets[idx] + len(layers[idx].segments)
+
+    def _layer_for_step(self, step_value: int) -> int:
+        if self._preview_data is None or not getattr(self._preview_data, "layers", None):
+            return 0
+        layers = self._preview_data.layers
+        if not layers:
+            return 0
+        if not self._layer_offsets:
+            total = 0
+            for layer in layers:
+                self._layer_offsets.append(total)
+                total += len(layer.segments)
+            self._total_steps = total
+        step_value = max(0, min(int(step_value), int(self._total_steps)))
+        layer_index = bisect.bisect_right(self._layer_offsets, step_value) - 1
+        return max(0, min(layer_index, len(layers) - 1))
+
+    def _set_steps_value(self, value: int):
+        block_slider = self._steps_slider.blockSignals(True)
+        block_spin = self._steps_spin.blockSignals(True)
+        self._steps_slider.setValue(int(value))
+        self._steps_spin.setValue(int(value))
+        self._steps_slider.blockSignals(block_slider)
+        self._steps_spin.blockSignals(block_spin)
+
+    def _set_layer_value(self, value: int):
+        block = self._layer_slider.blockSignals(True)
+        self._layer_slider.setValue(int(value))
+        self._layer_slider.blockSignals(block)
 
     def _on_line_type_changed(self, item):
         if self._line_type_updating:

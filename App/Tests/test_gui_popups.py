@@ -1,17 +1,9 @@
 import unittest
 
-try:
-    from PyQt5 import QtWidgets
-except Exception:  # pragma: no cover - optional dependency in tests
-    QtWidgets = None
+from qt_harness import QtTestCase
 
 
-@unittest.skipIf(QtWidgets is None, "PyQt5 not available")
-class PopupTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        assert QtWidgets is not None
-        cls._app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+class PopupTests(QtTestCase):
 
     def test_move_popup_emits(self):
         from gui.popups.move_popup import MovePopup

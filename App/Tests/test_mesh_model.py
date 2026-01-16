@@ -15,8 +15,12 @@ from harness import BaseTestCase
 
 
 class MeshModelTests(BaseTestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._box_mesh_template = trimesh.creation.box(extents=(2.0, 4.0, 6.0))
+
     def _box_mesh(self):
-        return trimesh.creation.box(extents=(2.0, 4.0, 6.0))
+        return self._box_mesh_template.copy()
 
     def test_bounds(self):
         mesh = self._box_mesh()

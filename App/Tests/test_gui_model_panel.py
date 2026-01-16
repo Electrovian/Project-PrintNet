@@ -1,19 +1,9 @@
 import unittest
 
-try:
-    from PyQt5 import QtWidgets
-except Exception:  # pragma: no cover - optional dependency in tests
-    QtWidgets = None
+from qt_harness import QtTestCase
 
 
-@unittest.skipIf(QtWidgets is None, "PyQt5 not available")
-class ModelPanelTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        if QtWidgets is None:
-            raise unittest.SkipTest("PyQt5 not available")
-        assert QtWidgets is not None
-        cls._app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+class ModelPanelTests(QtTestCase):
 
     def test_add_remove_and_select(self):
         from gui.model_panel import ModelPanel

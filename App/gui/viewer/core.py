@@ -130,6 +130,8 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         }
         self._preview_extrude_items: List[gl.GLMeshItem] = []
         self._preview_extrude_bins: List[Tuple[float, float, float]] = []
+        self._preview_step_offsets: List[int] = []
+        self._preview_total_steps = 0
         self._preview_base_width = 0.4
         self._preview_layer_height = float(
             DEFAULTS.get("settings_panel", {})
@@ -740,7 +742,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
 
         item = m.get("item")
         if item is None:
-            item = gl.GLMeshItem(meshdata=md, smooth=False, color=color, shader="shaded")
+            item = gl.GLMeshItem(meshdata=md, smooth=True, color=color, shader="shaded")
             self.addItem(item)
             item.setVisible(self._models_visible)
             m["item"] = item

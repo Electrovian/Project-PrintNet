@@ -1,19 +1,10 @@
 import unittest
 from typing import TYPE_CHECKING
 
-try:
-    from PyQt5 import QtWidgets, QtCore
-except Exception:  # pragma: no cover - optional dependency in tests
-    QtWidgets = None
-    QtCore = None
+from qt_harness import QtCore, QtTestCase, QtWidgets
 
 
-@unittest.skipIf(QtWidgets is None, "PyQt5 not available")
-class PreviewViewTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        assert QtWidgets is not None
-        cls._app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+class PreviewViewTests(QtTestCase):
 
     def _build(self):
         from gui.Windows.preview import PreviewView

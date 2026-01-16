@@ -1216,7 +1216,7 @@ class UiMixin(UiMixinBase):
             self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self._model_dock)
         if hasattr(self, "_settings_dock"):
             self._settings_dock.show()
-            self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self._settings_dock)
+            self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self._settings_dock)
         if hasattr(self, "_job_dock"):
             self._job_dock.show()
             self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self._job_dock)

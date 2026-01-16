@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 import math
 from typing import Any, Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
@@ -22,8 +23,11 @@ class PreviewMixin:
             self._preview_layer_index = None
             self._preview_step_index = None
             self._preview_step_layer = None
+            self._preview_step_offsets = []
+            self._preview_total_steps = 0
             self._update_preview_lines()
             return
+        self._rebuild_preview_step_offsets()
         self._preview_extrude_bins = []
         self._clear_preview_extrude_items()
         self._preview_layer_index = len(preview.layers) - 1
@@ -110,48 +114,57 @@ class PreviewMixin:
     def get_preview_progress(self):
         if self._preview_data is None or not getattr(self._preview_data, "layers", None):
             return None
-        layers = self._preview_data.layers
-        total = sum(len(layer.segments) for layer in layers)
+        total = int(getattr(self, "_preview_total_steps", 0))
+        if total <= 0:
+            total = sum(len(layer.segments) for layer in self._preview_data.layers)
         if total <= 0:
             return (0, 0)
-        if self._preview_step_index is not None:
-            layer_index = self._preview_step_layer
-        else:
-            layer_index = self._preview_layer_index
-        if layer_index is None:
-            layer_index = len(layers) - 1
-        layer_index = max(0, min(layer_index, len(layers) - 1))
-        completed = sum(len(layers[idx].segments) for idx in range(layer_index))
-        layer_segments = len(layers[layer_index].segments)
         if self._preview_step_index is None:
-            completed += layer_segments
+            completed = total
         else:
-            completed += max(0, min(int(self._preview_step_index), layer_segments))
+            completed = max(0, min(int(self._preview_step_index), total))
         return (completed, total)
 
     def _preview_segment_for_nozzle(self):
         if self._preview_data is None or not getattr(self._preview_data, "layers", None):
             return None
         layers = self._preview_data.layers
-        layer_index = self._preview_step_layer if self._preview_step_index is not None else self._preview_layer_index
-        if layer_index is None:
-            layer_index = len(layers) - 1
+        if self._preview_step_index is None:
+            layer_index = self._preview_layer_index
+            if layer_index is None:
+                layer_index = len(layers) - 1
+            layer_index = max(0, min(layer_index, len(layers) - 1))
+            segments = layers[layer_index].segments
+            return segments[-1] if segments else None
+
+        step_index = max(0, int(self._preview_step_index))
+        if step_index <= 0:
+            return None
+        if not self._preview_step_offsets:
+            self._rebuild_preview_step_offsets()
+        total = max(0, int(getattr(self, "_preview_total_steps", 0)))
+        if total <= 0:
+            return None
+        step_index = min(step_index, total)
+        target = step_index - 1
+        offsets = self._preview_step_offsets
+        layer_index = bisect.bisect_right(offsets, target) - 1
         layer_index = max(0, min(layer_index, len(layers) - 1))
-        layer = layers[layer_index]
-        segments = layer.segments
+        seg_index = target - offsets[layer_index]
+        segments = layers[layer_index].segments
         if not segments:
             return None
-        if self._preview_step_index is not None:
-            idx = max(0, min(self._preview_step_index - 1, len(segments) - 1))
-        else:
-            idx = len(segments) - 1
-        return segments[idx]
+        if seg_index < 0 or seg_index >= len(segments):
+            return None
+        return segments[seg_index]
 
     def clear_gcode_preview(self):
         self._preview_data = None
         self._preview_layer_index = None
         self._preview_step_index = None
         self._preview_step_layer = None
+        self._preview_step_offsets = []
+        self._preview_total_steps = 0
         self._update_preview_lines()
 
     def set_preview_layer_index(self, index: int):
@@ -161,24 +174,32 @@ class PreviewMixin:
         if self._preview_layer_index == idx:
             return
         self._preview_layer_index = idx
-        self._preview_step_index = None
+        if not self._preview_step_offsets:
+            self._rebuild_preview_step_offsets()
+        layer = self._preview_data.layers[idx]
+        step_count = self._preview_step_offsets[idx] + len(layer.segments)
+        self._preview_step_index = step_count
         self._preview_step_layer = idx
         self._update_preview_lines()
 
     def set_preview_step_index(self, step_count: int | None):
         if self._preview_data is None or not self._preview_data.layers:
             return
-        layer_index = self._preview_layer_index
-        if layer_index is None:
-            layer_index = len(self._preview_data.layers) - 1
-        layer_index = max(0, min(layer_index, len(self._preview_data.layers) - 1))
-        segments = self._preview_data.layers[layer_index].segments
-        max_count = len(segments)
         if step_count is None:
             self._preview_step_index = None
         else:
-            self._preview_step_index = max(0, min(int(step_count), max_count))
+            if not self._preview_step_offsets:
+                self._rebuild_preview_step_offsets()
+            total = max(0, int(getattr(self, "_preview_total_steps", 0)))
+            self._preview_step_index = max(0, min(int(step_count), total))
+        if self._preview_step_index is None:
+            layer_index = self._preview_layer_index
+        else:
+            layer_index, _local = self._preview_layer_slice_for_step(self._preview_step_index)
+        if layer_index is None:
+            layer_index = len(self._preview_data.layers) - 1
         self._preview_step_layer = layer_index
+        self._preview_layer_index = layer_index
         self._update_preview_lines()
 
     def preview_layer_step_count(self, layer_index: int | None = None) -> int:
@@ -190,6 +211,34 @@ class PreviewMixin:
             layer_index = len(self._preview_data.layers) - 1
         layer_index = max(0, min(layer_index, len(self._preview_data.layers) - 1))
         return len(self._preview_data.layers[layer_index].segments)
+
+    def _rebuild_preview_step_offsets(self):
+        self._preview_step_offsets = []
+        self._preview_total_steps = 0
+        if self._preview_data is None or not getattr(self._preview_data, "layers", None):
+            return
+        total = 0
+        for layer in self._preview_data.layers:
+            self._preview_step_offsets.append(total)
+            total += len(layer.segments)
+        self._preview_total_steps = total
+
+    def _preview_layer_slice_for_step(self, step_count: int) -> Tuple[int, int]:
+        if self._preview_data is None or not getattr(self._preview_data, "layers", None):
+            return (0, 0)
+        layers = self._preview_data.layers
+        if not self._preview_step_offsets:
+            self._rebuild_preview_step_offsets()
+        total = max(0, int(getattr(self, "_preview_total_steps", 0)))
+        step = max(0, min(int(step_count), total))
+        if not layers:
+            return (0, 0)
+        offsets = self._preview_step_offsets or [0] * len(layers)
+        layer_index = bisect.bisect_right(offsets, step) - 1
+        layer_index = max(0, min(layer_index, len(layers) - 1))
+        local_count = step - offsets[layer_index]
+        local_count = max(0, min(local_count, len(layers[layer_index].segments)))
+        return (layer_index, local_count)
 
     def set_preview_color_mode(self, mode: str):
         mode = (mode or "").strip().lower()
@@ -213,7 +262,7 @@ class PreviewMixin:
             item.setGLOptions("translucent")
             self.addItem(item)
             item.setVisible(self._preview_visible)
-            item._preview_width = 1
+            self._preview_travel_width = 1
             self._preview_items["travel"] = item
         if not self._preview_extrude_bins:
             self._preview_extrude_bins = self._preview_width_bins()
@@ -226,11 +275,10 @@ class PreviewMixin:
                     faces=np.zeros((0, 3), dtype=np.int32),
                 )
                 item = gl.GLMeshItem(meshdata=md, smooth=False, drawFaces=True,
-                                     drawEdges=False, shader=None)
-                item.setGLOptions("translucent")
+                                     drawEdges=False, shader="shaded")
+                item.setGLOptions("opaque")
                 self.addItem(item)
                 item.setVisible(self._preview_visible)
-                item._preview_width = float(line_width)
                 self._preview_extrude_items.append(item)
 
     def _preview_width_bins(self) -> List[Tuple[float, float, float]]:
@@ -340,16 +388,22 @@ class PreviewMixin:
                 if item is not None:
                     item.setData(pos=np.zeros((0, 3), dtype=float))
             for item in self._preview_extrude_items:
-                item.setData(pos=np.zeros((0, 3), dtype=float))
+                item.setMeshData(
+                    meshdata=gl.MeshData(
+                        vertexes=np.zeros((0, 3), dtype=float),
+                        faces=np.zeros((0, 3), dtype=np.int32),
+                    )
+                )
             self._update_nozzle_position()
             return
 
         self._preview_extrude_bins = self._preview_width_bins()
         self._ensure_preview_items()
-        layer_index = self._preview_layer_index
-        if layer_index is None:
+        step_slice = None
+        if self._preview_step_index is None:
             layer_index = len(self._preview_data.layers) - 1
-        layer_index = max(0, min(layer_index, len(self._preview_data.layers) - 1))
+        else:
+            layer_index, step_slice = self._preview_layer_slice_for_step(self._preview_step_index)
         self._update_nozzle_position(layer_index)
 
         extrude_points: List[List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]] = [
@@ -366,9 +420,8 @@ class PreviewMixin:
 
         for idx, layer in enumerate(self._preview_data.layers[: layer_index + 1]):
             segments = layer.segments
-            if idx == layer_index and self._preview_step_layer == layer_index:
-                if self._preview_step_index is not None:
-                    segments = segments[: self._preview_step_index]
+            if step_slice is not None and idx == layer_index:
+                segments = segments[: step_slice]
             for seg in segments:
                 if self._preview_feature_filter is not None and seg.feature not in self._preview_feature_filter:
                     continue
@@ -412,7 +465,7 @@ class PreviewMixin:
             item.setMeshData(meshdata=meshdata)
             item.setVisible(self._preview_visible and bool(segments))
         if travel_item is not None:
-            travel_width = getattr(travel_item, "_preview_width", getattr(travel_item, "width", 1))
+            travel_width = getattr(self, "_preview_travel_width", getattr(travel_item, "width", 1))
             if travel_points and travel_colors:
                 travel_item.setData(
                     pos=np.array(travel_points, dtype=float),

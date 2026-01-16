@@ -256,6 +256,7 @@ class OtherSectionMixin:
         muted_text = theme_css("popup_muted_text")
         accent = theme_css("topbar_accent")
         input_bg = theme_css("popup_input_bg")
+        button_hover = theme_css("action_button_hover_bg")
 
         self.setStyleSheet(
             "QWidget#SettingsPanel {"
@@ -390,6 +391,29 @@ class OtherSectionMixin:
             "QCheckBox#SettingsCheck::indicator:checked {"
             f"  background: {accent};"
             "  border-radius: 3px;"
+            "}"
+            "QWidget#ObjectsPanel {"
+            f"  background: {panel_bg};"
+            "}"
+            "QListWidget#ObjectsList {"
+            f"  background: {input_bg};"
+            f"  color: {panel_text};"
+            f"  border: 1px solid {panel_border};"
+            "  border-radius: 6px;"
+            "}"
+            "QListWidget#ObjectsList::item:selected {"
+            f"  background: {accent};"
+            "  color: #ffffff;"
+            "}"
+            "QPushButton#ObjectsButton {"
+            f"  background: {input_bg};"
+            f"  color: {panel_text};"
+            f"  border: 1px solid {panel_border};"
+            "  border-radius: 6px;"
+            "  padding: 4px 10px;"
+            "}"
+            "QPushButton#ObjectsButton:hover {"
+            f"  background: {button_hover};"
             "}"
         )
         self._update_filament_button_style()

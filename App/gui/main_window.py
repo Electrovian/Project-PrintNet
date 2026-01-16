@@ -11,6 +11,7 @@ from .Windows.control import ControlView
 from .Windows.files import FilesView
 from .Windows.activity import ActivityView
 from .Windows.shared_view import SharedView
+from .resource_paths import assets_dir
 from .Windows.controller import MainController
 from config.defaults import DEFAULTS
 from config.performance import resolve_performance_limits
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
     from .activity_logger import ActivityLogger
     from .crash_reporter import CrashReporter
 
-ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+ASSETS_DIR = assets_dir()
 
 
 class MainWindow(QtWidgets.QMainWindow):

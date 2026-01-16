@@ -10,12 +10,13 @@ from slicer import infill
 from slicer.geometry import polygons_with_holes
 
 class InfillTests(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         square = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0), (0.0, 0.0)]
-        self.islands = polygons_with_holes([square])
+        cls._islands = polygons_with_holes([square])
 
     def test_rectilinear_infill(self):
-        lines = infill.generate_infill(self.islands,
+        lines = infill.generate_infill(self._islands,
                                        density=0.25,
                                        angle_deg=45.0,
                                        layer_index=0,
@@ -24,13 +25,13 @@ class InfillTests(unittest.TestCase):
         self.assertGreater(len(lines), 0)
 
     def test_grid_infill(self):
-        lines_rect = infill.generate_infill(self.islands,
+        lines_rect = infill.generate_infill(self._islands,
                                             density=0.25,
                                             angle_deg=0.0,
                                             layer_index=0,
                                             extrusion_width=0.4,
                                             pattern="rectilinear")
-        lines_grid = infill.generate_infill(self.islands,
+        lines_grid = infill.generate_infill(self._islands,
                                             density=0.25,
                                             angle_deg=0.0,
                                             layer_index=0,
@@ -39,7 +40,7 @@ class InfillTests(unittest.TestCase):
         self.assertGreaterEqual(len(lines_grid), len(lines_rect))
 
     def test_triangle_infill(self):
-        lines = infill.generate_infill(self.islands,
+        lines = infill.generate_infill(self._islands,
                                        density=0.25,
                                        angle_deg=0.0,
                                        layer_index=0,

@@ -58,27 +58,40 @@ def _point_in_island(point: Point2D, island: Island2D) -> bool:
             return False
     return True
 
+def _triangle_centroid(tri: Sequence[Tuple[float, float, float]]) -> Tuple[float, float, float]:
+    cx = (tri[0][0] + tri[1][0] + tri[2][0]) / 3.0
+    cy = (tri[0][1] + tri[1][1] + tri[2][1]) / 3.0
+    cz = (tri[0][2] + tri[1][2] + tri[2][2]) / 3.0
+    return (cx, cy, cz)
+
 def _cluster_points(points: Sequence[Tuple[float, float, float]],
                     radius: float) -> List[Tuple[float, float, float]]:
     clusters: List[List[Tuple[float, float, float]]] = []
+    centers: List[Tuple[float, float]] = []
+    counts: List[int] = []
     r2 = radius * radius
     for point in points:
         added = False
-        for cluster in clusters:
-            cx = sum(p[0] for p in cluster) / len(cluster)
-            cy = sum(p[1] for p in cluster) / len(cluster)
-            dx = point[0] - cx
-            dy = point[1] - cy
+        for idx, center in enumerate(centers):
+            dx = point[0] - center[0]
+            dy = point[1] - center[1]
             if dx * dx + dy * dy <= r2:
-                cluster.append(point)
+                clusters[idx].append(point)
+                counts[idx] += 1
+                count = counts[idx]
+                centers[idx] = (
+                    center[0] + (point[0] - center[0]) / count,
+                    center[1] + (point[1] - center[1]) / count,
+                )
                 added = True
                 break
         if not added:
             clusters.append([point])
+            centers.append((point[0], point[1]))
+            counts.append(1)
     results: List[Tuple[float, float, float]] = []
-    for cluster in clusters:
-        x = sum(p[0] for p in cluster) / len(cluster)
-        y = sum(p[1] for p in cluster) / len(cluster)
+    for cluster, center in zip(clusters, centers):
+        x, y = center
         z = max(p[2] for p in cluster)
         results.append((x, y, z))
     return results
@@ -86,20 +99,28 @@ def _cluster_points(points: Sequence[Tuple[float, float, float]],
 def _cluster_nodes(nodes: Sequence[_TreeNode],
                    radius: float) -> List[List[_TreeNode]]:
     clusters: List[List[_TreeNode]] = []
+    centers: List[Tuple[float, float]] = []
+    counts: List[int] = []
     r2 = radius * radius
     for node in nodes:
         added = False
-        for cluster in clusters:
-            cx = sum(n.x for n in cluster) / len(cluster)
-            cy = sum(n.y for n in cluster) / len(cluster)
-            dx = node.x - cx
-            dy = node.y - cy
+        for idx, center in enumerate(centers):
+            dx = node.x - center[0]
+            dy = node.y - center[1]
             if dx * dx + dy * dy <= r2:
-                cluster.append(node)
+                clusters[idx].append(node)
+                counts[idx] += 1
+                count = counts[idx]
+                centers[idx] = (
+                    center[0] + (node.x - center[0]) / count,
+                    center[1] + (node.y - center[1]) / count,
+                )
                 added = True
                 break
         if not added:
             clusters.append([node])
+            centers.append((node.x, node.y))
+            counts.append(1)
     return clusters
 
 def generate_support_columns(mesh: MeshModel,
@@ -113,10 +134,7 @@ def generate_support_columns(mesh: MeshModel,
     triangles = mesh.overhang_triangles(settings.overhang_angle)
     points_xyz: List[Tuple[float, float, float]] = []
     for tri in triangles:
-        cx = (tri[0][0] + tri[1][0] + tri[2][0]) / 3.0
-        cy = (tri[0][1] + tri[1][1] + tri[2][1]) / 3.0
-        cz = (tri[0][2] + tri[1][2] + tri[2][2]) / 3.0
-        points_xyz.append((cx, cy, cz))
+        points_xyz.append(_triangle_centroid(tri))
 
     if not points_xyz:
         return []
@@ -174,9 +192,7 @@ def generate_tree_supports(mesh: MeshModel,
     triangles = mesh.overhang_triangles(settings.overhang_angle)
     points_xyz: List[Tuple[float, float, float]] = []
     for tri in triangles:
-        cx = (tri[0][0] + tri[1][0] + tri[2][0]) / 3.0
-        cy = (tri[0][1] + tri[1][1] + tri[2][1]) / 3.0
-        cz = (tri[0][2] + tri[1][2] + tri[2][2]) / 3.0
+        cx, cy, cz = _triangle_centroid(tri)
         for island in mask_islands:
             if _point_in_island((cx, cy), island):
                 points_xyz.append((cx, cy, cz))

@@ -18,8 +18,7 @@ def _rotate_lines(lines: Sequence[LineSegment2D], angle_rad: float) -> List[Line
     return [(_rotate_point(a, angle_rad), _rotate_point(b, angle_rad)) for a, b in lines]
 
 def _bounds(points: Sequence[Point2D]) -> Tuple[float, float, float, float]:
-    xs = [p[0] for p in points]
-    ys = [p[1] for p in points]
+    xs, ys = zip(*points)
     return min(xs), max(xs), min(ys), max(ys)
 
 def _line_spacing(density: float, extrusion_width: float, directions: int) -> float:

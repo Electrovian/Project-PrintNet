@@ -1,19 +1,10 @@
 import unittest
 
-try:
-    from PyQt5 import QtWidgets
-except Exception:  # pragma: no cover - optional dependency in tests
-    QtWidgets = None
-
+from qt_harness import QtTestCase
 from slicer.gcode.writer import SliceSettings
 
 
-@unittest.skipIf(QtWidgets is None, "PyQt5 not available")
-class SettingsPanelTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        assert QtWidgets is not None
-        cls._app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+class SettingsPanelTests(QtTestCase):
 
     def test_apply_settings_roundtrip(self):
         from gui.settings_panel import SettingsPanel

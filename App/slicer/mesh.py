@@ -69,9 +69,9 @@ class MeshModel:
         triangles = []
         for face in faces:
             v0, v1, v2 = vertices[face]
-            triangles.append((tuple(v0.tolist()),
-                              tuple(v1.tolist()),
-                              tuple(v2.tolist())))
+            triangles.append((tuple(v0),
+                              tuple(v1),
+                              tuple(v2)))
         return triangles
 
     def slice_layer(self, z_height: float, tolerance: float = 0.0) -> List[Island2D]:
@@ -134,7 +134,9 @@ def _estimate_islands_bytes(islands: List[Island2D]) -> int:
             point_count += len(hole)
     if point_count <= 0:
         return 0
-    return int(point_count * 32)
+    # Roughly 20-30% higher than the previous estimate to account for list/tuple overhead.
+    bytes_per_point = 40
+    return int(point_count * bytes_per_point)
 
 
 def _apply_default_cache_limit(model: MeshModel):

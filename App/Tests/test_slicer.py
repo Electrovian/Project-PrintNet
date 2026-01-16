@@ -30,8 +30,13 @@ def is_closed(points, tol=1e-8):
             and math.isclose(points[0][1], points[-1][1], abs_tol=tol))
 
 class LayerPerimeterTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._box_unit = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+        cls._box_wide = trimesh.creation.box(extents=(2.0, 2.0, 1.0))
+
     def test_generate_layer_perimeters_box(self):
-        mesh = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+        mesh = self._box_unit.copy()
         model = MeshModel(path="<memory>", mesh=mesh)
         settings = SliceSettings(perimeter_count=1, extrusion_width=0.2)
         layers = generate_layer_perimeters(model, [0.0], settings=settings)
@@ -48,7 +53,7 @@ class LayerPerimeterTests(unittest.TestCase):
         self.assertLess(polygon_area(island.outer), 0.0)
 
     def test_generate_layer_perimeters_multi_shell(self):
-        mesh = trimesh.creation.box(extents=(2.0, 2.0, 1.0))
+        mesh = self._box_wide.copy()
         model = MeshModel(path="<memory>", mesh=mesh)
         settings = SliceSettings(perimeter_count=3, extrusion_width=0.2)
         layers = generate_layer_perimeters(model, [0.0], settings=settings)
@@ -57,7 +62,7 @@ class LayerPerimeterTests(unittest.TestCase):
         self.assertEqual(len(layer.shells), 3)
 
     def test_generate_layer_plans_top_bottom(self):
-        mesh = trimesh.creation.box(extents=(2.0, 2.0, 1.0))
+        mesh = self._box_wide.copy()
         model = MeshModel(path="<memory>", mesh=mesh)
         settings = SliceSettings(infill_density=0.2,
                                  infill_angle=30.0,
@@ -79,7 +84,7 @@ class LayerPerimeterTests(unittest.TestCase):
         self.assertIsNotNone(plan.layers[-1].ironing)
 
     def test_brim_skirt_and_raft(self):
-        mesh = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+        mesh = self._box_unit.copy()
         model = MeshModel(path="<memory>", mesh=mesh)
         settings = SliceSettings(extrusion_width=0.2,
                                  brim_width=0.6,
@@ -99,7 +104,7 @@ class LayerPerimeterTests(unittest.TestCase):
         self.assertGreater(plan.layers[0].z, z_heights[0])
 
     def test_build_z_heights_manual_ranges(self):
-        mesh = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+        mesh = self._box_unit.copy()
         mesh.apply_translation((0.0, 0.0, 0.5))
         model = MeshModel(path="<memory>", mesh=mesh)
         settings = SliceSettings(layer_height=0.2,
@@ -115,7 +120,7 @@ class LayerPerimeterTests(unittest.TestCase):
         self.assertAlmostEqual(heights[-1], 1.0, places=4)
 
     def test_build_z_heights_adaptive_override(self):
-        mesh = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+        mesh = self._box_unit.copy()
         mesh.apply_translation((0.0, 0.0, 0.5))
         model = MeshModel(path="<memory>", mesh=mesh)
         settings = SliceSettings(layer_height=0.2,

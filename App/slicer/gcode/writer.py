@@ -198,11 +198,12 @@ class SliceSettings:
         self.supports_arcs = bool(self.supports_arcs)
 
         def _width_or_default(value: float, fallback: float) -> float:
+            fallback_value = float(fallback)
             try:
                 numeric = float(value)
             except (TypeError, ValueError):
-                return float(fallback)
-            return float(fallback) if numeric <= 0.0 else float(numeric)
+                return fallback_value
+            return fallback_value if numeric <= 0.0 else numeric
 
         self.seam_position = str(self.seam_position).strip().lower() or "aligned"
         self.staggered_inner_seams = bool(self.staggered_inner_seams)
@@ -318,9 +319,7 @@ class SliceSettings:
         if ironing_flag and self.ironing_type == "no_ironing":
             self.ironing_type = "all_top_surfaces"
         self.ironing_enabled = self.ironing_type != "no_ironing"
-        self.brim_width = max(0.0, float(self.brim_width))
         self.brim_type = str(self.brim_type).strip().lower() or "auto"
-        self.skirt_loops = max(0, int(self.skirt_loops))
         self.skirt_height = max(0, int(self.skirt_height))
         self.print_sequence = str(self.print_sequence).strip().lower() or "by_layer"
         self.spiral_vase = bool(self.spiral_vase)

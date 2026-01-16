@@ -8,6 +8,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from slicer.gcode.writer import SliceSettings
 from config.defaults import DEFAULTS
 from ..theme import theme_css
+from ..model_panel import ModelPanel
 from .multifilament import MultifilamentSectionMixin
 from .others import OtherSectionMixin
 from .quality import QualitySectionMixin
@@ -377,6 +378,7 @@ class SettingsPanel(
             self._scope_buttons[name.lower()] = btn
             process_layout.addWidget(btn)
         self._scope_buttons["global"].setChecked(True)
+        self._scope_group.buttonClicked.connect(self._on_scope_changed)
 
         process_layout.addStretch(1)
 
@@ -422,9 +424,6 @@ class SettingsPanel(
         root.addWidget(row)
 
     def _build_content(self, root: QtWidgets.QVBoxLayout):
-        content = QtWidgets.QHBoxLayout()
-        content.setSpacing(6)
-
         nav = QtWidgets.QFrame(self)
         nav.setObjectName("SettingsNav")
         nav_layout = QtWidgets.QVBoxLayout(nav)
@@ -455,11 +454,9 @@ class SettingsPanel(
                 btn.setChecked(True)
 
         nav_layout.addStretch(1)
-        content.addWidget(nav, 0)
 
         self._pages_stack = QtWidgets.QStackedWidget(self)
         self._pages_stack.setObjectName("SettingsPages")
-        content.addWidget(self._pages_stack, 1)
 
         self._build_quality_page()
         self._build_strength_page()
@@ -467,7 +464,36 @@ class SettingsPanel(
         self._build_multifilament_page()
         self._build_other_page()
 
-        root.addLayout(content, 1)
+        settings_container = QtWidgets.QWidget(self)
+        settings_layout = QtWidgets.QHBoxLayout(settings_container)
+        settings_layout.setContentsMargins(0, 0, 0, 0)
+        settings_layout.setSpacing(6)
+        settings_layout.addWidget(nav, 0)
+        settings_layout.addWidget(self._pages_stack, 1)
+
+        objects_container = QtWidgets.QWidget(self)
+        objects_layout = QtWidgets.QVBoxLayout(objects_container)
+        objects_layout.setContentsMargins(0, 0, 0, 0)
+        objects_layout.setSpacing(6)
+        self.model_panel = ModelPanel(self)
+        objects_layout.addWidget(self.model_panel, 1)
+
+        self._scope_stack = QtWidgets.QStackedWidget(self)
+        self._scope_stack.setObjectName("SettingsScope")
+        self._scope_stack.addWidget(settings_container)
+        self._scope_stack.addWidget(objects_container)
+
+        root.addWidget(self._scope_stack, 1)
+
+    def _on_scope_changed(self, button):
+        if not hasattr(self, "_scope_stack"):
+            return
+        text = (button.text() if button is not None else "").strip().lower()
+        if text == "objects":
+            self._scope_stack.setCurrentIndex(1)
+        else:
+            self._scope_stack.setCurrentIndex(0)
+            self._apply_search_filter(self._search_input.text())
 
     def _build_tooltip_defs(self) -> Dict[str, dict]:
         return {

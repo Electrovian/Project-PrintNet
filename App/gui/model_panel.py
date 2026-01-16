@@ -14,25 +14,31 @@ class ModelPanel(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("ObjectsPanel")
         self._build_ui()
 
     def _build_ui(self):
         layout = QtWidgets.QVBoxLayout(self)
 
         self.list_widget = QtWidgets.QListWidget()
+        self.list_widget.setObjectName("ObjectsList")
         self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         layout.addWidget(self.list_widget)
 
         select_row = QtWidgets.QHBoxLayout()
         self.select_all_btn = QtWidgets.QPushButton("Select all")
+        self.select_all_btn.setObjectName("ObjectsButton")
         self.clear_selection_btn = QtWidgets.QPushButton("Clear selection")
+        self.clear_selection_btn.setObjectName("ObjectsButton")
         select_row.addWidget(self.select_all_btn)
         select_row.addWidget(self.clear_selection_btn)
         layout.addLayout(select_row)
 
         btn_row = QtWidgets.QHBoxLayout()
         self.duplicate_btn = QtWidgets.QPushButton("Duplicate")
+        self.duplicate_btn.setObjectName("ObjectsButton")
         self.remove_btn = QtWidgets.QPushButton("Remove selected")
+        self.remove_btn.setObjectName("ObjectsButton")
         btn_row.addWidget(self.duplicate_btn)
         btn_row.addStretch(1)
         btn_row.addWidget(self.remove_btn)

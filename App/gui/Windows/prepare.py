@@ -3,7 +3,6 @@ from PyQt5 import QtWidgets, QtCore
 from ..viewer import Viewer3D
 from ..settings_panel import SettingsPanel
 from ..controls import TransformToolbar
-from ..model_panel import ModelPanel
 from ..popups import MovePopup, RotatePopup, ScalePopup, AutoOrientPopup, ArrangePopup
 from ..theme import theme_css
 
@@ -26,23 +25,17 @@ class PrepareView(QtCore.QObject):
         settings_dock = QtWidgets.QDockWidget("Printer", self.main)
         settings_dock.setWidget(settings_panel)
         settings_dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
-        self.main.addDockWidget(QtCore.Qt.RightDockWidgetArea, settings_dock)
+        self.main.addDockWidget(QtCore.Qt.LeftDockWidgetArea, settings_dock)
 
-        model_panel = ModelPanel(self.main)
-        model_dock = QtWidgets.QDockWidget("Models", self.main)
-        model_dock.setWidget(model_panel)
-        model_dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
-        self.main.addDockWidget(QtCore.Qt.LeftDockWidgetArea, model_dock)
+        model_panel = settings_panel.model_panel
 
         self.settings_panel = settings_panel
         self.model_panel = model_panel
         self._settings_dock = settings_dock
-        self._model_dock = model_dock
 
         self.main.settings_panel = settings_panel
         self.main.model_panel = model_panel
         self.main._settings_dock = settings_dock
-        self.main._model_dock = model_dock
 
     def _build_toolbar(self):
         toolbar = TransformToolbar(self.main)
@@ -108,16 +101,14 @@ class PrepareView(QtCore.QObject):
         self._action_panel.move(x, y)
 
     def show(self):
-        for dock in (self._settings_dock, self._model_dock):
-            dock.show()
+        self._settings_dock.show()
         self.transform_toolbar.show()
         self._action_panel.show()
         self._action_panel.raise_()
         self.position_panels()
 
     def hide(self):
-        for dock in (self._settings_dock, self._model_dock):
-            dock.hide()
+        self._settings_dock.hide()
         self.transform_toolbar.hide()
         self._action_panel.hide()
         for popup in (

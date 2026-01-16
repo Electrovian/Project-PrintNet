@@ -4,9 +4,10 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 
 from ..theme import THEMES, get_theme_name, theme_css, theme_qcolor
 from ..shortcuts import shortcut_key, shortcut_label, shortcuts_by_category
+from ..resource_paths import assets_dir
 from config.defaults import DEFAULTS
 
-ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "assets")
+ASSETS_DIR = assets_dir()
 
 
 class SharedView(QtCore.QObject):

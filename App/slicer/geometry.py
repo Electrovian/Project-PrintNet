@@ -63,11 +63,10 @@ def _polygon_area(points: Sequence[Point2D]) -> float:
     if len(points) < 3:
         return 0.0
     area = 0.0
-    count = len(points)
-    for i in range(count):
-        x1, y1 = points[i]
-        x2, y2 = points[(i + 1) % count]
+    x1, y1 = points[-1]
+    for x2, y2 in points:
         area += x1 * y2 - x2 * y1
+        x1, y1 = x2, y2
     return 0.5 * area
 
 def _require_pyclipper() -> Any:
@@ -95,22 +94,23 @@ def _polygon_centroid(points: Sequence[Point2D]) -> Point2D:
         avg_y = sum(p[1] for p in base) / len(base)
         return (avg_x, avg_y)
 
-    area = _polygon_area(base)
-    if abs(area) < 1e-9:
+    area2 = 0.0
+    cx = 0.0
+    cy = 0.0
+    x1, y1 = base[-1]
+    for x2, y2 in base:
+        cross = x1 * y2 - x2 * y1
+        area2 += cross
+        cx += (x1 + x2) * cross
+        cy += (y1 + y2) * cross
+        x1, y1 = x2, y2
+
+    if abs(area2) < 1e-9:
         avg_x = sum(p[0] for p in base) / len(base)
         avg_y = sum(p[1] for p in base) / len(base)
         return (avg_x, avg_y)
 
-    cx = 0.0
-    cy = 0.0
-    count = len(base)
-    for i in range(count):
-        x1, y1 = base[i]
-        x2, y2 = base[(i + 1) % count]
-        cross = x1 * y2 - x2 * y1
-        cx += (x1 + x2) * cross
-        cy += (y1 + y2) * cross
-    scale = 1.0 / (6.0 * area)
+    scale = 1.0 / (3.0 * area2)
     return (cx * scale, cy * scale)
 
 def _is_circular_polygon(points: Sequence[Point2D],
@@ -163,10 +163,11 @@ def lowest_planar_face(vertices: np.ndarray,
         except Exception:
             continue
         n = np.cross(b - a, c - a)
-        area = float(np.linalg.norm(n) * 0.5)
-        if area <= 1e-9:
+        n_norm = float(np.linalg.norm(n))
+        if n_norm <= 1e-9:
             continue
-        n_unit = n / max(1e-9, float(np.linalg.norm(n)))
+        area = n_norm * 0.5
+        n_unit = n / max(1e-9, n_norm)
         dot = float(np.dot(n_unit, axis))
         if abs(dot) < normal_threshold:
             continue

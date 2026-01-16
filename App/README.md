@@ -53,7 +53,10 @@ production slicer.
    cd App
    ```
 
-5. **Create a virtual environment (recommended)**
+5. **Optional: create a local virtual environment**
+
+   This repo does not include a venv. You can skip this step and use your
+   system Python, or create a local venv for isolation.
 
    In VS Code, open a terminal (``Ctrl+` ``) and run:
 
@@ -69,7 +72,7 @@ production slicer.
      .venv\Scripts\Activate
      ```
 
-   VS Code should then detect the `.venv` interpreter.
+   VS Code should then detect the `.venv` interpreter if you created it.
 
 6. **Install dependencies**
 
