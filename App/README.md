@@ -1,6 +1,6 @@
-# OpenSlicer (Prototype)
+# EON-OpenSlicer (Prototype)
 
-OpenSlicer is a **prototype** open‑source 3D printing slicer and print manager.
+EON-OpenSlicer is a **prototype** open‑source 3D printing slicer and print manager.
 
 This version is intentionally lightweight: it has a functional PyQt GUI,
 STL preview, a very simple demo slicer that generates a single‑layer
@@ -10,7 +10,7 @@ production slicer.
 
 ## Features
 
-- Dark UI inspired by modern slicers (Creality / Bambu style).
+- Dark UI inspired by modern slicers (Bambu style).
 - Drag‑and‑drop STL loading.
 - 3D preview of the model.
 - Basic slicing demo that writes a simple square outline G‑code.
@@ -45,9 +45,18 @@ production slicer.
 3. **Open the folder in VS Code**
 
    - Start **Visual Studio Code**.
-   - `File -> Open Folder...` and select the `OpenSlicer` folder.
+   - `File -> Open Folder...` and select the `Project-EON-OpenSlicer` folder.
 
-4. **Create a virtual environment (recommended)**
+4. **Open a terminal and move into the app folder**
+
+   ```bash
+   cd App
+   ```
+
+5. **Optional: create a local virtual environment**
+
+   This repo does not include a venv. You can skip this step and use your
+   system Python, or create a local venv for isolation.
 
    In VS Code, open a terminal (``Ctrl+` ``) and run:
 
@@ -63,9 +72,9 @@ production slicer.
      .venv\Scripts\Activate
      ```
 
-   VS Code should then detect the `.venv` interpreter.
+   VS Code should then detect the `.venv` interpreter if you created it.
 
-5. **Install dependencies**
+6. **Install dependencies**
 
    In the same terminal:
 
@@ -73,14 +82,14 @@ production slicer.
    pip install -r requirements.txt
    ```
 
-6. **(Optional) Add `Printer Information.xlsx`**
+7. **(Optional) Add `Printer Information.xlsx`**
 
-   Place your `Printer Information.xlsx` file in the **root** of this
-   project (next to `main.py`).  
-   The loader is tolerant; if the file is missing it will just create a
-   dummy printer configuration.
+   Place your `Printer Information.xlsx` file in the `App` folder
+   (next to `main.py`).  
+   The loader is tolerant; if the file is missing it will create a
+   default MakerGear M3-SE configuration.
 
-7. **Run the app**
+8. **Run the app**
 
    In VS Code:
 
@@ -91,7 +100,7 @@ production slicer.
      python main.py
      ```
 
-   A window titled **OpenSlicer** should appear.  
+   A window titled **EON-OpenSlicer** should appear.  
    Drag an STL file onto the build plate area or use **File → Open STL**.
 
 ---

@@ -1,4 +1,4 @@
-# OctoPrint Overview and How It Relates to PrintNet
+# OctoPrint Overview and How It Relates to EON-OpenSlicer
 Author: Muneer Al-Khasawneh (alkhasme)  
 Course: CS 5001 – Senior Design  
 
@@ -21,15 +21,15 @@ A typical OctoPrint setup includes:
 - **Web client** accessing OctoPrint via LAN/WiFi  
 - **REST API + WebSocket** for external integrations  
 
-## 3. Relevance to PrintNet
+## 3. Relevance to EON-OpenSlicer
 
-PrintNet can use OctoPrint as the **low-level controller** for each printer:
+EON-OpenSlicer can use OctoPrint as the **low-level controller** for each printer:
 - Communicate via REST API  
 - Read temps, status, print progress  
 - Start or cancel prints  
 - Retrieve logs and webcam snapshots  
 
-This allows PrintNet to focus on:
+This allows EON-OpenSlicer to focus on:
 - Multi-printer dashboards  
 - Student-friendly UI  
 - Queue management  
@@ -47,9 +47,9 @@ Weaknesses:
 - UI is complex for beginners  
 - Limited built-in fleet management  
 
-## 5. Potential Use in PrintNet
+## 5. Potential Use in EON-OpenSlicer
 
-PrintNet could:
+EON-OpenSlicer could:
 - Poll each OctoPrint instance  
 - Build a central dashboard  
 - Provide simple "Beginner Modes"  

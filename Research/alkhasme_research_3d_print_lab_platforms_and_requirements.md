@@ -1,17 +1,17 @@
-# Existing 3D Printing Management Platforms and Requirements for PrintNet  
+# Existing 3D Printing Management Platforms and Requirements for EON-OpenSlicer  
 Author: Muneer Al-Khasawneh (alkhasme)  
 Course: CS 5001 – Senior Design  
 
-## 1. Purpose of PrintNet
+## 1. Purpose of EON-OpenSlicer
 
-PrintNet is intended to be a centralized platform for:
+EON-OpenSlicer is intended to be a centralized platform for:
 - Managing multiple 3D printers  
 - Student print submissions  
 - Queueing and job scheduling  
 - Lab staff oversight  
 - Analytics and reporting  
 
-Many 3D printing labs rely on SD cards, email, or scattered tools to manage prints. PrintNet is designed to provide a more centralized and streamlined workflow.
+Many 3D printing labs rely on SD cards, email, or scattered tools to manage prints. EON-OpenSlicer is designed to provide a more centralized and streamlined workflow.
 
 ## 2. Survey of Existing Systems
 
@@ -43,9 +43,9 @@ Across all platforms:
 - Analytics matter for admins  
 - Students need simple workflows  
 
-PrintNet should include these patterns.
+EON-OpenSlicer should include these patterns.
 
-## 4. Early Requirements for PrintNet
+## 4. Early Requirements for EON-OpenSlicer
 
 ### **Functional Requirements**
 1. User authentication  
@@ -68,8 +68,8 @@ As the teammate responsible for:
 - **Hardware integration**  
 
 This research helps define:
-- How PrintNet stores data  
+- How EON-OpenSlicer stores data  
 - How it communicates with printers  
 - How lab analytics and job logs are structured  
 
-This gives us the foundation for PrintNet’s backend architecture.
+This gives us the foundation for EON-OpenSlicer’s backend architecture.

@@ -1,4 +1,4 @@
-# Frontend Data Binding for PrintNet
+# Frontend Data Binding for EON-OpenSlicer
 Author: Mo Al-Khasawneh (alkhasmr)
 
 ## 1. Overview
@@ -7,7 +7,7 @@ Data binding refers to connecting the user interface to backend data so updates 
 Many educational and lab systems use data binding to update job status without refreshing pages.
 
 ## 2. Why It Matters
-For PrintNet:
+For EON-OpenSlicer:
 - Students need live status updates
 - TAs need to see queue changes
 - Lab managers need failure notifications
@@ -19,7 +19,7 @@ Common options include:
 - Framework-level binding (e.g., React, Vue)
 
 ## 4. Planned Usage
-PrintNet may use:
+EON-OpenSlicer may use:
 - API calls to retrieve job status
 - Automatic UI refresh when status changes
 

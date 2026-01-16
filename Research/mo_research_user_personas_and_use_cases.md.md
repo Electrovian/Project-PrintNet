@@ -1,9 +1,9 @@
-# User Personas and Use Cases for PrintNet
+# User Personas and Use Cases for EON-OpenSlicer
 Author: Mo Al-Khasawneh (alkhasmr)  
 Course: CS 5001 – Senior Design
 
 ## 1. Overview
-This document outlines who will use PrintNet and how they are expected to interact with the system.  
+This document outlines who will use EON-OpenSlicer and how they are expected to interact with the system.  
 The goal is to translate high-level ideas into concrete user personas and typical use cases.
 
 Some details are based on common practices in university 3D printing labs and may need validation with UC lab staff later.

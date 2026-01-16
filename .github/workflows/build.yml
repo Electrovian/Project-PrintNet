@@ -1,0 +1,65 @@
+name: build-app
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r App/requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name EON-OpenSlicer --paths App --add-data "App/assets;assets" App/main.py
+          Compress-Archive -Path dist/EON-OpenSlicer.exe -DestinationPath EON-OpenSlicer-windows.zip
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name EON-OpenSlicer --paths App --add-data "App/assets:assets" App/main.py
+          chmod +x dist/EON-OpenSlicer
+          zip -j EON-OpenSlicer-linux.zip dist/EON-OpenSlicer
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: EON-OpenSlicer-${{ runner.os }}
+          path: EON-OpenSlicer-*.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+          merge-multiple: true
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-artifacts/EON-OpenSlicer-*.zip

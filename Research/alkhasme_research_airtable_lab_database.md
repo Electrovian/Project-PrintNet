@@ -13,9 +13,9 @@ Airtable is a cloud platform that mixes a spreadsheet UI with a real database un
 
 This makes it an ideal backend for early-stage prototypes.
 
-## 2. Why Use Airtable for PrintNet?
+## 2. Why Use Airtable for EON-OpenSlicer?
 
-For v1 of PrintNet, Airtable provides:
+For v1 of EON-OpenSlicer, Airtable provides:
 - Easy schema creation
 - Built-in UI for lab managers
 - Quick integration with our backend via REST API
@@ -84,9 +84,9 @@ Useful views:
 - Student print history  
 - Material inventory  
 
-## 5. Integration with PrintNet Backend
+## 5. Integration with EON-OpenSlicer Backend
 
-PrintNet can:
+EON-OpenSlicer can:
 - Create new job records  
 - Update job status from OctoPrint  
 - Log failures and completions  

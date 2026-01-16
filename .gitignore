@@ -1,1 +1,8 @@
 .venv/
+/App/.venv/
+/App/Tests/test objects
+logs
+/logs
+__pycache__/
+*.pyc
+Test Files

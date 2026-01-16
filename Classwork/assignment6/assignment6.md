@@ -1,0 +1,77 @@
+# Assignment #6
+
+Source: `Assignment #6`
+
+# 3D Print Lab Management System – Assignment #6
+### Milestones, Timeline, and Effort Matrix  
+**Team Members:**  
+- Mitchell Koski  
+- Muhanad Al-Khasawneh  
+- Muneer Al-Khasawneh  
+
+---
+
+## 🧱 Milestones List (15 Detailed Milestones)
+
+| # | Milestone | Description |
+|:-:|------------|-------------|
+| **1** | **Team Setup & Toolchain Configuration** | Establish GitHub repo, communication channels, and shared workspace. Verify Docker, Airtable, and Python/Node environments on all systems. |
+| **2** | **Requirements & Use-Case Specification** | Define user roles (Student, Manager, Admin), data flow, and printer control requirements. Document functional and non-functional needs. |
+| **3** | **System Architecture & Design Diagrams** | Create architecture diagram showing Airtable ↔ API ↔ OctoPrint ↔ Database. Finalize entity relations and request/response schema. |
+| **4** | **Docker Infrastructure Setup** | Build Docker Compose with PostgreSQL, API container, and optional print-simulator container. Confirm inter-container networking. |
+| **5** | **Database Schema & API Base Routes** | Design tables for Users, Print Jobs, Printers, and Logs. Implement `/jobs`, `/users`, `/printers` base endpoints. |
+| **6** | **Airtable Integration Layer** | Connect Airtable form submission to backend endpoints using REST API keys. Validate field mapping and error handling. |
+| **7** | **Printer Communication Module** | Implement OctoPrint API client for job queueing, start/stop commands, and job status retrieval from printer IPs. |
+| **8** | **Authentication & Role-Based Access Control** | Add login/session logic for Admins and Managers. Define access scopes for create/approve/monitor actions. |
+| **9** | **User Interface & Approval Workflow** | Develop Airtable views and filters to display print queue, approval states, and printer availability for Managers/Admins. |
+| **10** | **Job Monitoring & Logging Subsystem** | Store print progress, temperature, and timestamps. Build periodic job-status poller and database logger. |
+| **11** | **Analytics & Dashboard Metrics** | Add Airtable-linked or Looker-Studio view summarizing total prints, filament usage, and printer uptime. |
+| **12** | **System Testing & Bug Resolution** | Conduct unit, integration, and end-to-end testing. Simulate print submissions from multiple users and handle failures gracefully. |
+| **13** | **Deployment & Security Hardening** | Host backend on club server or VM. Implement HTTPS, API key rotation, and firewall configuration for printer subnet. |
+| **14** | **Demo Video & Documentation** | Record 5-min demo showing submission-to-print flow. Write README with installation and configuration steps. |
+| **15** | **Final Evaluation & Future Improvements** | Gather feedback from testers, document enhancement ideas (multi-printer scheduling, maintenance logging, etc.), and finalize PDF submission. |
+
+---
+
+## 📅 Table 1. Project Timeline (14 Weeks)
+
+| Week # | Task | Start Date | End Date | Responsible Member(s) | Related Milestone |
+|:--:|:--|:--:|:--:|:--|:--|
+| **1** | Establish team repo, tools, and baseline environment | Oct 7 2025 | Oct 13 2025 | Mitchell + Muhanad + Muneer | 1 |
+| **2** | Draft requirements and user stories | Oct 14 2025 | Oct 20 2025 | Muneer (lead) + all review | 2 |
+| **3** | Create system design diagrams and database ER model | Oct 21 2025 | Oct 27 2025 | Muhanad (lead) + Mitchell | 3 |
+| **4** | Build Docker Compose and test network linking | Oct 28 2025 | Nov 3 2025 | Mitchell (lead) + Muhanad | 4 |
+| **5** | Implement core database schema and API base endpoints | Nov 4 2025 | Nov 10 2025 | Mitchell (lead) + Muhanad | 5 |
+| **6** | Integrate Airtable form submission to backend | Nov 11 2025 | Nov 17 2025 | Muhanad (lead) + Mitchell | 6 |
+| **7** | Implement printer communication via OctoPrint API | Nov 18 2025 | Nov 24 2025 | Mitchell (lead) + Muneer | 7 |
+| **8** | Add authentication + role-based access control | Nov 25 2025 | Dec 1 2025 | Muneer (lead) + Mitchell | 8 |
+| **9** | Design Airtable UI views and approval workflow | Dec 2 2025 | Dec 8 2025 | Muneer (lead) + Muhanad | 9 |
+| **10** | Develop logging subsystem for printer job data | Dec 9 2025 | Dec 15 2025 | Muhanad (lead) + Mitchell | 10 |
+| **11** | Build analytics dashboard and performance metrics | Dec 16 2025 | Dec 22 2025 | Muhanad (lead) | 11 |
+| **12** | Conduct full system testing and bug fixing | Dec 23 2025 | Dec 29 2025 | All Members | 12 |
+| **13** | Deploy on server and apply security measures | Dec 30 2025 | Jan 5 2026 | Mitchell (lead) + Muhanad | 13 |
+| **14** | Create demo video, documentation, and submit final | Jan 6 2026 | Jan 13 2026 | All Members | 14 & 15 |
+
+---
+
+## 🧮 Table 2. Effort Matrix (Estimated Hours)
+
+| Task # | Task Name | Mitchell Koski | Muhanad Al-Khasawneh | Muneer Al-Khasawneh |
+|:--:|:--|:--:|:--:|:--:|
+| 1 | Repo & Toolchain Setup | 6 h (50%) | 3 h (25%) | 3 h (25%) |
+| 2 | Requirements Analysis | 3 h (25%) | 3 h (25%) | 6 h (50%) |
+| 3 | Architecture & ER Design | 4 h (40%) | 6 h (60%) | — |
+| 4 | Docker Infrastructure | 8 h (70%) | 3 h (30%) | — |
+| 5 | Database & API Base Routes | 9 h (70%) | 4 h (30%) | — |
+| 6 | Airtable Integration | 4 h (30%) | 9 h (70%) | — |
+| 7 | Printer API Module | 9 h (75%) | 2 h (15%) | 1 h (10%) |
+| 8 | Authentication & Roles | 3 h (25%) | 2 h (15%) | 7 h (60%) |
+| 9 | UI & Workflow Design | 2 h (15%) | 3 h (20%) | 9 h (65%) |
+| 10 | Logging Subsystem | 4 h (30%) | 9 h (70%) | — |
+| 11 | Analytics Dashboard | 2 h (20%) | 8 h (80%) | — |
+| 12 | Testing & Debugging | 5 h (33%) | 5 h (33%) | 5 h (33%) |
+| 13 | Deployment & Security | 8 h (70%) | 3 h (30%) | — |
+| 14 | Documentation & Demo | 3 h (33%) | 3 h (33%) | 3 h (33%) |
+| **Totals (≈)** |  | **70 h** | **60 h** | **37 h** |
+
+---

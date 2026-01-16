@@ -1,7 +1,11 @@
 import os
+import os
 from typing import List, Tuple, Dict
 
 import pandas as pd
+
+from .defaults import DEFAULTS
+from .printers_catalog import PRINTER_CATALOG
 
 EXCEL_FILE = "Printer Information.xlsx"
 
@@ -18,6 +22,8 @@ def load_printer_config() -> Tuple[List[Dict], Dict]:
         (printers, airtable_cfg)
     """
     printers = []
+    printer_defaults = DEFAULTS.get("printer", {})
+    base_name = str(printer_defaults.get("name", "MakerGear M3-SE")).strip() or "MakerGear M3-SE"
     airtable_cfg = {
         "api_key": "",
         "base_id": "",
@@ -32,12 +38,13 @@ def load_printer_config() -> Tuple[List[Dict], Dict]:
             df = xls.parse(xls.sheet_names[0])
             for _, row in df.iterrows():
                 printers.append({
-                    "name": str(row.get("Name", "MakerGear M3")),
+                    "name": str(row.get("Name", base_name)),
                     "octoprint_url": str(row.get("OctoPrintURL", "http://localhost")),
                     "octoprint_api_key": str(row.get("OctoPrintAPIKey", "")),
                     "bed_x": float(row.get("BedX", 200)),
                     "bed_y": float(row.get("BedY", 200)),
                     "bed_z": float(row.get("BedZ", 200)),
+                    "catalog_only": False,
                 })
             # Airtable sheet (optional)
             if "Airtable" in xls.sheet_names:
@@ -50,15 +57,44 @@ def load_printer_config() -> Tuple[List[Dict], Dict]:
                     airtable_cfg["status_field"] = str(row.get("StatusField", "Status"))
         except Exception as exc:
             print(f"[printer_config] Failed to parse Excel config: {exc}")
-    else:
-        # Fallback dummy printer
-        printers.append({
-            "name": "Dummy M3",
-            "octoprint_url": "http://localhost",
-            "octoprint_api_key": "",
-            "bed_x": 200.0,
-            "bed_y": 200.0,
-            "bed_z": 200.0,
-        })
+
+    if PRINTER_CATALOG:
+        existing = {str(p.get("name", "")).strip().lower() for p in printers}
+        for entry in PRINTER_CATALOG:
+            name = str(entry.get("name", "")).strip()
+            if not name:
+                continue
+            if name.lower() in existing:
+                continue
+            catalog_entry = dict(entry)
+            catalog_entry.setdefault("catalog_only", True)
+            printers.append(catalog_entry)
+            existing.add(name.lower())
+
+    bed_size = printer_defaults.get("bed_size", (200, 200))
+    bed_x = float(bed_size[0]) if len(bed_size) > 0 else 200.0
+    bed_y = float(bed_size[1]) if len(bed_size) > 1 else 200.0
+    bed_z = float(printer_defaults.get("max_height", 200.0))
+    base_printer = {
+        "name": base_name,
+        "octoprint_url": "http://localhost",
+        "octoprint_api_key": "",
+        "bed_x": bed_x,
+        "bed_y": bed_y,
+        "bed_z": bed_z,
+        "catalog_only": False,
+    }
+    existing_base = None
+    remaining = []
+    for printer in printers:
+        if str(printer.get("name", "")).strip().lower() == base_name.lower():
+            if existing_base is None:
+                existing_base = printer
+            else:
+                remaining.append(printer)
+        else:
+            remaining.append(printer)
+    printers = remaining
+    printers.insert(0, existing_base or base_printer)
 
     return printers, airtable_cfg
