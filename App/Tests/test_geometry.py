@@ -85,6 +85,25 @@ class GeometryValidationTests(unittest.TestCase):
         self.assertAlmostEqual(sum(xs) / len(xs), 0.0, places=3)
         self.assertAlmostEqual(sum(ys) / len(ys), 0.0, places=3)
 
+    def test_slice_mesh_preserves_translation(self):
+        mesh = trimesh.creation.box(extents=(2.0, 4.0, 2.0))
+        translation = np.array([10.0, -5.0, 0.0], dtype=float)
+        mesh.apply_translation(translation)
+        loops = geometry.slice_mesh(mesh, z_height=0.0)
+        self.assertGreater(len(loops), 0)
+        xs = []
+        ys = []
+        for loop in loops:
+            for x, y in loop[:-1]:
+                xs.append(x)
+                ys.append(y)
+        self.assertGreater(len(xs), 0)
+        self.assertGreater(len(ys), 0)
+        center_x = (min(xs) + max(xs)) / 2.0
+        center_y = (min(ys) + max(ys)) / 2.0
+        self.assertAlmostEqual(center_x, translation[0], places=3)
+        self.assertAlmostEqual(center_y, translation[1], places=3)
+
     def test_thin_wall_lines(self):
         thin_rect = [(0.0, 0.0), (0.3, 0.0), (0.3, 5.0), (0.0, 5.0), (0.0, 0.0)]
         islands = geometry.polygons_with_holes([thin_rect])
