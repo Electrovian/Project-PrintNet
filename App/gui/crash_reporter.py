@@ -1,7 +1,10 @@
+import faulthandler
+import json
 import os
 import platform
 import sys
 import threading
+import time
 import traceback
 from datetime import datetime
 from urllib.parse import quote
@@ -41,6 +44,15 @@ class CrashReporter:
         self._handled_once = False
         self._prev_hook = None
         self._prev_thread_hook = None
+        self._watchdog_thread = None
+        self._heartbeat_timer = None
+        self._last_heartbeat = None
+        self._watchdog_interval = None
+        self._watchdog_timeout = None
+        self._hang_handled = False
+        self._main_thread_id = threading.main_thread().ident
+        self._fault_file = None
+        self._fault_path = None
 
     def install(self):
         if self._installed:
@@ -51,6 +63,60 @@ class CrashReporter:
         if hasattr(threading, "excepthook"):
             self._prev_thread_hook = threading.excepthook
             threading.excepthook = self._thread_excepthook
+
+    def install_faulthandler(self):
+        if self._fault_file is not None:
+            return
+        try:
+            os.makedirs(self.log_dir, exist_ok=True)
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self._fault_path = os.path.join(self.log_dir, f"fault_{stamp}.log")
+            self._fault_file = open(self._fault_path, "w", encoding="utf-8")
+            self._fault_file.write(f"timestamp: {_utc_timestamp()}\n")
+            self._fault_file.write(f"python: {sys.version}\n")
+            self._fault_file.write(f"platform: {platform.platform()}\n")
+            self._fault_file.write("\n")
+            self._fault_file.flush()
+            faulthandler.enable(file=self._fault_file, all_threads=True)
+        except Exception:
+            self._fault_file = None
+
+    def install_watchdog(self, app, interval_ms: int = 500, timeout_s: float = 12.0):
+        if app is None or self._watchdog_thread is not None:
+            return
+        self._main_thread_id = threading.main_thread().ident
+        self._watchdog_interval = max(100, int(interval_ms))
+        self._watchdog_timeout = max(1.0, float(timeout_s))
+        self._last_heartbeat = time.monotonic()
+
+        self._heartbeat_timer = QtCore.QTimer(app)
+        self._heartbeat_timer.setInterval(self._watchdog_interval)
+        self._heartbeat_timer.timeout.connect(self._heartbeat_tick)
+        self._heartbeat_timer.start()
+
+        self._watchdog_thread = threading.Thread(
+            target=self._watchdog_loop,
+            name="CrashReporterWatchdog",
+            daemon=True,
+        )
+        self._watchdog_thread.start()
+
+    def _heartbeat_tick(self):
+        self._last_heartbeat = time.monotonic()
+
+    def _watchdog_loop(self):
+        while True:
+            interval = self._watchdog_interval or 500
+            time.sleep(interval / 1000.0)
+            if self._hang_handled or self._handling:
+                return
+            last = self._last_heartbeat
+            timeout = self._watchdog_timeout or 12.0
+            if last is None:
+                continue
+            if time.monotonic() - last > timeout:
+                self._handle_hang("event_loop_stall")
+                return
 
     def _excepthook(self, exc_type, exc, tb):
         self._handle_exception(exc_type, exc, tb, thread_name=None)
@@ -90,6 +156,7 @@ class CrashReporter:
                 handle.write(f"argv: {sys.argv}\n")
                 if activity_path:
                     handle.write(f"activity_log: {activity_path}\n")
+                self._write_last_activity(handle)
                 handle.write("\n")
                 handle.write(trace_text)
 
@@ -103,6 +170,48 @@ class CrashReporter:
 
             self._open_issue(log_path, trace_text, exc_type, exc, activity_path)
             self._handled_once = True
+        finally:
+            self._handling = False
+
+    def _handle_hang(self, reason: str):
+        if self._handling or self._hang_handled:
+            return
+        self._handling = True
+        try:
+            os.makedirs(self.log_dir, exist_ok=True)
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_path = os.path.join(self.log_dir, f"crash_hang_{stamp}.log")
+            frames = sys._current_frames()
+            thread_id = self._main_thread_id or threading.main_thread().ident
+            if thread_id in frames:
+                trace_text = "".join(traceback.format_stack(frames[thread_id]))
+            else:
+                trace_text = "<no main thread traceback available>\n"
+
+            activity_path = None
+            if self.activity_logger is not None:
+                activity_path = getattr(self.activity_logger, "log_path", None)
+
+            with open(log_path, "w", encoding="utf-8") as handle:
+                handle.write(f"timestamp: {_utc_timestamp()}\n")
+                handle.write(f"python: {sys.version}\n")
+                handle.write(f"platform: {platform.platform()}\n")
+                handle.write("thread: main\n")
+                handle.write(f"reason: {reason}\n")
+                if activity_path:
+                    handle.write(f"activity_log: {activity_path}\n")
+                self._write_last_activity(handle)
+                handle.write("\n")
+                handle.write("traceback (main thread):\n")
+                handle.write(trace_text)
+
+            if self.activity_logger is not None:
+                self.activity_logger.log_action(
+                    "hang_detected",
+                    log_path=log_path,
+                    reason=_safe_text(reason),
+                )
+            self._hang_handled = True
         finally:
             self._handling = False
 
@@ -145,6 +254,19 @@ class CrashReporter:
         if len(body) > max_len:
             body = body[: max_len - 40] + "\n```\n...truncated...\n```\n"
         return body
+
+    def _write_last_activity(self, handle):
+        if self.activity_logger is None:
+            return
+        record = getattr(self.activity_logger, "last_record", None)
+        if not record:
+            return
+        try:
+            payload = json.dumps(record, ensure_ascii=True)
+        except Exception:
+            payload = _safe_text(record, max_len=400)
+        if payload:
+            handle.write(f"last_activity: {payload}\n")
 
     def _default_log_dir(self):
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))

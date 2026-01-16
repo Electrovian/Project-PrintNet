@@ -12,7 +12,7 @@ if TESTS not in sys.path:
     sys.path.insert(0, TESTS)
 
 from slicer import slicer as slicer_module
-from slicer.gcode import SliceSettings
+from slicer.gcode.writer import SliceSettings
 from slicer.mesh import MeshModel
 from harness import BaseTestCase
 

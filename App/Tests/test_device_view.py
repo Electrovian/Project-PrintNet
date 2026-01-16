@@ -10,6 +10,7 @@ except Exception:  # pragma: no cover - optional dependency in tests
 class DeviceViewTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        assert QtWidgets is not None
         cls._app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
     def test_live_status_formatting(self):

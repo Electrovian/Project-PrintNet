@@ -10,6 +10,7 @@ except Exception:  # pragma: no cover - optional dependency in tests
 class PopupTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        assert QtWidgets is not None
         cls._app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
     def test_move_popup_emits(self):

@@ -37,6 +37,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.setWindowIcon(QtGui.QIcon(icon_path))
 
         self.printers = printers
+        self.connected_printers = [
+            printer for printer in (printers or []) if not printer.get("catalog_only")
+        ]
         self.airtable_cfg = airtable_cfg
         self.printer_manager = PrinterManager(printers=self.printers, airtable_cfg=self.airtable_cfg)
         self.activity_logger: Optional["ActivityLogger"] = None
@@ -60,11 +63,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._central_stack.addWidget(self.viewer)
 
         self.device_view = DeviceView(self)
-        self.device_view.set_printers(self.printers)
+        self.device_view.set_printers(self.connected_printers)
         self._central_stack.addWidget(self.device_view)
 
         self.control_view = ControlView(self)
-        self.control_view.set_printers(self.printers)
+        self.control_view.set_printers(self.connected_printers)
         self._central_stack.addWidget(self.control_view)
 
         self.files_view = FilesView(self)

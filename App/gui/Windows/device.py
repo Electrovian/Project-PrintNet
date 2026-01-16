@@ -25,9 +25,18 @@ class DeviceView(QtWidgets.QWidget):
         layout.addWidget(title)
 
         select_row = QtWidgets.QHBoxLayout()
-        select_label = QtWidgets.QLabel("Select printer:")
+        select_label = QtWidgets.QLabel("Search printer:")
         select_row.addWidget(select_label)
         self._printer_combo = QtWidgets.QComboBox(self)
+        self._printer_combo.setObjectName("DeviceCombo")
+        self._printer_combo.setEditable(True)
+        self._printer_combo.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
+        completer = QtWidgets.QCompleter(self._printer_combo.model(), self)
+        completer.setFilterMode(QtCore.Qt.MatchContains)
+        completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        self._printer_combo.setCompleter(completer)
+        if self._printer_combo.lineEdit() is not None:
+            self._printer_combo.lineEdit().setPlaceholderText("Search connected printers")
         select_row.addWidget(self._printer_combo, 1)
         layout.addLayout(select_row)
 
@@ -118,7 +127,30 @@ class DeviceView(QtWidgets.QWidget):
         queue_placeholder.setObjectName("DeviceQueuePlaceholder")
         queue_placeholder.setAlignment(QtCore.Qt.AlignCenter)
         queue_layout.addWidget(queue_placeholder, 1)
-        content_row.addWidget(queue_frame, 2)
+        right_col = QtWidgets.QVBoxLayout()
+        right_col.setSpacing(16)
+        right_col.addWidget(queue_frame, 2)
+
+        connected_frame = QtWidgets.QFrame(self)
+        connected_frame.setObjectName("DeviceConnected")
+        connected_layout = QtWidgets.QVBoxLayout(connected_frame)
+        connected_layout.setContentsMargins(12, 12, 12, 12)
+        connected_layout.setSpacing(8)
+        self._connected_title = QtWidgets.QLabel("Connected printers", connected_frame)
+        self._connected_title.setObjectName("DeviceSectionTitle")
+        connected_layout.addWidget(self._connected_title)
+        self._connected_scroll = QtWidgets.QScrollArea(connected_frame)
+        self._connected_scroll.setObjectName("DeviceConnectedScroll")
+        self._connected_scroll.setWidgetResizable(True)
+        connected_container = QtWidgets.QWidget(self._connected_scroll)
+        connected_container.setObjectName("DeviceConnectedList")
+        self._connected_list = QtWidgets.QVBoxLayout(connected_container)
+        self._connected_list.setContentsMargins(0, 0, 0, 0)
+        self._connected_list.setSpacing(6)
+        self._connected_scroll.setWidget(connected_container)
+        connected_layout.addWidget(self._connected_scroll, 1)
+        right_col.addWidget(connected_frame, 1)
+        content_row.addLayout(right_col, 2)
 
         layout.addLayout(content_row, 1)
         layout.addStretch(1)
@@ -131,10 +163,15 @@ class DeviceView(QtWidgets.QWidget):
         self.apply_theme()
 
     def set_printers(self, printers):
-        self._printers = list(printers or [])
+        raw_printers = list(printers or [])
+        self._printers = [
+            printer
+            for printer in raw_printers
+            if not (isinstance(printer, dict) and printer.get("catalog_only"))
+        ]
         self._printer_combo.clear()
         if not self._printers:
-            self._printer_combo.addItem("No printers configured")
+            self._printer_combo.addItem("No connected printers")
             self._printer_combo.setEnabled(False)
         else:
             self._printer_combo.setEnabled(True)
@@ -147,6 +184,7 @@ class DeviceView(QtWidgets.QWidget):
                     default_index = idx
             if default_index is not None:
                 self._printer_combo.setCurrentIndex(default_index)
+        self._populate_connected_list()
         self._update_details()
 
     def current_printer(self):
@@ -190,6 +228,55 @@ class DeviceView(QtWidgets.QWidget):
         self._send_btn.setEnabled(True)
         if emit_signal:
             self.printer_changed.emit(printer)
+
+    def _populate_connected_list(self):
+        if not hasattr(self, "_connected_list"):
+            return
+
+        def _clear_layout(layout):
+            while layout.count():
+                item = layout.takeAt(0)
+                if item is None:
+                    continue
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+                    continue
+                nested = item.layout()
+                if nested is not None:
+                    _clear_layout(nested)
+
+        _clear_layout(self._connected_list)
+
+        if hasattr(self, "_connected_title"):
+            if self._printers:
+                self._connected_title.setText(f"Connected printers ({len(self._printers)})")
+            else:
+                self._connected_title.setText("Connected printers")
+
+        if not self._printers:
+            placeholder = QtWidgets.QLabel("No connected printers.")
+            placeholder.setObjectName("DeviceQueuePlaceholder")
+            placeholder.setAlignment(QtCore.Qt.AlignCenter)
+            self._connected_list.addWidget(placeholder)
+            return
+
+        for printer in self._printers:
+            name = printer.get("name", "Printer")
+            bed = f"{printer.get('bed_x', 'n/a')} x {printer.get('bed_y', 'n/a')} x {printer.get('bed_z', 'n/a')}"
+            row = QtWidgets.QFrame(self)
+            row.setObjectName("DevicePrinterItem")
+            row_layout = QtWidgets.QVBoxLayout(row)
+            row_layout.setContentsMargins(10, 6, 10, 6)
+            row_layout.setSpacing(2)
+            name_label = QtWidgets.QLabel(str(name), row)
+            name_label.setObjectName("DevicePrinterName")
+            bed_label = QtWidgets.QLabel(f"Bed: {bed}", row)
+            bed_label.setObjectName("DevicePrinterMeta")
+            row_layout.addWidget(name_label)
+            row_layout.addWidget(bed_label)
+            self._connected_list.addWidget(row)
+        self._connected_list.addStretch(1)
 
     def _emit_send(self):
         printer = self.current_printer()
@@ -266,6 +353,11 @@ class DeviceView(QtWidgets.QWidget):
             f"  background: {theme_css('action_panel_bg')};"
             "  border-radius: 8px;"
             "}"
+            "QFrame#DeviceConnected {"
+            f"  border: 1px solid {theme_css('action_panel_border')};"
+            f"  background: {theme_css('action_panel_bg')};"
+            "  border-radius: 8px;"
+            "}"
             "QLabel#DeviceSectionTitle {"
             "  font-size: 13px;"
             "  font-weight: 600;"
@@ -285,6 +377,24 @@ class DeviceView(QtWidgets.QWidget):
             "QLabel#DeviceStatusValue {"
             "  font-weight: 600;"
             "}"
+            "QFrame#DevicePrinterItem {"
+            f"  background: {theme_css('popup_bg')};"
+            f"  border: 1px solid {theme_css('action_panel_border')};"
+            "  border-radius: 6px;"
+            "}"
+            "QScrollArea#DeviceConnectedScroll {"
+            "  border: none;"
+            "  background: transparent;"
+            "}"
+            "QWidget#DeviceConnectedList {"
+            "  background: transparent;"
+            "}"
+            "QLabel#DevicePrinterName {"
+            "  font-weight: 600;"
+            "}"
+            "QLabel#DevicePrinterMeta {"
+            f"  color: {theme_css('popup_muted_text')};"
+            "}"
             "QPushButton {"
             f"  background: {theme_css('action_button_bg')};"
             f"  color: {theme_css('action_button_text')};"
@@ -298,7 +408,7 @@ class DeviceView(QtWidgets.QWidget):
             "QPushButton:pressed {"
             f"  background: {theme_css('action_button_active_bg')};"
             "}"
-            "QComboBox {"
+            "QComboBox#DeviceCombo {"
             f"  background: {theme_css('popup_input_bg')};"
             f"  color: {theme_css('popup_input_text')};"
             f"  border: 1px solid {theme_css('popup_input_border')};"

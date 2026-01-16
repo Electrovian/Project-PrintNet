@@ -1,7 +1,7 @@
 from typing import List, Dict
 
-from slicer.slicer import slice_file
-from slicer.gcode import SliceSettings
+from slicer.slicer.emit import slice_file
+from slicer.gcode.writer import SliceSettings
 from .octoprint_api import upload_and_print
 
 class PrinterManager:

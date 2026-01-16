@@ -71,6 +71,7 @@ class GeometryValidationTests(unittest.TestCase):
         mesh = trimesh.creation.box(extents=(1.0, 2.0, 3.0))
         result = geometry.lowest_planar_face(mesh.vertices, mesh.faces)
         self.assertIsNotNone(result)
+        assert result is not None
         normal, _ = result
         normal = np.array(normal, dtype=float)
         self.assertAlmostEqual(abs(normal[2]), 1.0, places=4)

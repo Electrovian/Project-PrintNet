@@ -14,6 +14,8 @@ def main():
     activity_logger.install(app)
     crash_reporter = CrashReporter(activity_logger=activity_logger)
     crash_reporter.install()
+    crash_reporter.install_faulthandler()
+    crash_reporter.install_watchdog(app)
 
     splash = SplashScreen()
     screen = app.primaryScreen()

@@ -334,8 +334,8 @@ def _bounds_overlap_xy(bounds_a: Tuple[Point3D, Point3D],
     overlap_y = ay0 <= by1 and ay1 >= by0
     return overlap_x and overlap_y
 
-def detect_bridge_islands(current: List[Island2D],
-                          below: List[Island2D]) -> List[Island2D]:
+def detect_bridge_islands(current: Sequence[Island2D],
+                          below: Sequence[Island2D]) -> List[Island2D]:
     """Return regions on the current layer lacking support below."""
     return islands_difference(current, below)
 

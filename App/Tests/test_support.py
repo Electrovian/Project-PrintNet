@@ -9,7 +9,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from slicer.gcode import SliceSettings
+from slicer.gcode.writer import SliceSettings
 from slicer.mesh import MeshModel
 from slicer import support
 

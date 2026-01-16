@@ -1,4 +1,5 @@
 import unittest
+from typing import TYPE_CHECKING
 
 try:
     from PyQt5 import QtWidgets, QtCore
@@ -11,6 +12,7 @@ except Exception:  # pragma: no cover - optional dependency in tests
 class PreviewViewTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        assert QtWidgets is not None
         cls._app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
     def _build(self):
@@ -53,48 +55,78 @@ class PreviewViewTests(unittest.TestCase):
     def test_feature_filter_sync(self):
         view, _main, viewer = self._build()
         first = view._line_table.item(0, 0)
+        self.assertIsNotNone(first)
+        assert first is not None
+        assert QtCore is not None
         first.setCheckState(QtCore.Qt.Unchecked)
         view._sync_feature_filter()
-        self.assertIsInstance(viewer.preview_feature_filter, list)
-        self.assertGreater(len(viewer.preview_feature_filter), 0)
+        preview_feature_filter = viewer.preview_feature_filter
+        self.assertIsInstance(preview_feature_filter, list)
+        self.assertIsNotNone(preview_feature_filter)
+        assert preview_feature_filter is not None
+        self.assertGreater(len(preview_feature_filter), 0)
 
 
-class _DummyMain(QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
-        self.printers = [{"name": "Demo"}]
-        self.sliced = False
-        self.opened = False
+if TYPE_CHECKING:
+    from PyQt5 import QtWidgets as _QtWidgets
 
-    def slice_current_model(self):
-        self.sliced = True
+    class _DummyMain(_QtWidgets.QWidget):
+        printers: list[dict]
+        sliced: bool
+        opened: bool
 
-    def _open_device_view(self):
-        self.opened = True
+        def slice_current_model(self) -> None: ...
+        def _open_device_view(self) -> None: ...
 
 
-class _DummyViewer(QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
-        self.platform_visible = None
-        self.nozzle_visible = None
-        self.preview_color_mode = None
-        self.preview_feature_filter = None
+    class _DummyViewer(_QtWidgets.QWidget):
+        platform_visible: bool | None
+        nozzle_visible: bool | None
+        preview_color_mode: str | None
+        preview_feature_filter: list | None
 
-    def set_platform_visible(self, visible: bool):
-        self.platform_visible = bool(visible)
+        def set_platform_visible(self, visible: bool) -> None: ...
+        def set_nozzle_visible(self, visible: bool) -> None: ...
+        def set_preview_color_mode(self, mode: str) -> None: ...
+        def set_preview_feature_filter(self, features): ...
+        def get_preview_nozzle_state(self): ...
+elif QtWidgets is not None:
+    class _DummyMain(QtWidgets.QWidget):
+        def __init__(self):
+            super().__init__()
+            self.printers = [{"name": "Demo"}]
+            self.sliced = False
+            self.opened = False
 
-    def set_nozzle_visible(self, visible: bool):
-        self.nozzle_visible = bool(visible)
+        def slice_current_model(self):
+            self.sliced = True
 
-    def set_preview_color_mode(self, mode: str):
-        self.preview_color_mode = mode
+        def _open_device_view(self):
+            self.opened = True
 
-    def set_preview_feature_filter(self, features):
-        self.preview_feature_filter = list(features) if features else None
 
-    def get_preview_nozzle_state(self):
-        return ((1.0, 2.0, 3.0), 120.0, True)
+    class _DummyViewer(QtWidgets.QWidget):
+        def __init__(self):
+            super().__init__()
+            self.platform_visible = None
+            self.nozzle_visible = None
+            self.preview_color_mode = None
+            self.preview_feature_filter = None
+
+        def set_platform_visible(self, visible: bool):
+            self.platform_visible = bool(visible)
+
+        def set_nozzle_visible(self, visible: bool):
+            self.nozzle_visible = bool(visible)
+
+        def set_preview_color_mode(self, mode: str):
+            self.preview_color_mode = mode
+
+        def set_preview_feature_filter(self, features):
+            self.preview_feature_filter = list(features) if features else None
+
+        def get_preview_nozzle_state(self):
+            return ((1.0, 2.0, 3.0), 120.0, True)
 
 
 if __name__ == "__main__":

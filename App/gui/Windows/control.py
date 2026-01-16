@@ -107,32 +107,39 @@ class ControlView(QtWidgets.QWidget):
         step_row.addWidget(QtWidgets.QLabel("Step", move_card))
         self._step_combo = QtWidgets.QComboBox(move_card)
         self._step_combo.setObjectName("ControlCombo")
-        self._step_combo.addItems(["0.1 mm", "1 mm", "10 mm"])
+        self._step_combo.addItems(["0.1 mm", "1 mm", "10 mm", "100 mm"])
         step_row.addWidget(self._step_combo)
         step_row.addStretch(1)
         move_layout.addLayout(step_row)
 
-        move_grid = QtWidgets.QGridLayout()
-        move_grid.setHorizontalSpacing(6)
-        move_grid.setVerticalSpacing(6)
-        move_grid.addWidget(self._make_move_button("Y+"), 0, 1)
-        move_grid.addWidget(self._make_move_button("X-"), 1, 0)
-        move_grid.addWidget(self._make_move_button("Home"), 1, 1)
-        move_grid.addWidget(self._make_move_button("X+"), 1, 2)
-        move_grid.addWidget(self._make_move_button("Y-"), 2, 1)
-        move_layout.addLayout(move_grid)
+        jog_row = QtWidgets.QHBoxLayout()
+        jog_row.setSpacing(10)
 
-        axis_row = QtWidgets.QHBoxLayout()
-        axis_row.addWidget(self._make_move_button("Z+"))
-        axis_row.addWidget(self._make_move_button("Z-"))
-        axis_row.addStretch(1)
-        move_layout.addLayout(axis_row)
+        jog_pad = QtWidgets.QFrame(move_card)
+        jog_pad.setObjectName("ControlJogPad")
+        jog_pad.setFixedSize(180, 180)
+        jog_layout = QtWidgets.QGridLayout(jog_pad)
+        jog_layout.setContentsMargins(18, 18, 18, 18)
+        jog_layout.setHorizontalSpacing(8)
+        jog_layout.setVerticalSpacing(8)
+        jog_layout.addWidget(self._make_jog_button("Y+"), 0, 1)
+        jog_layout.addWidget(self._make_jog_button("X-"), 1, 0)
+        jog_layout.addWidget(self._make_jog_button("Home", center=True), 1, 1)
+        jog_layout.addWidget(self._make_jog_button("X+"), 1, 2)
+        jog_layout.addWidget(self._make_jog_button("Y-"), 2, 1)
+        jog_row.addWidget(jog_pad)
 
-        extrude_row = QtWidgets.QHBoxLayout()
-        extrude_row.addWidget(self._make_move_button("E+"))
-        extrude_row.addWidget(self._make_move_button("E-"))
-        extrude_row.addStretch(1)
-        move_layout.addLayout(extrude_row)
+        axis_col = QtWidgets.QVBoxLayout()
+        axis_col.setSpacing(8)
+        axis_col.addWidget(self._make_move_button("Z+"))
+        axis_col.addWidget(self._make_move_button("Z-"))
+        axis_col.addSpacing(6)
+        axis_col.addWidget(self._make_move_button("E+"))
+        axis_col.addWidget(self._make_move_button("E-"))
+        axis_col.addStretch(1)
+        jog_row.addLayout(axis_col)
+        jog_row.addStretch(1)
+        move_layout.addLayout(jog_row)
         panel_layout.addWidget(move_card)
 
         aux_card, aux_body = self._make_card("Auxiliary")
@@ -181,6 +188,14 @@ class ControlView(QtWidgets.QWidget):
         btn.setText(label)
         btn.setObjectName("ControlMoveButton")
         btn.setCursor(QtCore.Qt.PointingHandCursor)
+        return btn
+
+    def _make_jog_button(self, label: str, center: bool = False):
+        btn = QtWidgets.QToolButton(self)
+        btn.setText(label)
+        btn.setObjectName("ControlJogButton" if not center else "ControlJogHome")
+        btn.setCursor(QtCore.Qt.PointingHandCursor)
+        btn.setFixedSize(54, 38 if not center else 44)
         return btn
 
     def _make_action_button(self, label: str):
@@ -307,10 +322,34 @@ class ControlView(QtWidgets.QWidget):
             "  border-radius: 6px;"
             "  padding: 6px 10px;"
             "}"
+            "QFrame#ControlJogPad {"
+            f"  background: {theme_css('action_button_bg')};"
+            f"  border: 1px solid {theme_css('action_panel_border')};"
+            "  border-radius: 90px;"
+            "}"
+            "QToolButton#ControlJogButton {"
+            f"  background: {theme_css('action_button_bg')};"
+            f"  border: 1px solid {theme_css('action_panel_border')};"
+            "  border-radius: 10px;"
+            "  padding: 4px 6px;"
+            "}"
+            "QToolButton#ControlJogHome {"
+            f"  background: {theme_css('topbar_accent')};"
+            f"  color: {theme_css('popup_text')};"
+            "  border: 1px solid transparent;"
+            "  border-radius: 14px;"
+            "  font-weight: 600;"
+            "}"
             "QToolButton#ControlMoveButton:hover {"
             f"  background: {theme_css('action_button_hover_bg')};"
             "}"
+            "QToolButton#ControlJogButton:hover {"
+            f"  background: {theme_css('action_button_hover_bg')};"
+            "}"
             "QToolButton#ControlMoveButton:pressed {"
+            f"  background: {theme_css('action_button_active_bg')};"
+            "}"
+            "QToolButton#ControlJogButton:pressed, QToolButton#ControlJogHome:pressed {"
             f"  background: {theme_css('action_button_active_bg')};"
             "}"
             "QPushButton#ControlActionButton {"

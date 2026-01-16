@@ -10,8 +10,8 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from slicer.mesh import MeshModel
-from slicer.gcode import SliceSettings
-from slicer.slicer import build_z_heights, generate_layer_perimeters, generate_layer_plans
+from slicer.gcode.writer import SliceSettings
+from slicer.slicer.plan import build_z_heights, generate_layer_perimeters, generate_layer_plans
 
 def polygon_area(points):
     if len(points) < 3:
@@ -92,6 +92,8 @@ class LayerPerimeterTests(unittest.TestCase):
         self.assertEqual(len(plan.raft_layers), 2)
         self.assertIsNotNone(plan.brim)
         self.assertIsNotNone(plan.skirt)
+        assert plan.brim is not None
+        assert plan.skirt is not None
         self.assertGreater(len(plan.brim.loops), 0)
         self.assertGreater(len(plan.skirt.loops), 0)
         self.assertGreater(plan.layers[0].z, z_heights[0])

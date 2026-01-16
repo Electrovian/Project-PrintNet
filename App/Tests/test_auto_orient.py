@@ -80,6 +80,7 @@ class TestAutoOrient(unittest.TestCase):
             metrics.append({"support": support, "height": height})
         best_idx = pick_best_orientation(metrics, "min_time")
         self.assertIsNotNone(best_idx)
+        assert best_idx is not None
         self.assertAlmostEqual(metrics[best_idx]["height"], 10.0, places=5)
 
 

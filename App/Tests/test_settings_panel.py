@@ -5,13 +5,14 @@ try:
 except Exception:  # pragma: no cover - optional dependency in tests
     QtWidgets = None
 
-from slicer.gcode import SliceSettings
+from slicer.gcode.writer import SliceSettings
 
 
 @unittest.skipIf(QtWidgets is None, "PyQt5 not available")
 class SettingsPanelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        assert QtWidgets is not None
         cls._app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
     def test_apply_settings_roundtrip(self):
@@ -29,7 +30,10 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertIn(panel._label_one_wall_first, tooltip_targets)
         panel.set_printers([{"name": "Test Printer", "bed_x": 1, "bed_y": 2, "bed_z": 3}])
         self.assertEqual(panel._printer_combo.count(), 1)
-        self.assertEqual(panel.current_printer().get("name"), "Test Printer")
+        current_printer = panel.current_printer()
+        self.assertIsNotNone(current_printer)
+        assert current_printer is not None
+        self.assertEqual(current_printer.get("name"), "Test Printer")
         settings = SliceSettings(
             layer_height=0.24,
             first_layer_height=0.28,

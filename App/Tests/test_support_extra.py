@@ -12,7 +12,7 @@ if TESTS not in sys.path:
 
 from slicer import geometry
 from slicer import support
-from slicer.gcode import SliceSettings
+from slicer.gcode.writer import SliceSettings
 from harness import BaseTestCase, square_points
 
 

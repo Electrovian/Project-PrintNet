@@ -47,11 +47,15 @@ class SimplifyDialog(QtWidgets.QDialog):
 
         header = QtWidgets.QGridLayout()
         header.setHorizontalSpacing(10)
-        header.addWidget(QtWidgets.QLabel("Mesh name:", self), 0, 0)
+        mesh_label = QtWidgets.QLabel("Mesh name:", self)
+        mesh_label.setObjectName("SimplifyHeader")
+        header.addWidget(mesh_label, 0, 0)
         self._mesh_value = QtWidgets.QLabel(self._mesh_name, self)
         self._mesh_value.setObjectName("SimplifyValue")
         header.addWidget(self._mesh_value, 0, 1)
-        header.addWidget(QtWidgets.QLabel("Triangles:", self), 1, 0)
+        tri_label = QtWidgets.QLabel("Triangles:", self)
+        tri_label.setObjectName("SimplifyHeader")
+        header.addWidget(tri_label, 1, 0)
         self._tri_value = QtWidgets.QLabel(f"{self._triangles}", self)
         self._tri_value.setObjectName("SimplifyValue")
         header.addWidget(self._tri_value, 1, 1)
@@ -169,7 +173,11 @@ class SimplifyDialog(QtWidgets.QDialog):
             f"  background: {theme_css('popup_bg')};"
             f"  color: {theme_css('popup_text')};"
             "}"
+            "QLabel#SimplifyHeader {"
+            "  color: #ffffff;"
+            "}"
             "QLabel#SimplifyValue {"
+            "  color: #ffffff;"
             "  font-weight: 600;"
             "}"
             "QLabel#SimplifyAccent {"

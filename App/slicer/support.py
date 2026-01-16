@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from .geometry import (Island2D, LineSegment2D, Point2D, offset_islands,
                        point_in_polygon, polygons_with_holes)
-from .gcode import SliceSettings
+from .gcode.writer import SliceSettings
 from .mesh import MeshModel
 from . import infill
 

@@ -49,7 +49,9 @@ class ActivityEventFilter(QtCore.QObject):
         super().__init__()
         self._logger = logger
 
-    def eventFilter(self, obj, event):
+    def eventFilter(self, a0, a1):
+        obj = a0
+        event = a1
         etype = event.type()
         if etype == QtCore.QEvent.MouseMove:
             self._logger.log_mouse_event("mouse_move", obj, event)
@@ -66,9 +68,9 @@ class ActivityEventFilter(QtCore.QObject):
         elif etype == QtCore.QEvent.KeyRelease:
             self._logger.log_key_event("key_release", obj, event)
         elif etype == QtCore.QEvent.ChildAdded:
-            try:
+            if isinstance(event, QtCore.QChildEvent):
                 child = event.child()
-            except Exception:
+            else:
                 child = None
             if child is not None:
                 self._logger.track_widget_tree(child)
@@ -89,6 +91,8 @@ class ActivityLogger:
         self._logger.propagate = False
         self._event_filter = None
         self._tracked_ids = set()
+        self.last_record = None
+        self.last_record_ts = None
 
     def install(self, app):
         if app is None or self._event_filter is not None:
@@ -219,6 +223,8 @@ class ActivityLogger:
 
     def _write(self, record):
         self._logger.info(json.dumps(record, ensure_ascii=True))
+        self.last_record = record
+        self.last_record_ts = record.get("ts")
 
     def _widget_context(self, obj):
         if not isinstance(obj, QtCore.QObject):
@@ -235,11 +241,8 @@ class ActivityLogger:
                 if title:
                     context["window_title"] = title
             text = None
-            if hasattr(widget, "text"):
-                try:
-                    text = _short_text(widget.text())
-                except Exception:
-                    text = None
+            if isinstance(widget, (QtWidgets.QAbstractButton, QtWidgets.QLabel, QtWidgets.QLineEdit)):
+                text = _short_text(widget.text())
             if not text and hasattr(widget, "toolTip"):
                 try:
                     text = _short_text(widget.toolTip())
@@ -247,11 +250,8 @@ class ActivityLogger:
                     text = None
             if text:
                 context["label"] = text
-            if hasattr(widget, "defaultAction"):
-                try:
-                    action = widget.defaultAction()
-                except Exception:
-                    action = None
+            if isinstance(widget, QtWidgets.QToolButton):
+                action = widget.defaultAction()
                 if action is not None:
                     action_text = _short_text(action.text())
                     if action_text:

@@ -7,7 +7,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from slicer.gcode import GCodeWriter, SliceSettings, estimate_gcode_stats
+from slicer.gcode.stats import estimate_gcode_stats
+from slicer.gcode.writer import GCodeWriter, SliceSettings
 
 class GCodeExtrusionTests(unittest.TestCase):
     def test_extrusion_for_length(self):
@@ -58,7 +59,12 @@ class GCodeExtrusionTests(unittest.TestCase):
         lines = ["G1 X10 Y0 E1.0 F600"]
         stats = estimate_gcode_stats(lines, settings)
         self.assertIn("time", stats)
-        self.assertGreater(stats.get("length_mm", 0.0), 0.0)
+        length_mm_raw = stats.get("length_mm")
+        if isinstance(length_mm_raw, (int, float)):
+            length_mm = float(length_mm_raw)
+        else:
+            length_mm = 0.0
+        self.assertGreater(length_mm, 0.0)
 
 if __name__ == "__main__":
     unittest.main()

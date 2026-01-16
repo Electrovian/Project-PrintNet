@@ -44,6 +44,7 @@ def load_printer_config() -> Tuple[List[Dict], Dict]:
                     "bed_x": float(row.get("BedX", 200)),
                     "bed_y": float(row.get("BedY", 200)),
                     "bed_z": float(row.get("BedZ", 200)),
+                    "catalog_only": False,
                 })
             # Airtable sheet (optional)
             if "Airtable" in xls.sheet_names:
@@ -65,7 +66,9 @@ def load_printer_config() -> Tuple[List[Dict], Dict]:
                 continue
             if name.lower() in existing:
                 continue
-            printers.append(dict(entry))
+            catalog_entry = dict(entry)
+            catalog_entry.setdefault("catalog_only", True)
+            printers.append(catalog_entry)
             existing.add(name.lower())
 
     bed_size = printer_defaults.get("bed_size", (200, 200))
@@ -79,6 +82,7 @@ def load_printer_config() -> Tuple[List[Dict], Dict]:
         "bed_x": bed_x,
         "bed_y": bed_y,
         "bed_z": bed_z,
+        "catalog_only": False,
     }
     existing_base = None
     remaining = []

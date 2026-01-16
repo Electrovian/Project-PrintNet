@@ -27,6 +27,7 @@ class PathPlannerExtraTests(BaseTestCase):
         p3 = (-1.0, 0.0)
         circle = path_planner._circle_from_points(p1, p2, p3)
         self.assertIsNotNone(circle)
+        assert circle is not None
         center, radius = circle
         self.assertPointClose(center, (0.0, 0.0))
         self.assertAlmostEqual(radius, 1.0, places=4)
@@ -36,6 +37,7 @@ class PathPlannerExtraTests(BaseTestCase):
         pts.append(pts[0])
         fit = path_planner.fit_arc(pts, tolerance=0.05, require_closed=True)
         self.assertIsNotNone(fit)
+        assert fit is not None
         self.assertTrue(fit.is_full_circle)
         self.assertAlmostEqual(fit.radius, 5.0, places=2)
         self.assertTrue(math.isfinite(fit.angle))
