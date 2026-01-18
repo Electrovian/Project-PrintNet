@@ -60,7 +60,7 @@ The project uses [BeeWare Briefcase](https://briefcase.readthedocs.io/) for cros
 
 #### Create the project
 ```bash
-cd /path/to/Project-PrintNet
+cd /path/to/Project-PrintNet  # Repository directory
 briefcase create android
 ```
 
@@ -96,7 +96,7 @@ adb install android/gradle/EON-OpenSlicer/app/build/outputs/apk/debug/app-debug.
 
 #### Create the project
 ```bash
-cd /path/to/Project-PrintNet
+cd /path/to/Project-PrintNet  # Repository directory
 briefcase create iOS
 ```
 

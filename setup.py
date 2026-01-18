@@ -24,8 +24,8 @@ setup(
     author="EON-OpenSlicer Team",
     author_email="koskima@mail.uc.edu",
     url="https://github.com/Electrovian/Project-EON-OpenSlicer",
-    packages=find_packages(),
-    package_dir={"": "App"},
+    packages=["App"] + ["App." + pkg for pkg in find_packages("App")],
+    package_dir={"App": "App"},
     install_requires=[
         "requests>=2.31",
         "numpy>=1.24",
