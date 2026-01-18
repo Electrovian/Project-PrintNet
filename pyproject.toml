@@ -7,21 +7,20 @@ project_name = "EON-OpenSlicer"
 bundle = "edu.uc"
 version = "1.0.0"
 url = "https://github.com/Electrovian/Project-EON-OpenSlicer"
-license = "MIT"
 author = "EON-OpenSlicer Team"
 author_email = "koskima@mail.uc.edu"
+license = { text = "MIT" }
 
-[tool.briefcase.app.EON-OpenSlicer]
+[tool.briefcase.app.eon_openslicer]
 formal_name = "EON-OpenSlicer"
 description = "A centralized 3D printing lab management system"
 long_description = """EON-OpenSlicer is a centralized 3D printing lab management system designed to streamline the submission, tracking, and completion of print jobs."""
 sources = ["App"]
-icon = "App/assets/icons/app_icon"
-splash = "App/assets/icons/app_icon"
 
-# Main entry points
-# Desktop platforms use PyQt5
-[tool.briefcase.app.EON-OpenSlicer.macOS]
+# Entry point - uses unified __main__.py that detects platform
+app_start_module = "App.__main__"
+app_start_callable = "main"
+[tool.briefcase.app.eon_openslicer.macOS]
 requires = [
     "PyQt5>=5.15.10",
     "PyQt5-stubs>=5.15.6",
@@ -38,7 +37,7 @@ requires = [
     "fast_simplification>=0.1.8",
 ]
 
-[tool.briefcase.app.EON-OpenSlicer.linux]
+[tool.briefcase.app.eon_openslicer.linux]
 requires = [
     "PyQt5>=5.15.10",
     "PyQt5-stubs>=5.15.6",
@@ -67,7 +66,7 @@ system_requires = [
     "libxcb-xfixes0",
 ]
 
-[tool.briefcase.app.EON-OpenSlicer.windows]
+[tool.briefcase.app.eon_openslicer.windows]
 requires = [
     "PyQt5>=5.15.10",
     "PyQt5-stubs>=5.15.6",
@@ -85,19 +84,19 @@ requires = [
 ]
 
 # Mobile platforms use Toga for UI
-[tool.briefcase.app.EON-OpenSlicer.iOS]
+[tool.briefcase.app.eon_openslicer.iOS]
 requires = [
     "toga>=0.4.0",
     "numpy>=1.24",
     "requests>=2.31",
 ]
 supported = false
-info_plist = {
-    NSCameraUsageDescription = "This app needs camera access to scan QR codes for printer connection",
-    NSPhotoLibraryUsageDescription = "This app needs photo library access to import 3D models",
-}
 
-[tool.briefcase.app.EON-OpenSlicer.android]
+[tool.briefcase.app.eon_openslicer.iOS.info_plist]
+NSCameraUsageDescription = "This app needs camera access to scan QR codes for printer connection"
+NSPhotoLibraryUsageDescription = "This app needs photo library access to import 3D models"
+
+[tool.briefcase.app.eon_openslicer.android]
 requires = [
     "toga>=0.4.0",
     "numpy>=1.24",
@@ -116,7 +115,7 @@ permissions = [
     "android.permission.WRITE_EXTERNAL_STORAGE",
 ]
 
-[tool.briefcase.app.EON-OpenSlicer.web]
+[tool.briefcase.app.eon_openslicer.web]
 requires = [
     "toga>=0.4.0",
     "numpy>=1.24",

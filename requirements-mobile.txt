@@ -1,0 +1,13 @@
+# Mobile development requirements
+# Install with: pip install -r requirements-mobile.txt
+
+# BeeWare toolchain for mobile app packaging
+briefcase>=0.3.0
+toga>=0.4.0
+
+# Core dependencies needed for mobile
+requests>=2.31
+numpy>=1.24
+
+# Optional: For testing mobile builds locally
+# Android SDK and other platform tools are handled by Briefcase
