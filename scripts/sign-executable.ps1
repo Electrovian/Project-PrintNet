@@ -94,9 +94,14 @@ if (-not (Test-Path $CertificatePath)) {
 
 if ([string]::IsNullOrEmpty($CertificatePassword)) {
     $securePassword = Read-Host "Enter certificate password" -AsSecureString
-    $CertificatePassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
-    )
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
+    try {
+        $CertificatePassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+    }
+    finally {
+        # Securely clear password from memory
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    }
 }
 
 # Sign the executable

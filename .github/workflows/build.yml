@@ -68,7 +68,7 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --windowed --name EON-OpenSlicer --paths App --add-data "App/assets;assets" --version-file version_info.txt App/main.py
 
       - name: Sign executable (Windows)
-        if: runner.os == 'Windows' && secrets.WINDOWS_CERTIFICATE != ''
+        if: runner.os == 'Windows' && env.WINDOWS_CERTIFICATE != ''
         run: |
           # Decode certificate from base64
           $certBytes = [System.Convert]::FromBase64String("${{ secrets.WINDOWS_CERTIFICATE }}")
@@ -96,7 +96,6 @@ jobs:
           Remove-Item $certPath -ErrorAction SilentlyContinue
         env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
 
       - name: Package (Windows)
         if: runner.os == 'Windows'

@@ -43,7 +43,7 @@ Implemented a complete code signing infrastructure that:
 
 ### 2. Documentation
 
-#### CODE_SIGNING.md (5,571 characters)
+#### CODE_SIGNING.md
 Comprehensive guide covering:
 - Why code signing is necessary
 - How to obtain certificates from commercial CAs
@@ -55,7 +55,7 @@ Comprehensive guide covering:
 - Security best practices
 - Troubleshooting guide
 
-#### GITHUB_SECRETS_SETUP.md (4,801 characters)
+#### GITHUB_SECRETS_SETUP.md
 Step-by-step guide for:
 - Converting certificates to Base64
 - Adding secrets to GitHub repository
@@ -65,7 +65,7 @@ Step-by-step guide for:
 - Certificate management
 - Troubleshooting common issues
 
-#### CODE_SIGNING_QUICKSTART.md (6,545 characters)
+#### CODE_SIGNING_QUICKSTART.md
 Quick reference guide with:
 - Problem overview
 - Setup checklist
@@ -77,7 +77,7 @@ Quick reference guide with:
 
 ### 3. Scripts
 
-#### sign-executable.ps1 (3,950 characters)
+#### sign-executable.ps1
 PowerShell script that:
 - Automatically finds `signtool.exe` in Windows SDK paths
 - Validates executable file
@@ -86,7 +86,7 @@ PowerShell script that:
 - Verifies signature
 - Provides detailed error messages and usage examples
 
-#### scripts/README.md (1,795 characters)
+#### scripts/README.md
 Documentation for scripts including:
 - Usage examples
 - Parameter descriptions
