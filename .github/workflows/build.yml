@@ -27,10 +27,80 @@ jobs:
           python -m pip install -r App/requirements.txt
           python -m pip install pyinstaller
 
+      - name: Create version info file (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          # Create version_info.txt for PyInstaller
+          @"
+          VSVersionInfo(
+            ffi=FixedFileInfo(
+              filevers=(1, 0, 0, 0),
+              prodvers=(1, 0, 0, 0),
+              mask=0x3f,
+              flags=0x0,
+              OS=0x40004,
+              fileType=0x1,
+              subtype=0x0,
+              date=(0, 0)
+            ),
+            kids=[
+              StringFileInfo(
+                [
+                StringTable(
+                  '040904B0',
+                  [StringStruct('CompanyName', 'EON-OpenSlicer Team'),
+                  StringStruct('FileDescription', 'EON-OpenSlicer - 3D Print Management'),
+                  StringStruct('FileVersion', '1.0.0.0'),
+                  StringStruct('InternalName', 'EON-OpenSlicer'),
+                  StringStruct('LegalCopyright', 'Copyright (c) 2024 EON-OpenSlicer Team'),
+                  StringStruct('OriginalFilename', 'EON-OpenSlicer.exe'),
+                  StringStruct('ProductName', 'EON-OpenSlicer'),
+                  StringStruct('ProductVersion', '1.0.0.0')])
+                ]),
+              VarFileInfo([VarStruct('Translation', [1033, 1200])])
+            ]
+          )
+          "@ | Out-File -FilePath version_info.txt -Encoding utf8
+
       - name: Build (Windows)
         if: runner.os == 'Windows'
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name EON-OpenSlicer --paths App --add-data "App/assets;assets" App/main.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name EON-OpenSlicer --paths App --add-data "App/assets;assets" --version-file version_info.txt App/main.py
+
+      - name: Sign executable (Windows)
+        if: runner.os == 'Windows' && secrets.WINDOWS_CERTIFICATE != ''
+        run: |
+          # Decode certificate from base64
+          $certBytes = [System.Convert]::FromBase64String("${{ secrets.WINDOWS_CERTIFICATE }}")
+          $certPath = Join-Path $env:TEMP "certificate.pfx"
+          [IO.File]::WriteAllBytes($certPath, $certBytes)
+          
+          # Find signtool.exe
+          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          
+          if ($signtool) {
+            Write-Host "Found signtool at: $($signtool.FullName)"
+            
+            # Sign the executable
+            & $signtool.FullName sign /f $certPath /p "${{ secrets.CERTIFICATE_PASSWORD }}" /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 dist/EON-OpenSlicer.exe
+            
+            # Verify signature
+            & $signtool.FullName verify /pa dist/EON-OpenSlicer.exe
+            
+            Write-Host "Executable signed successfully"
+          } else {
+            Write-Host "Warning: signtool.exe not found. Executable will not be signed."
+          }
+          
+          # Clean up certificate file
+          Remove-Item $certPath -ErrorAction SilentlyContinue
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
           Compress-Archive -Path dist/EON-OpenSlicer.exe -DestinationPath EON-OpenSlicer-windows.zip
 
       - name: Build (Linux)

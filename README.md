@@ -62,6 +62,44 @@ Work included coding, research, documentation, meetings, and communication throu
 
 ---
 
+## Code Signing for Windows Builds
+
+To prevent Windows SmartScreen warnings about unverified publishers, the EON-OpenSlicer executable can be digitally signed with a code signing certificate.
+
+### For Users
+
+When downloading signed releases, Windows will recognize the verified publisher and not display "unsafe" warnings.
+
+### For Developers
+
+See the comprehensive [Code Signing Documentation](./docs/CODE_SIGNING.md) for:
+- How to obtain a code signing certificate
+- Setting up GitHub Actions for automated signing
+- Signing executables locally
+- Troubleshooting common issues
+
+**Quick Start for Local Signing:**
+
+```powershell
+# Sign an executable
+.\scripts\sign-executable.ps1 -ExecutablePath "dist\EON-OpenSlicer.exe" -CertificatePath "cert.pfx" -CertificatePassword "password"
+```
+
+### GitHub Actions Setup
+
+To enable automatic code signing in CI/CD:
+
+1. Obtain a code signing certificate (.pfx format)
+2. Convert certificate to Base64
+3. Add GitHub repository secrets:
+   - `WINDOWS_CERTIFICATE`: Base64-encoded certificate
+   - `CERTIFICATE_PASSWORD`: Certificate password
+4. The build workflow will automatically sign releases
+
+For detailed instructions, see [docs/CODE_SIGNING.md](./docs/CODE_SIGNING.md).
+
+---
+
 ## Appendix
 Full code repository:  
 https://github.com/Electrovian/Project-EON-OpenSlicer

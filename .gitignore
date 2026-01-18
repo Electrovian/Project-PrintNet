@@ -6,3 +6,24 @@ logs
 __pycache__/
 *.pyc
 Test Files
+
+# Code signing certificates (NEVER commit these!)
+*.pfx
+*.p12
+*.cer
+*.pem
+*-cert.pfx
+*-certificate.*
+certificate.pfx
+certificate-base64.txt
+test-cert.pfx
+
+# Build artifacts
+dist/
+build/
+*.spec
+*.exe
+*.zip
+
+# Version info
+version_info.txt
