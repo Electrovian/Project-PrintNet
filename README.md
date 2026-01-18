@@ -20,6 +20,22 @@ Development of a web-based platform for the 3D Print Lab, with server integratio
 ## Project Abstract
 EON-OpenSlicer is a centralized 3D printing lab management system designed to streamline the submission, tracking, and completion of print jobs. It improves workflow efficiency by organizing requests, managing printer resources, and providing clear communication between users and operators.
 
+**Platform Support**: The application is available for Windows desktop (full-featured), with mobile companion apps for iOS and Android tablets/phones (monitoring and basic management).
+
+---
+
+## Platform Support & Downloads
+
+### Desktop Application (Windows, Linux)
+- Full-featured 3D slicing and print management
+- Downloads available in [Releases](https://github.com/Electrovian/Project-EON-OpenSlicer/releases)
+
+### Mobile Applications (iOS & Android)
+- Monitor print jobs and printer status
+- Basic print management
+- See [Mobile Deployment Guide](./docs/MOBILE_DEPLOYMENT.md) for build instructions
+- See [Quick Start](./docs/MOBILE_QUICKSTART.md) for quick build commands
+
 ---
 
 ## Table of Contents

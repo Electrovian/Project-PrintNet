@@ -6,3 +6,22 @@ logs
 __pycache__/
 *.pyc
 Test Files
+
+# Briefcase build artifacts
+build/
+dist/
+*.app
+*.apk
+*.aab
+*.ipa
+*.msi
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+
+# Mobile platform specific
+iOS/
+android/
+.briefcase/
+briefcase.*.config
