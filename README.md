@@ -47,7 +47,7 @@ EON-OpenSlicer is a centralized 3D printing lab management system designed to st
 ---
 
 ## Budget
-No direct expenses were required for this project. We used personal computers, free software, and university resources.
+No direct expenses were required for this project. We used personal computers, free software, and university resources(professor Help with code).
 
 ---
 
