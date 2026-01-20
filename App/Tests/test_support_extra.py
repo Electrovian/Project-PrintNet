@@ -32,18 +32,32 @@ class SupportExtraTests(BaseTestCase):
         clusters = support._cluster_nodes(nodes, radius=0.5)
         self.assertEqual(len(clusters), 2)
 
+    def test_islands_union_and_intersection(self):
+        outer_a = square_points(4.0)
+        outer_b = [(x + 1.0, y) for x, y in outer_a]
+        islands_a = geometry.polygons_with_holes([outer_a])
+        islands_b = geometry.polygons_with_holes([outer_b])
+        merged = geometry.islands_union(islands_a + islands_b)
+        self.assertGreaterEqual(len(merged), 1)
+        overlap = geometry.islands_intersection(islands_a, islands_b)
+        self.assertGreaterEqual(len(overlap), 1)
+
     def test_generate_support_interfaces(self):
         outer = square_points(4.0)
         islands = geometry.polygons_with_holes([outer])
         settings = SliceSettings(
+            support_enabled=True,
             interface_layers=1,
             interface_density=0.5,
             infill_angle=0.0,
             extrusion_width=0.4,
             layer_height=0.2,
         )
-        layers = support.generate_support_interfaces(islands, [0.2, 0.4, 0.6], settings, top_z=0.6)
-        self.assertGreaterEqual(len(layers), 1)
+        z_heights = [0.2, 0.4]
+        layer_islands = [[], islands]
+        plan = support.generate_support_plan(None, z_heights, settings, layer_islands=layer_islands)
+        self.assertGreaterEqual(len(plan.layers), 1)
+        self.assertTrue(any(layer.interface_lines for layer in plan.layers))
 
 
 if __name__ == "__main__":

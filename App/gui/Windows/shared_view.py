@@ -234,7 +234,7 @@ class SharedView(QtCore.QObject):
 
         self.main._3dconnexion_action = QtWidgets.QAction(self.main)
         self.main._3dconnexion_action.setShortcut(shortcut_key("show_3dconnexion"))
-        self.main._3dconnexion_action.triggered.connect(self.main._not_implemented)
+        self.main._3dconnexion_action.triggered.connect(self.main._show_3dconnexion_dialog)
         self.main.addAction(self.main._3dconnexion_action)
 
     def apply_theme(self):
@@ -505,8 +505,11 @@ class SharedView(QtCore.QObject):
         self.main._labels_action = labels_action
 
         overhang_action = QtWidgets.QAction("Show Overhang", self.main)
-        overhang_action.triggered.connect(self.main._not_implemented)
+        overhang_action.setCheckable(True)
+        overhang_action.setChecked(False)
+        overhang_action.toggled.connect(self.main._toggle_overhang)
         self.main._view_menu.addAction(overhang_action)
+        self.main._overhang_action = overhang_action
 
     def _build_prefs_menu(self):
         prefs_action = QtWidgets.QAction(shortcut_label("preferences"), self.main)
@@ -515,17 +518,18 @@ class SharedView(QtCore.QObject):
         self.main._prefs_menu.addAction(prefs_action)
 
     def _build_calib_menu(self):
-        for label in (
-            "Temperature",
-            "Flow rate",
-            "Pressure advance",
-            "Retraction test",
-            "Tolerance Test",
-            "Max flowrate",
-            "Tutorial",
-        ):
+        calib_actions = (
+            ("Temperature", self.main._calibrate_temperature),
+            ("Flow rate", self.main._calibrate_flow_rate),
+            ("Pressure advance", self.main._calibrate_pressure_advance),
+            ("Retraction test", self.main._calibrate_retraction),
+            ("Tolerance Test", self.main._calibrate_tolerance),
+            ("Max flowrate", self.main._calibrate_max_flowrate),
+            ("Tutorial", self.main._open_calibration_tutorial),
+        )
+        for label, handler in calib_actions:
             action = QtWidgets.QAction(label, self.main)
-            action.triggered.connect(self.main._not_implemented)
+            action.triggered.connect(handler)
             self.main._calib_menu.addAction(action)
 
     def _build_help_menu(self):
@@ -539,7 +543,10 @@ class SharedView(QtCore.QObject):
                 action.setShortcut(shortcut_key("show_shortcuts"))
                 action.triggered.connect(self.show_shortcuts_dialog)
             else:
-                action.triggered.connect(self.main._not_implemented)
+                if label == "Show Configuration Folder":
+                    action.triggered.connect(self.main._open_config_folder)
+                else:
+                    action.triggered.connect(self.main._check_for_updates)
             self.main._help_menu.addAction(action)
 
         self.main._help_menu.addSeparator()
@@ -554,8 +561,16 @@ class SharedView(QtCore.QObject):
             action = QtWidgets.QAction(label, self.main)
             if label == "User Feedback":
                 action.triggered.connect(self.main._open_feedback)
+            elif label == "User Course":
+                action.triggered.connect(self.main._open_user_course)
+            elif label == "About Us":
+                action.triggered.connect(self.main._open_about_dialog)
+            elif label == "Log View":
+                action.triggered.connect(self.main._open_log_view)
+            elif label == "User Guide":
+                action.triggered.connect(self.main._open_user_guide)
             else:
-                action.triggered.connect(self.main._not_implemented)
+                action.triggered.connect(self.main._open_user_guide)
             self.main._help_menu.addAction(action)
 
     def _topbar_separator(self, parent):

@@ -415,6 +415,37 @@ def islands_difference(subject: Sequence[Island2D],
                             pc.PFT_NONZERO)
     return _polytree_to_islands(tree)
 
+def islands_union(islands: Sequence[Island2D]) -> List[Island2D]:
+    """Return a union of all islands."""
+    pc = _require_pyclipper()
+    paths = _islands_to_paths(islands)
+    if not paths:
+        return []
+    clipper = pc.Pyclipper()
+    clipper.AddPaths(paths, pc.PT_SUBJECT, True)
+    tree = clipper.Execute2(pc.CT_UNION,
+                            pc.PFT_NONZERO,
+                            pc.PFT_NONZERO)
+    return _polytree_to_islands(tree)
+
+def islands_intersection(subject: Sequence[Island2D],
+                         clip: Sequence[Island2D]) -> List[Island2D]:
+    """Return subject islands clipped to clip islands."""
+    pc = _require_pyclipper()
+    subject_paths = _islands_to_paths(subject)
+    if not subject_paths:
+        return []
+    clip_paths = _islands_to_paths(clip)
+    if not clip_paths:
+        return []
+    clipper = pc.Pyclipper()
+    clipper.AddPaths(subject_paths, pc.PT_SUBJECT, True)
+    clipper.AddPaths(clip_paths, pc.PT_CLIP, True)
+    tree = clipper.Execute2(pc.CT_INTERSECTION,
+                            pc.PFT_NONZERO,
+                            pc.PFT_NONZERO)
+    return _polytree_to_islands(tree)
+
 def _islands_to_paths(islands: Sequence[Island2D]) -> List[List[Tuple[int, int]]]:
     paths: List[List[Tuple[int, int]]] = []
     for outer, holes in islands:

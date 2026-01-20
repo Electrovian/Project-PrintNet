@@ -35,9 +35,6 @@ class ProjectMixin:
         self._current_project_path = None
         self._clear_all_models()
 
-    def _not_implemented(self):
-        QtWidgets.QMessageBox.information(self.main, "Not implemented", "This feature is not implemented yet.")
-
     def _open_feedback(self):
         url = "https://github.com/Electrovian/Project-EON-OpenSlicer/issues"
         reply = QtWidgets.QMessageBox.question(

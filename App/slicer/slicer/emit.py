@@ -5,11 +5,15 @@ import random
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple, cast
 
+import trimesh
+
 from ..geometry import Island2D, LineSegment2D, Polygon2D, ensure_winding, point_in_island
 from ..gcode.writer import GCodeWriter, SliceSettings
 from .. import path_planner
 from ..mesh import MeshModel
-from .plan import PrintPlan, _shells_to_islands, generate_layer_plans
+from config.defaults import DEFAULTS
+from config.performance import resolve_performance_limits
+from .plan import PrintPlan, _shells_to_islands, build_z_heights, generate_layer_plans, generate_layer_plans_multi
 
 
 def _emit_gcode(plan: PrintPlan,
@@ -109,7 +113,11 @@ def _emit_gcode(plan: PrintPlan,
         if not islands:
             return
         writer.add(f";TYPE:{label}")
-        for outer, holes in islands:
+        ordered_islands = path_planner.order_islands_nearest(
+            islands,
+            (writer.position[0], writer.position[1]),
+        )
+        for outer, holes in ordered_islands:
             if outer:
                 _emit_loop(outer, z, speed, width, multiplier, shell_index,
                            layer_index, has_overhang, False, allow_gap, wipe)
@@ -125,6 +133,29 @@ def _emit_gcode(plan: PrintPlan,
                 return island
         return None
 
+    def _dedupe_lines(lines: List[LineSegment2D]) -> List[LineSegment2D]:
+        if not lines:
+            return []
+        seen = set()
+        filtered: List[LineSegment2D] = []
+        for start, end in lines:
+            length = math.hypot(end[0] - start[0], end[1] - start[1])
+            if length <= 1e-9:
+                continue
+            sx = round(start[0], 3)
+            sy = round(start[1], 3)
+            ex = round(end[0], 3)
+            ey = round(end[1], 3)
+            if (sx, sy) <= (ex, ey):
+                key = (sx, sy, ex, ey)
+            else:
+                key = (ex, ey, sx, sy)
+            if key in seen:
+                continue
+            seen.add(key)
+            filtered.append((start, end))
+        return filtered
+
     def emit_lines(lines: List[LineSegment2D],
                    z: float,
                    speed: float,
@@ -132,6 +163,8 @@ def _emit_gcode(plan: PrintPlan,
                    width: float,
                    multiplier: float,
                    comb_islands: Sequence[Island2D] | None = None) -> None:
+        if settings.dedupe_extrusion_paths:
+            lines = _dedupe_lines(lines)
         if not lines:
             return
         writer.add(f";TYPE:{label}")
@@ -161,6 +194,11 @@ def _emit_gcode(plan: PrintPlan,
                 flow_multiplier *= scale
             extrusion = writer.extrusion_for_length(length, width=width, multiplier=flow_multiplier)
             writer.move_extrude(end[0], end[1], z, speed, extrusion=extrusion)
+
+    support_by_z = {}
+    if plan.support is not None:
+        for support_layer in plan.support.layers:
+            support_by_z[round(float(support_layer.z), 6)] = support_layer
 
     # Raft
     for raft in plan.raft_layers:
@@ -207,6 +245,25 @@ def _emit_gcode(plan: PrintPlan,
                 wall_speed_factor = (prev_wall_speed_factor * 0.5) + (wall_speed_factor * 0.5)
                 prev_wall_speed_factor = wall_speed_factor
         wall_speed = settings.print_speed * wall_speed_factor
+        support_layer = support_by_z.get(round(float(layer.z), 6))
+        if support_layer is not None:
+            support_width = settings.support_line_width or settings.extrusion_width
+            support_speed = getattr(settings, "support_speed", settings.print_speed)
+            interface_speed = getattr(settings, "support_interface_speed", support_speed * 0.8)
+            if support_layer.base_lines:
+                emit_lines(support_layer.base_lines,
+                           z=layer.z,
+                           speed=support_speed,
+                           label="SUPPORT",
+                           width=support_width,
+                           multiplier=1.0)
+            if support_layer.interface_lines:
+                emit_lines(support_layer.interface_lines,
+                           z=layer.z,
+                           speed=interface_speed,
+                           label="SUPPORT_INTERFACE",
+                           width=support_width,
+                           multiplier=1.0)
 
         def _should_single_wall() -> bool:
             if settings.one_wall_threshold <= 0.0:
@@ -382,6 +439,100 @@ def slice_trimesh(mesh,
                             output_gcode_path=output_gcode_path,
                             settings=settings,
                             source_path=source_path)
+
+
+def _resolve_max_workers() -> int:
+    try:
+        limits = resolve_performance_limits(DEFAULTS.get("performance"))
+    except Exception:
+        return 1
+    try:
+        return max(1, int(limits.get("max_threads", 1)))
+    except Exception:
+        return 1
+
+
+def _estimate_strategy(meshes: Sequence[trimesh.Trimesh],
+                       z_heights: Sequence[float],
+                       max_workers: int) -> str:
+    model_count = len(meshes)
+    layer_count = len(z_heights)
+    if model_count <= 1 or layer_count <= 1 or max_workers <= 1:
+        return "per_layer"
+
+    faces = []
+    for mesh in meshes:
+        try:
+            faces.append(int(len(mesh.faces)))
+        except Exception:
+            faces.append(0)
+    total_faces = sum(faces)
+    if total_faces <= 0:
+        return "per_layer"
+
+    layer_workers = max(1, min(layer_count, max_workers))
+    per_layer_time = (total_faces * layer_count) / layer_workers
+
+    model_workers = max(1, min(model_count, max_workers))
+    if model_count <= model_workers:
+        per_model_time = max(faces) * layer_count
+    else:
+        per_model_time = (total_faces * layer_count) / model_workers
+
+    return "per_model" if per_model_time < per_layer_time else "per_layer"
+
+
+def slice_trimesh_auto(meshes: Sequence[trimesh.Trimesh] | trimesh.Trimesh,
+                       output_gcode_path: Optional[str] = None,
+                       settings: Optional[SliceSettings] = None,
+                       source_path: Optional[str] = None,
+                       combined_mesh: Optional[trimesh.Trimesh] = None) -> str:
+    if settings is None:
+        settings = SliceSettings()
+    settings_obj = cast(SliceSettings, settings)
+
+    if isinstance(meshes, trimesh.Trimesh):
+        mesh_list = [meshes]
+    else:
+        mesh_list = [mesh for mesh in meshes if mesh is not None]
+    if not mesh_list:
+        raise ValueError("No meshes provided for slicing.")
+
+    if combined_mesh is None:
+        if len(mesh_list) == 1:
+            combined_mesh = mesh_list[0]
+        else:
+            combined_mesh = trimesh.util.concatenate(mesh_list)
+
+    combined_model = MeshModel.from_trimesh(combined_mesh, path=source_path or "<memory>")
+    z_heights = build_z_heights(combined_model, settings_obj)
+    max_workers = _resolve_max_workers()
+
+    if len(mesh_list) == 1:
+        plan = generate_layer_plans(combined_model,
+                                    z_heights,
+                                    settings=settings_obj,
+                                    max_workers=max_workers)
+    else:
+        strategy = _estimate_strategy(mesh_list, z_heights, max_workers)
+        if strategy == "per_model":
+            models = [MeshModel.from_trimesh(mesh, path=source_path or "<memory>")
+                      for mesh in mesh_list]
+            plan = generate_layer_plans_multi(models,
+                                              z_heights,
+                                              settings=settings_obj,
+                                              max_workers=max_workers)
+        else:
+            plan = generate_layer_plans(combined_model,
+                                        z_heights,
+                                        settings=settings_obj,
+                                        max_workers=max_workers)
+
+    if output_gcode_path is None:
+        source = source_path or combined_model.path or "model"
+        output_gcode_path = str(Path(source).with_suffix(".gcode"))
+
+    return _emit_gcode(plan, output_gcode_path, settings_obj)
 
 
 def slice_file(stl_path: str, output_gcode_path: Optional[str] = None,

@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
 import math
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
+import trimesh
 
 from ..mesh import MeshModel
 from ..geometry import (Island2D, LineSegment2D, Polygon2D, compensate_holes,
@@ -10,6 +12,7 @@ from ..geometry import (Island2D, LineSegment2D, Polygon2D, compensate_holes,
                         thin_wall_lines)
 from ..gcode.writer import SliceSettings
 from .. import infill as infill_generator
+from .. import support as support_generator
 from .raft import BrimPlan, RaftLayer, SkirtPlan, build_brim_plan, build_raft_layers, build_skirt_plan
 from .supports import BridgeInfill, IroningPass, build_bridge_infill, build_ironing_pass
 
@@ -56,6 +59,7 @@ class PrintPlan:
     brim: Optional[BrimPlan]
     skirt: Optional[SkirtPlan]
     layers: List[LayerPlan]
+    support: Optional[support_generator.SupportPlan] = None
 
 def _wrap_islands(islands: List[Island2D]) -> List[IslandPerimeters]:
     return [IslandPerimeters(outer=outer, holes=holes) for outer, holes in islands]
@@ -242,6 +246,63 @@ def build_z_heights(mesh: MeshModel, settings: SliceSettings) -> List[float]:
         heights.append(float(z))
     return heights
 
+def _compute_layer_perimeters(mesh: MeshModel,
+                              layer_index: int,
+                              z_value: float,
+                              settings: SliceSettings,
+                              perimeter_count: int,
+                              perimeter_spacing: float) -> LayerPerimeters:
+    tolerance = settings.resolution if settings.resolution > 0.0 else 0.0
+    base_islands = mesh.slice_layer(z_value, tolerance=tolerance)
+    if settings.slice_gap_closing_radius > 0.0 and base_islands:
+        base_islands = _close_gap_islands(base_islands, settings.slice_gap_closing_radius)
+    if settings.xy_contour_compensation != 0.0 and base_islands:
+        offset = offset_islands(base_islands, settings.xy_contour_compensation)
+        if offset:
+            base_islands = offset
+    if settings.xy_hole_compensation != 0.0 and base_islands:
+        if settings.xy_hole_compensation > 0.0:
+            base_islands = compensate_holes(base_islands, settings.xy_hole_compensation)
+        else:
+            base_islands = _offset_holes(base_islands, settings.xy_hole_compensation)
+    if settings.convert_holes_to_polyholes and base_islands:
+        base_islands = _convert_holes_to_polyholes(base_islands, settings.nozzle_diameter)
+    if (settings.elephant_foot_compensation > 0.0
+            and layer_index < settings.elephant_foot_compensation_layers
+            and base_islands):
+        offset = offset_islands(base_islands, -settings.elephant_foot_compensation)
+        if offset:
+            base_islands = offset
+    if settings.hole_compensation_mm > 0.0 and base_islands:
+        base_islands = compensate_holes(base_islands, settings.hole_compensation_mm)
+
+    shells: List[PerimeterShell] = []
+    if base_islands:
+        shells.append(PerimeterShell(index=0, islands=_wrap_islands(base_islands)))
+
+    current_islands = base_islands
+    spacing = float(perimeter_spacing)
+    if settings.wall_generator == "arachne":
+        spacing = _wall_spacing(settings, layer_index)
+    outer_spacing = spacing
+    if settings.precise_wall and settings.wall_printing_order == "inner_outer":
+        try:
+            outer_spacing = max(0.01, float(settings.outer_wall_line_width))
+        except (TypeError, ValueError):
+            outer_spacing = spacing
+        if settings.wall_generator == "arachne":
+            outer_spacing = max(outer_spacing, spacing)
+    for shell_index in range(1, perimeter_count):
+        if not current_islands:
+            break
+        step = outer_spacing if shell_index == 1 else spacing
+        current_islands = offset_islands(current_islands, -step)
+        if not current_islands:
+            break
+        shells.append(PerimeterShell(index=shell_index,
+                                     islands=_wrap_islands(current_islands)))
+    return LayerPerimeters(z=z_value, shells=shells)
+
 def generate_layer_perimeters(mesh: MeshModel,
                               z_heights: Iterable[float],
                               settings: Optional[SliceSettings] = None,
@@ -260,83 +321,94 @@ def generate_layer_perimeters(mesh: MeshModel,
     layers: List[LayerPerimeters] = []
     for layer_index, z in enumerate(z_heights):
         z_value = float(z)
-        tolerance = settings.resolution if settings.resolution > 0.0 else 0.0
-        base_islands = mesh.slice_layer(z_value, tolerance=tolerance)
-        if settings.slice_gap_closing_radius > 0.0 and base_islands:
-            base_islands = _close_gap_islands(base_islands, settings.slice_gap_closing_radius)
-        if settings.xy_contour_compensation != 0.0 and base_islands:
-            offset = offset_islands(base_islands, settings.xy_contour_compensation)
-            if offset:
-                base_islands = offset
-        if settings.xy_hole_compensation != 0.0 and base_islands:
-            if settings.xy_hole_compensation > 0.0:
-                base_islands = compensate_holes(base_islands, settings.xy_hole_compensation)
-            else:
-                base_islands = _offset_holes(base_islands, settings.xy_hole_compensation)
-        if settings.convert_holes_to_polyholes and base_islands:
-            base_islands = _convert_holes_to_polyholes(base_islands, settings.nozzle_diameter)
-        if (settings.elephant_foot_compensation > 0.0
-                and layer_index < settings.elephant_foot_compensation_layers
-                and base_islands):
-            offset = offset_islands(base_islands, -settings.elephant_foot_compensation)
-            if offset:
-                base_islands = offset
-        if settings.hole_compensation_mm > 0.0 and base_islands:
-            base_islands = compensate_holes(base_islands, settings.hole_compensation_mm)
-        shells: List[PerimeterShell] = []
-        if base_islands:
-            shells.append(PerimeterShell(index=0, islands=_wrap_islands(base_islands)))
-
-        current_islands = base_islands
-        spacing = float(perimeter_spacing)
-        if settings.wall_generator == "arachne":
-            spacing = _wall_spacing(settings, layer_index)
-        outer_spacing = spacing
-        if settings.precise_wall and settings.wall_printing_order == "inner_outer":
-            try:
-                outer_spacing = max(0.01, float(settings.outer_wall_line_width))
-            except (TypeError, ValueError):
-                outer_spacing = spacing
-            if settings.wall_generator == "arachne":
-                outer_spacing = max(outer_spacing, spacing)
-        for shell_index in range(1, perimeter_count):
-            if not current_islands:
-                break
-            step = outer_spacing if shell_index == 1 else spacing
-            current_islands = offset_islands(current_islands, -step)
-            if not current_islands:
-                break
-            shells.append(PerimeterShell(index=shell_index,
-                                         islands=_wrap_islands(current_islands)))
-        layers.append(LayerPerimeters(z=z_value, shells=shells))
+        layers.append(_compute_layer_perimeters(mesh,
+                                                 layer_index,
+                                                 z_value,
+                                                 settings,
+                                                 perimeter_count,
+                                                 perimeter_spacing))
     return layers
+
+def generate_layer_perimeters_parallel(mesh: MeshModel,
+                                       z_heights: Iterable[float],
+                                       settings: Optional[SliceSettings] = None,
+                                       perimeter_count: Optional[int] = None,
+                                       perimeter_spacing: Optional[float] = None,
+                                       max_workers: Optional[int] = None
+                                       ) -> List[LayerPerimeters]:
+    if settings is None:
+        settings = SliceSettings()
+    if perimeter_count is None:
+        perimeter_count = settings.perimeter_count
+    if perimeter_spacing is None:
+        perimeter_spacing = settings.inner_wall_line_width
+    perimeter_count = max(1, int(perimeter_count))
+
+    z_list = [float(z) for z in z_heights]
+    if not z_list:
+        return []
+
+    worker_count = int(max_workers or 0)
+    if worker_count <= 1 or len(z_list) <= 1:
+        return generate_layer_perimeters(mesh,
+                                         z_list,
+                                         settings=settings,
+                                         perimeter_count=perimeter_count,
+                                         perimeter_spacing=perimeter_spacing)
+
+    worker_count = max(1, min(worker_count, len(z_list)))
+    results: List[Optional[LayerPerimeters]] = [None for _ in z_list]
+    with ThreadPoolExecutor(max_workers=worker_count) as pool:
+        futures = {}
+        for layer_index, z_value in enumerate(z_list):
+            fut = pool.submit(_compute_layer_perimeters,
+                              mesh,
+                              layer_index,
+                              z_value,
+                              settings,
+                              perimeter_count,
+                              perimeter_spacing)
+            futures[fut] = layer_index
+        for fut, layer_index in futures.items():
+            results[layer_index] = fut.result()
+    return [layer for layer in results if layer is not None]
 
 def _shells_to_islands(shell: PerimeterShell) -> List[Island2D]:
     return [(island.outer, island.holes) for island in shell.islands]
 
-def generate_layer_plans(mesh: MeshModel,
-                         z_heights: Optional[Iterable[float]] = None,
-                         settings: Optional[SliceSettings] = None,
-                         perimeter_count: Optional[int] = None,
-                         perimeter_spacing: Optional[float] = None
-                         ) -> PrintPlan:
-    if settings is None:
-        settings = SliceSettings()
+def _merge_layer_perimeters(layers_by_model: Sequence[List[LayerPerimeters]]
+                            ) -> List[LayerPerimeters]:
+    if not layers_by_model:
+        return []
+    layer_count = min(len(layers) for layers in layers_by_model)
+    merged: List[LayerPerimeters] = []
+    for idx in range(layer_count):
+        z_value = layers_by_model[0][idx].z
+        shells_map = {}
+        for layers in layers_by_model:
+            for shell in layers[idx].shells:
+                existing = shells_map.get(shell.index)
+                if existing is None:
+                    shells_map[shell.index] = PerimeterShell(index=shell.index,
+                                                            islands=list(shell.islands))
+                else:
+                    existing.islands.extend(shell.islands)
+        shells = [shells_map[i] for i in sorted(shells_map.keys())]
+        merged.append(LayerPerimeters(z=z_value, shells=shells))
+    return merged
 
-    if z_heights is None:
-        z_heights = build_z_heights(mesh, settings)
-    z_heights = list(z_heights)
-    if not z_heights:
+def _build_plan_from_layers(layers: List[LayerPerimeters],
+                            settings: SliceSettings,
+                            mesh: Optional[MeshModel] = None,
+                            z_heights: Optional[Sequence[float]] = None
+                            ) -> PrintPlan:
+    if not layers:
         return PrintPlan(raft_layers=[],
                          brim=None,
                          skirt=None,
-                         layers=[])
+                         layers=[],
+                         support=None)
 
-    layers = generate_layer_perimeters(mesh,
-                                       z_heights,
-                                       settings=settings,
-                                       perimeter_count=perimeter_count,
-                                       perimeter_spacing=perimeter_spacing)
     total_layers = len(layers)
     plans: List[LayerPlan] = []
     brim_plan: Optional[BrimPlan] = None
@@ -428,8 +500,132 @@ def generate_layer_plans(mesh: MeshModel,
         brim_plan = build_brim_plan(base_islands, first_layer.z + z_offset, settings)
         skirt_plan = build_skirt_plan(base_islands, first_layer.z + z_offset, settings)
 
+    support_plan = None
+    if settings.support_enabled and layers:
+        if z_heights is None:
+            z_heights = [layer.z for layer in layers]
+        support_islands = [
+            _shells_to_islands(layer.shells[0]) if layer.shells else []
+            for layer in layers
+        ]
+        support_plan = support_generator.generate_support_plan(
+            mesh,
+            [z + z_offset for z in z_heights],
+            settings,
+            layer_islands=support_islands,
+        )
+
     return PrintPlan(raft_layers=raft_layers,
                      brim=brim_plan,
                      skirt=skirt_plan,
-                     layers=plans)
+                     layers=plans,
+                     support=support_plan)
+
+def generate_layer_plans(mesh: MeshModel,
+                         z_heights: Optional[Iterable[float]] = None,
+                         settings: Optional[SliceSettings] = None,
+                         perimeter_count: Optional[int] = None,
+                         perimeter_spacing: Optional[float] = None,
+                         max_workers: Optional[int] = None
+                         ) -> PrintPlan:
+    if settings is None:
+        settings = SliceSettings()
+
+    if z_heights is None:
+        z_heights = build_z_heights(mesh, settings)
+    z_heights = list(z_heights)
+    if not z_heights:
+        return PrintPlan(raft_layers=[],
+                         brim=None,
+                         skirt=None,
+                         layers=[],
+                         support=None)
+
+    if max_workers and max_workers > 1:
+        layers = generate_layer_perimeters_parallel(mesh,
+                                                    z_heights,
+                                                    settings=settings,
+                                                    perimeter_count=perimeter_count,
+                                                    perimeter_spacing=perimeter_spacing,
+                                                    max_workers=max_workers)
+    else:
+        layers = generate_layer_perimeters(mesh,
+                                           z_heights,
+                                           settings=settings,
+                                           perimeter_count=perimeter_count,
+                                           perimeter_spacing=perimeter_spacing)
+
+    return _build_plan_from_layers(layers, settings, mesh=mesh, z_heights=z_heights)
+
+
+def generate_layer_plans_multi(models: Sequence[MeshModel],
+                               z_heights: Optional[Iterable[float]] = None,
+                               settings: Optional[SliceSettings] = None,
+                               perimeter_count: Optional[int] = None,
+                               perimeter_spacing: Optional[float] = None,
+                               max_workers: Optional[int] = None
+                               ) -> PrintPlan:
+    if settings is None:
+        settings = SliceSettings()
+    if not models:
+        return PrintPlan(raft_layers=[],
+                         brim=None,
+                         skirt=None,
+                         layers=[],
+                         support=None)
+    if z_heights is None:
+        combined = trimesh.util.concatenate([m.mesh for m in models])
+        reference = MeshModel(path="<combined>", mesh=combined)
+        z_heights = build_z_heights(reference, settings)
+    z_heights = list(z_heights)
+    if not z_heights:
+        return PrintPlan(raft_layers=[],
+                         brim=None,
+                         skirt=None,
+                         layers=[],
+                         support=None)
+
+    if perimeter_count is None:
+        perimeter_count = settings.perimeter_count
+    if perimeter_spacing is None:
+        perimeter_spacing = settings.inner_wall_line_width
+    perimeter_count = max(1, int(perimeter_count))
+
+    worker_count = int(max_workers or 0)
+    if worker_count > 1 and len(models) > 1:
+        worker_count = max(1, min(worker_count, len(models)))
+        layers_by_model: List[Optional[List[LayerPerimeters]]] = [None for _ in models]
+        with ThreadPoolExecutor(max_workers=worker_count) as pool:
+            futures = {}
+            for idx, model in enumerate(models):
+                fut = pool.submit(generate_layer_perimeters,
+                                  model,
+                                  z_heights,
+                                  settings=settings,
+                                  perimeter_count=perimeter_count,
+                                  perimeter_spacing=perimeter_spacing)
+                futures[fut] = idx
+            for fut, idx in futures.items():
+                layers_by_model[idx] = fut.result()
+    else:
+        layers_by_model = [
+            generate_layer_perimeters(model,
+                                      z_heights,
+                                      settings=settings,
+                                      perimeter_count=perimeter_count,
+                                      perimeter_spacing=perimeter_spacing)
+            for model in models
+        ]
+
+    merged_layers = _merge_layer_perimeters([layers for layers in layers_by_model if layers is not None])
+    combined_mesh = None
+    if models:
+        combined_mesh = MeshModel.from_trimesh(
+            trimesh.util.concatenate([m.mesh for m in models]),
+            path="<combined>",
+        )
+    return _build_plan_from_layers(merged_layers,
+                                   settings,
+                                   mesh=combined_mesh,
+                                   z_heights=z_heights)
 

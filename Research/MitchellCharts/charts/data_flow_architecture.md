@@ -1,4 +1,4 @@
-## Data Flow Architecture
+# Data Flow Architecture
 
 ```mermaid
 flowchart LR

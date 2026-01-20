@@ -42,8 +42,19 @@ class SettingsPanelTests(QtTestCase):
             support_style="tree",
             overhang_angle=50.0,
             support_build_plate_only=True,
+            support_z_gap=0.35,
+            support_xy_gap=0.45,
+            interface_layers=3,
+            interface_density=0.75,
+            support_spacing=2.5,
+            support_speed=70.0,
+            support_interface_speed=55.0,
+            support_pattern="grid",
+            support_interface_pattern="triangle",
             support_filament_base="support",
             support_filament_interface="support",
+            tree_branch_angle=35.0,
+            tree_merge_distance=3.5,
             prime_tower_enabled=True,
             prime_tower_width=40.0,
             prime_tower_square=False,
@@ -82,8 +93,19 @@ class SettingsPanelTests(QtTestCase):
         self.assertEqual(updated.support_style, "tree")
         self.assertAlmostEqual(updated.overhang_angle, 50.0, places=1)
         self.assertTrue(updated.support_build_plate_only)
+        self.assertAlmostEqual(updated.support_z_gap, 0.35, places=2)
+        self.assertAlmostEqual(updated.support_xy_gap, 0.45, places=2)
+        self.assertEqual(updated.interface_layers, 3)
+        self.assertAlmostEqual(updated.interface_density, 0.75, places=2)
+        self.assertAlmostEqual(updated.support_spacing, 2.5, places=2)
+        self.assertAlmostEqual(updated.support_speed, 70.0, places=2)
+        self.assertAlmostEqual(updated.support_interface_speed, 55.0, places=2)
+        self.assertEqual(updated.support_pattern, "grid")
+        self.assertEqual(updated.support_interface_pattern, "triangle")
         self.assertEqual(updated.support_filament_base, "support")
         self.assertEqual(updated.support_filament_interface, "support")
+        self.assertAlmostEqual(updated.tree_branch_angle, 35.0, places=2)
+        self.assertAlmostEqual(updated.tree_merge_distance, 3.5, places=2)
         self.assertTrue(updated.prime_tower_enabled)
         self.assertAlmostEqual(updated.prime_tower_width, 40.0, places=2)
         self.assertFalse(updated.prime_tower_square)

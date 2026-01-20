@@ -30,6 +30,14 @@ class WireframeMixin:
             return
         enable_edges = bool(enabled)
         m["wireframe"] = enable_edges
+        if enable_edges and m.get("meshdata_wireframe") is not None:
+            item.setMeshData(meshdata=m["meshdata_wireframe"])
+            if hasattr(self, "_apply_model_color"):
+                self._apply_model_color(m)
+        elif m.get("meshdata_full") is not None:
+            item.setMeshData(meshdata=m["meshdata_full"])
+            if hasattr(self, "_apply_model_color"):
+                self._apply_model_color(m)
         models_visible = bool(getattr(self, "_models_visible", True))
         if models_visible:
             item.setVisible(True)

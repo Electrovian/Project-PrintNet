@@ -10,10 +10,11 @@ import trimesh
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from ...workers import Worker
+from slicer.ai_checks import run_ai_checks
 from slicer.gcode.preview import parse_gcode_preview_file
 from slicer.gcode.stats import estimate_gcode_file
 from slicer.gcode.writer import SliceSettings
-from slicer.slicer.emit import slice_trimesh
+from slicer.slicer.emit import slice_trimesh, slice_trimesh_auto
 
 
 class PrintMixin:
@@ -28,6 +29,10 @@ class PrintMixin:
         _last_gcode_path: str | None
         _last_slice_signature: str | None
         _last_gcode_stats: dict | None
+        _last_preview_key: tuple[str, float, int] | None
+        _last_preview_data: Any | None
+        _last_preview_text: str | None
+        _last_slice_meshes: list[trimesh.Trimesh] | None
 
         def statusBar(self) -> QtWidgets.QStatusBar: ...
         def _busy_dialog(self, title: str, label: str) -> QtWidgets.QProgressDialog: ...
@@ -39,6 +44,10 @@ class PrintMixin:
         self._last_gcode_path = None
         self._last_slice_signature = None
         self._last_gcode_stats = None
+        self._last_preview_key = None
+        self._last_preview_data = None
+        self._last_preview_text = None
+        self._last_slice_meshes = None
         if clear_preview:
             if hasattr(self, "preview_view") and hasattr(self.preview_view, "set_gcode_text"):
                 self.preview_view.set_gcode_text("")
@@ -90,6 +99,32 @@ class PrintMixin:
         combined_faces = np.vstack(faces_list) if faces_list else np.zeros((0, 3), dtype=int)
         return trimesh.Trimesh(vertices=combined_vertices, faces=combined_faces, process=False)
 
+    def _get_plate_meshes(self):
+        model_ids = self.viewer.get_model_ids()
+        if not model_ids:
+            return [], None
+        meshes = []
+        vertices_list = []
+        faces_list = []
+        vert_offset = 0
+        for mid in model_ids:
+            mesh_data = self.viewer.get_model_mesh_data(mid)
+            if not mesh_data:
+                continue
+            vertices, faces = mesh_data
+            v = np.asarray(vertices, dtype=float)
+            f = np.asarray(faces, dtype=int)
+            meshes.append(trimesh.Trimesh(vertices=v, faces=f, process=False))
+            vertices_list.append(v)
+            faces_list.append(f + vert_offset)
+            vert_offset += len(v)
+        if not meshes:
+            return [], None
+        combined_vertices = np.vstack(vertices_list)
+        combined_faces = np.vstack(faces_list) if faces_list else np.zeros((0, 3), dtype=int)
+        combined = trimesh.Trimesh(vertices=combined_vertices, faces=combined_faces, process=False)
+        return meshes, combined
+
     def _build_slice_signature(self, settings: SliceSettings):
         model_ids = sorted(self.viewer.get_model_ids())
         if not model_ids:
@@ -125,11 +160,12 @@ class PrintMixin:
             if show_dialog:
                 QtWidgets.QMessageBox.warning(self.main, "No model", "Load model(s) first.")
             return
-        mesh = self._get_plate_mesh()
-        if mesh is None:
+        meshes, combined = self._get_plate_meshes()
+        if not meshes or combined is None:
             if show_dialog:
                 QtWidgets.QMessageBox.warning(self.main, "No model", "Model data unavailable for slicing.")
             return
+        self._last_slice_meshes = [m for m in meshes]
         if self._slice_in_progress:
             return
 
@@ -167,11 +203,12 @@ class PrintMixin:
             if show_errors:
                 QtWidgets.QMessageBox.critical(self.main, "Slicing error", msg)
 
-        worker = Worker(slice_trimesh,
-                        mesh,
+        worker = Worker(slice_trimesh_auto,
+                        meshes,
                         output_gcode_path=None,
                         settings=settings,
-                        source_path=source_path)
+                        source_path=source_path,
+                        combined_mesh=combined)
         worker.signals.finished.connect(on_done)
         worker.signals.error.connect(on_err)
         self._start_worker(worker)
@@ -318,25 +355,62 @@ class PrintMixin:
     def _update_preview_from_gcode(self, gcode_path: str, stats: dict):
         if not hasattr(self, "preview_view"):
             return
+        settings = self.settings_panel.to_settings() if hasattr(self, "settings_panel") else None
+        stats = dict(stats or {})
+        if settings is not None and self._last_slice_meshes:
+            try:
+                ai_report = run_ai_checks(self._last_slice_meshes, settings)
+                stats["ai_warnings"] = ai_report.warnings
+                stats["ai_suggestions"] = ai_report.suggestions
+            except Exception:
+                stats.setdefault("ai_warnings", [])
+                stats.setdefault("ai_suggestions", [])
         self._last_gcode_stats = dict(stats or {})
-        preview_text, total_lines = self._read_gcode_preview(gcode_path)
+        preview_text = None
+        preview_key = None
+        try:
+            stat = os.stat(gcode_path)
+            preview_key = (gcode_path, float(stat.st_mtime), int(stat.st_size))
+        except OSError:
+            preview_key = None
+
+        if preview_key is not None and preview_key == getattr(self, "_last_preview_key", None):
+            preview_text = getattr(self, "_last_preview_text", None)
+            preview = getattr(self, "_last_preview_data", None)
+        else:
+            preview = None
+
+        if preview_text is None:
+            preview_text, _total_lines = self._read_gcode_preview(gcode_path)
+        if preview is None:
+            preview = parse_gcode_preview_file(gcode_path, settings=settings)
+
         self.preview_view.set_gcode_text(preview_text)
         self.preview_view.update_stats(stats)
         if hasattr(self.viewer, "set_print_stats"):
             self.viewer.set_print_stats(stats)
-        settings = self.settings_panel.to_settings() if hasattr(self, "settings_panel") else None
-        preview = parse_gcode_preview_file(gcode_path, settings=settings)
+
+        if hasattr(self.preview_view, "set_preview_settings"):
+            self.preview_view.set_preview_settings(settings)
         if hasattr(self.viewer, "set_preview_settings"):
             self.viewer.set_preview_settings(settings)
         if hasattr(self.viewer, "set_gcode_preview"):
             self.viewer.set_gcode_preview(preview)
         self.preview_view.set_preview_data(preview)
 
+        self._last_preview_key = preview_key
+        self._last_preview_data = preview
+        self._last_preview_text = preview_text
+
     def _clear_preview(self):
         self._last_gcode_path = None
         self._last_slice_signature = None
         self._slice_in_progress = False
         self._last_gcode_stats = None
+        self._last_preview_key = None
+        self._last_preview_data = None
+        self._last_preview_text = None
+        self._last_slice_meshes = None
         if not hasattr(self, "preview_view"):
             return
         self.preview_view.set_gcode_text("")

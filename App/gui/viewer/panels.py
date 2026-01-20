@@ -511,6 +511,17 @@ class PanelMixin:
         base_color = theme_value("mesh_color", (0.0, 0.9, 0.4, 0.9))
         warn_color = theme_value("mesh_warning", (1.0, 0.25, 0.2, 0.95))
         color = warn_color if model.get("out_of_bounds") else base_color
+        alpha_scale = getattr(self, "_model_preview_alpha", 1.0)
+        if isinstance(color, (tuple, list)):
+            values = list(color)
+            if len(values) == 3:
+                values.append(1.0 if max(values) <= 1.0 else 255.0)
+            max_rgb = max(values[:3]) if values[:3] else 1.0
+            if max_rgb > 1.0:
+                values[3] = max(0.0, min(255.0, float(values[3]) * alpha_scale))
+            else:
+                values[3] = max(0.0, min(1.0, float(values[3]) * alpha_scale))
+            color = tuple(values)
         self._safe_gl_update(item.setColor, color)
 
     def _model_volume(self, model: dict):

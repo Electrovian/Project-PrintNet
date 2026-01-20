@@ -17,6 +17,10 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
         self._last_gcode_path = None
         self._last_slice_signature = None
         self._last_gcode_stats = None
+        self._last_preview_key = None
+        self._last_preview_data = None
+        self._last_preview_text = None
+        self._last_slice_meshes = None
         self._slice_in_progress = False
         self._labels_visible = True
         self._model_clipboard = []
@@ -62,6 +66,10 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
         self._undo_in_progress = False
         self._bed_warning_active = False
         self._last_gcode_stats = None
+        self._last_preview_key = None
+        self._last_preview_data = None
+        self._last_preview_text = None
+        self._last_slice_meshes = None
         self._undo_timer = QtCore.QTimer(self)
         self._undo_timer.setSingleShot(True)
         self._undo_timer.timeout.connect(self._finalize_undo_snapshot)

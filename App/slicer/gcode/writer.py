@@ -1,6 +1,19 @@
 from dataclasses import dataclass, field
 import math
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+
+_XYZ_DIGITS = 3
+_E_DIGITS = 5
+_XYZ_EPSILON = 10 ** (-_XYZ_DIGITS)
+
+
+def _format_gcode_number(value: float, digits: int) -> str:
+    text = f"{value:.{digits}f}"
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    if text in ("-0", "-0.0"):
+        text = "0"
+    return text
 
 @dataclass
 class FirmwareProfile:
@@ -77,6 +90,8 @@ class SliceSettings:
     firmware_flavor: str = "marlin"
     retract_style: Optional[str] = None
     supports_arcs: Optional[bool] = None
+    dedupe_extrusion_paths: bool = True
+    min_move_distance: float = 0.0
     start_gcode: Optional[List[str] | str] = None
     end_gcode: Optional[List[str] | str] = None
     filament_name: str = "Hyper PLA"
@@ -138,6 +153,10 @@ class SliceSettings:
     interface_layers: int = 2
     interface_density: float = 0.9
     support_spacing: float = 2.0
+    support_speed: float = 60.0
+    support_interface_speed: float = 50.0
+    support_pattern: str = "rectilinear"
+    support_interface_pattern: str = "rectilinear"
     support_style: str = "pillars"
     support_filament_base: str = "default"
     support_filament_interface: str = "default"
@@ -196,6 +215,11 @@ class SliceSettings:
         if self.supports_arcs is None:
             self.supports_arcs = profile.supports_arcs
         self.supports_arcs = bool(self.supports_arcs)
+        self.dedupe_extrusion_paths = bool(self.dedupe_extrusion_paths)
+        try:
+            self.min_move_distance = max(0.0, float(self.min_move_distance))
+        except (TypeError, ValueError):
+            self.min_move_distance = 0.0
 
         def _width_or_default(value: float, fallback: float) -> float:
             fallback_value = float(fallback)
@@ -304,6 +328,16 @@ class SliceSettings:
         self.interface_layers = max(0, int(self.interface_layers))
         self.interface_density = max(0.0, min(1.0, float(self.interface_density)))
         self.support_spacing = max(0.1, float(self.support_spacing))
+        self.support_speed = max(1.0, float(self.support_speed))
+        self.support_interface_speed = max(1.0, float(self.support_interface_speed))
+        self.support_pattern = str(self.support_pattern).strip().lower() or "rectilinear"
+        if self.support_pattern not in ("rectilinear", "grid", "triangle"):
+            self.support_pattern = "rectilinear"
+        self.support_interface_pattern = (
+            str(self.support_interface_pattern).strip().lower() or self.support_pattern
+        )
+        if self.support_interface_pattern not in ("rectilinear", "grid", "triangle"):
+            self.support_interface_pattern = self.support_pattern
         self.support_style = str(self.support_style).strip().lower() or "pillars"
         self.support_filament_base = str(self.support_filament_base).strip().lower() or "default"
         self.support_filament_interface = str(self.support_filament_interface).strip().lower() or "default"
@@ -369,9 +403,122 @@ class GCodeWriter:
     position: Tuple[float, float, float] = (0.0, 0.0, 0.0)
     is_retracted: bool = False
     has_extruded: bool = False
+    last_feed_rate: Optional[float] = None
+    _segment_layer_z: Optional[float] = field(default=None, init=False, repr=False)
+    _seen_extrusion_segments: set = field(default_factory=set, init=False, repr=False)
+    _seen_arc_segments: set = field(default_factory=set, init=False, repr=False)
 
     def add(self, line: str):
         self.lines.append(line)
+
+    def _axis_eps(self) -> float:
+        return max(_XYZ_EPSILON, float(self.settings.min_move_distance or 0.0))
+
+    def _format_feed(self, feed_rate: float) -> Optional[str]:
+        feed_int = int(round(float(feed_rate)))
+        if self.last_feed_rate is None or int(self.last_feed_rate) != feed_int:
+            self.last_feed_rate = float(feed_int)
+            return f"F{feed_int}"
+        return None
+
+    def _format_linear_move(self,
+                            cmd: str,
+                            x: Optional[float],
+                            y: Optional[float],
+                            z: Optional[float],
+                            e: Optional[float],
+                            feed_rate: Optional[float]) -> Optional[str]:
+        parts = [cmd]
+        if x is not None:
+            parts.append(f"X{_format_gcode_number(x, _XYZ_DIGITS)}")
+        if y is not None:
+            parts.append(f"Y{_format_gcode_number(y, _XYZ_DIGITS)}")
+        if z is not None:
+            parts.append(f"Z{_format_gcode_number(z, _XYZ_DIGITS)}")
+        if e is not None:
+            parts.append(f"E{_format_gcode_number(e, _E_DIGITS)}")
+        if feed_rate is not None:
+            feed_text = self._format_feed(feed_rate)
+            if feed_text:
+                parts.append(feed_text)
+        if len(parts) == 1:
+            return None
+        return " ".join(parts)
+
+    def _format_arc_move(self,
+                         cmd: str,
+                         x: float,
+                         y: float,
+                         z: float,
+                         i: float,
+                         j: float,
+                         e: Optional[float],
+                         feed_rate: Optional[float]) -> str:
+        parts = [
+            cmd,
+            f"X{_format_gcode_number(x, _XYZ_DIGITS)}",
+            f"Y{_format_gcode_number(y, _XYZ_DIGITS)}",
+            f"Z{_format_gcode_number(z, _XYZ_DIGITS)}",
+            f"I{_format_gcode_number(i, _XYZ_DIGITS)}",
+            f"J{_format_gcode_number(j, _XYZ_DIGITS)}",
+        ]
+        if e is not None:
+            parts.append(f"E{_format_gcode_number(e, _E_DIGITS)}")
+        if feed_rate is not None:
+            feed_text = self._format_feed(feed_rate)
+            if feed_text:
+                parts.append(feed_text)
+        return " ".join(parts)
+
+    def _update_segment_layer(self, z: float):
+        layer_z = round(float(z), _XYZ_DIGITS)
+        if self._segment_layer_z is None or abs(self._segment_layer_z - layer_z) >= self._axis_eps():
+            self._segment_layer_z = layer_z
+            self._seen_extrusion_segments.clear()
+            self._seen_arc_segments.clear()
+
+    def _segment_key(self,
+                     start: Tuple[float, float],
+                     end: Tuple[float, float]) -> Tuple[float, float, float, float]:
+        sx = round(float(start[0]), _XYZ_DIGITS)
+        sy = round(float(start[1]), _XYZ_DIGITS)
+        ex = round(float(end[0]), _XYZ_DIGITS)
+        ey = round(float(end[1]), _XYZ_DIGITS)
+        if (sx, sy) <= (ex, ey):
+            return (sx, sy, ex, ey)
+        return (ex, ey, sx, sy)
+
+    def _is_duplicate_extrusion(self,
+                                start: Tuple[float, float],
+                                end: Tuple[float, float],
+                                z: float) -> bool:
+        self._update_segment_layer(z)
+        key = self._segment_key(start, end)
+        if key in self._seen_extrusion_segments:
+            return True
+        self._seen_extrusion_segments.add(key)
+        return False
+
+    def _is_duplicate_arc(self,
+                          start: Tuple[float, float],
+                          end: Tuple[float, float],
+                          center: Tuple[float, float],
+                          clockwise: bool,
+                          z: float) -> bool:
+        self._update_segment_layer(z)
+        key = (
+            round(float(start[0]), _XYZ_DIGITS),
+            round(float(start[1]), _XYZ_DIGITS),
+            round(float(end[0]), _XYZ_DIGITS),
+            round(float(end[1]), _XYZ_DIGITS),
+            round(float(center[0]), _XYZ_DIGITS),
+            round(float(center[1]), _XYZ_DIGITS),
+            bool(clockwise),
+        )
+        if key in self._seen_arc_segments:
+            return True
+        self._seen_arc_segments.add(key)
+        return False
 
     def _emit_macro(self, lines: Iterable[str]):
         for line in lines:
@@ -397,21 +544,60 @@ class GCodeWriter:
         self.add("M84 ; disable motors")
         self.add("; End of EON-OpenSlicer demo")
 
-    def move_travel(self, x: float, y: float, z: float, f: float):
-        distance = math.hypot(x - self.position[0], y - self.position[1])
-        if distance > 0.0 and self.has_extruded:
+    def move_travel(self, x: float, y: float, z: float, f: float, retract: bool = True):
+        eps = self._axis_eps()
+        dx = x - self.position[0]
+        dy = y - self.position[1]
+        dz = z - self.position[2]
+        if abs(dx) < eps and abs(dy) < eps and abs(dz) < eps:
+            return
+        distance_xy = math.hypot(dx, dy)
+        if retract and distance_xy > eps and self.has_extruded:
             self.retract()
-        self.add(f"G0 X{x:.3f} Y{y:.3f} Z{z:.3f} F{f * 60:.0f}")
+        x_out = x if abs(dx) >= eps else None
+        y_out = y if abs(dy) >= eps else None
+        z_out = z if abs(dz) >= eps else None
+        line = self._format_linear_move("G0", x_out, y_out, z_out, None, f * 60.0)
+        if line:
+            self.add(line)
         self.position = (x, y, z)
 
     def move_wipe(self, x: float, y: float, z: float, speed: float):
-        self.add(f"G1 X{x:.3f} Y{y:.3f} Z{z:.3f} F{speed * 60:.0f}")
+        eps = self._axis_eps()
+        dx = x - self.position[0]
+        dy = y - self.position[1]
+        dz = z - self.position[2]
+        if abs(dx) < eps and abs(dy) < eps and abs(dz) < eps:
+            return
+        x_out = x if abs(dx) >= eps else None
+        y_out = y if abs(dy) >= eps else None
+        z_out = z if abs(dz) >= eps else None
+        line = self._format_linear_move("G1", x_out, y_out, z_out, None, speed * 60.0)
+        if line:
+            self.add(line)
         self.position = (x, y, z)
 
     def move_extrude(self, x: float, y: float, z: float, speed: float, extrusion: float):
+        eps = self._axis_eps()
+        dx = x - self.position[0]
+        dy = y - self.position[1]
+        dz = z - self.position[2]
+        if abs(dx) < eps and abs(dy) < eps and abs(dz) < eps:
+            return
+        start_xy = (self.position[0], self.position[1])
+        end_xy = (x, y)
+        if extrusion > 0.0 and self.settings.dedupe_extrusion_paths:
+            if self._is_duplicate_extrusion(start_xy, end_xy, z):
+                self.move_travel(x, y, z, self.settings.travel_speed, retract=True)
+                return
         self.unretract()
         self.e_position += extrusion
-        self.add(f"G1 X{x:.3f} Y{y:.3f} Z{z:.3f} E{self.e_position:.5f} F{speed * 60:.0f}")
+        x_out = x if abs(dx) >= eps else None
+        y_out = y if abs(dy) >= eps else None
+        z_out = z if abs(dz) >= eps else None
+        line = self._format_linear_move("G1", x_out, y_out, z_out, self.e_position, speed * 60.0)
+        if line:
+            self.add(line)
         self.position = (x, y, z)
         if extrusion > 0.0:
             self.has_extruded = True
@@ -424,15 +610,24 @@ class GCodeWriter:
                          extrusion: float,
                          center_xy: Tuple[float, float],
                          clockwise: bool):
+        eps = self._axis_eps()
+        dx = x - self.position[0]
+        dy = y - self.position[1]
+        dz = z - self.position[2]
+        if abs(dx) < eps and abs(dy) < eps and abs(dz) < eps:
+            return
+        start_xy = (self.position[0], self.position[1])
+        end_xy = (x, y)
+        if extrusion > 0.0 and self.settings.dedupe_extrusion_paths:
+            if self._is_duplicate_arc(start_xy, end_xy, center_xy, clockwise, z):
+                self.move_travel(x, y, z, self.settings.travel_speed, retract=True)
+                return
         self.unretract()
         self.e_position += extrusion
         i = center_xy[0] - self.position[0]
         j = center_xy[1] - self.position[1]
         cmd = "G2" if clockwise else "G3"
-        self.add(
-            f"{cmd} X{x:.3f} Y{y:.3f} Z{z:.3f} I{i:.3f} J{j:.3f} "
-            f"E{self.e_position:.5f} F{speed * 60:.0f}"
-        )
+        self.add(self._format_arc_move(cmd, x, y, z, i, j, self.e_position, speed * 60.0))
         self.position = (x, y, z)
         if extrusion > 0.0:
             self.has_extruded = True
@@ -444,7 +639,10 @@ class GCodeWriter:
             self.add("G10")
         else:
             self.e_position -= self.settings.retract_distance
-            self.add(f"G1 E{self.e_position:.5f} F{self.settings.retract_speed * 60:.0f}")
+            line = self._format_linear_move("G1", None, None, None, self.e_position,
+                                            self.settings.retract_speed * 60.0)
+            if line:
+                self.add(line)
         self.is_retracted = True
 
     def unretract(self):
@@ -454,7 +652,10 @@ class GCodeWriter:
             self.add("G11")
         else:
             self.e_position += self.settings.retract_distance
-            self.add(f"G1 E{self.e_position:.5f} F{self.settings.retract_speed * 60:.0f}")
+            line = self._format_linear_move("G1", None, None, None, self.e_position,
+                                            self.settings.retract_speed * 60.0)
+            if line:
+                self.add(line)
         self.is_retracted = False
 
     def extrusion_for_length(self,
@@ -686,6 +887,92 @@ def generate_pressure_advance_pattern(settings: SliceSettings,
             end = (line_length, y)
         y += spacing
         value += step
+
+    writer.write_footer()
+    return writer.get_gcode()
+
+def generate_flow_rate_test(settings: SliceSettings,
+                            start_percent: float,
+                            end_percent: float,
+                            step: float,
+                            block_height: float = 2.0,
+                            square_size: float = 20.0,
+                            spacing: float = 5.0) -> str:
+    writer = GCodeWriter(settings=settings)
+    writer.write_header()
+    writer.add("; Flow rate test")
+
+    if step == 0:
+        step = 1.0
+    if (end_percent - start_percent) * step < 0:
+        step = -step
+
+    z = settings.layer_height
+    x = 0.0
+    percent = start_percent
+    while (percent <= end_percent and step > 0) or (percent >= end_percent and step < 0):
+        writer.add(f"; FLOW: {percent:.0f}%")
+        writer.add(f"M221 S{percent:.0f}")
+        square = _tower_square(square_size, center=(x, 0.0))
+        layers = max(1, int(round(block_height / settings.layer_height)))
+        for _ in range(layers):
+            writer.perimeter_loop(square, z=z, speed=settings.print_speed)
+            z += settings.layer_height
+        x += square_size + spacing
+        percent += step
+
+    writer.write_footer()
+    return writer.get_gcode()
+
+def generate_max_flowrate_test(settings: SliceSettings,
+                               start_speed: float,
+                               end_speed: float,
+                               step: float,
+                               line_length: float = 80.0,
+                               line_count: int = 5,
+                               spacing: float = 5.0) -> str:
+    writer = GCodeWriter(settings=settings)
+    writer.write_header()
+    writer.add("; Max flowrate test")
+
+    if step == 0:
+        step = 5.0
+    if (end_speed - start_speed) * step < 0:
+        step = -step
+
+    z = settings.layer_height
+    y = 0.0
+    speed = start_speed
+    while (speed <= end_speed and step > 0) or (speed >= end_speed and step < 0):
+        writer.add(f"; SPEED: {speed:.0f}mm/s")
+        start = (0.0, y)
+        end = (line_length, y)
+        for _ in range(max(1, int(line_count))):
+            writer.move_travel(start[0], start[1], z, settings.travel_speed)
+            extrusion = writer.extrusion_for_length(line_length, width=settings.extrusion_width, multiplier=1.0)
+            writer.move_extrude(end[0], end[1], z, speed, extrusion=extrusion)
+            y += spacing
+            start = (0.0, y)
+            end = (line_length, y)
+        y += spacing
+        speed += step
+    writer.write_footer()
+    return writer.get_gcode()
+
+def generate_tolerance_test(settings: SliceSettings,
+                            sizes: Sequence[float],
+                            spacing: float = 5.0) -> str:
+    writer = GCodeWriter(settings=settings)
+    writer.write_header()
+    writer.add("; Tolerance test")
+
+    z = settings.layer_height
+    x = 0.0
+    for size in sizes:
+        square = _tower_square(size, center=(x, 0.0))
+        writer.add(f"; SIZE: {size:.2f}mm")
+        writer.perimeter_loop(square, z=z, speed=settings.print_speed)
+        x += size + spacing
 
     writer.write_footer()
     return writer.get_gcode()

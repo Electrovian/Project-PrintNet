@@ -13,7 +13,15 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from ...theme import export_theme, get_theme_name, register_theme, set_theme
 from config.defaults import DEFAULTS
-from slicer.gcode.writer import SliceSettings
+from slicer.gcode.writer import (
+    SliceSettings,
+    generate_flow_rate_test,
+    generate_max_flowrate_test,
+    generate_pressure_advance_pattern,
+    generate_retraction_tower,
+    generate_temperature_tower,
+    generate_tolerance_test,
+)
 
 if TYPE_CHECKING:
     UiMixinBase = QtCore.QObject
@@ -694,6 +702,11 @@ class UiMixin(UiMixinBase):
         mode = (mode or "").strip().lower()
         if not mode:
             return
+        if mode != "preview":
+            prev = getattr(self, "_preview_wireframe_prev", None)
+            if prev is not None and hasattr(self.viewer, "set_wireframe_enabled"):
+                self.viewer.set_wireframe_enabled(prev)
+            self._preview_wireframe_prev = None
         if mode == "prepare":
             self.prepare_view.show()
             self.preview_view.hide()
@@ -706,6 +719,8 @@ class UiMixin(UiMixinBase):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
                 self.viewer.set_models_visible(True)
+            if hasattr(self.viewer, "set_models_preview_alpha"):
+                self.viewer.set_models_preview_alpha(1.0)
             if hasattr(self.viewer, "set_platform_visible"):
                 self.viewer.set_platform_visible(True)
             if hasattr(self.viewer, "set_nozzle_visible"):
@@ -721,6 +736,11 @@ class UiMixin(UiMixinBase):
             self.preview_view.show()
             self._central_stack.setCurrentWidget(self.viewer)
             self._auto_slice_prepare()
+            if hasattr(self.viewer, "get_wireframe_enabled"):
+                if getattr(self, "_preview_wireframe_prev", None) is None:
+                    self._preview_wireframe_prev = self.viewer.get_wireframe_enabled()
+            if hasattr(self.viewer, "set_wireframe_enabled"):
+                self.viewer.set_wireframe_enabled(True)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
             if hasattr(self.viewer, "set_labels_visible"):
@@ -729,6 +749,8 @@ class UiMixin(UiMixinBase):
                 self.viewer.set_preview_visible(True)
             if hasattr(self.viewer, "set_models_visible"):
                 self.viewer.set_models_visible(False)
+            if hasattr(self.viewer, "set_models_preview_alpha"):
+                self.viewer.set_models_preview_alpha(1.0)
             if hasattr(self.viewer, "set_print_stats_visible"):
                 self.viewer.set_print_stats_visible(False)
             if hasattr(self.viewer, "set_preview_object_visible"):
@@ -1209,6 +1231,331 @@ class UiMixin(UiMixinBase):
             self.viewer.set_wireframe_enabled(enabled)
         state = "on" if enabled else "off"
         self.statusBar().showMessage(f"Wireframe {state}")
+
+    def _show_3dconnexion_dialog(self):
+        url = "https://3dconnexion.com/us/drivers/"
+        reply = QtWidgets.QMessageBox.question(
+            self.main,
+            "3Dconnexion",
+            "3Dconnexion devices use the system driver.\n"
+            "Open the driver download page?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply == QtWidgets.QMessageBox.Yes:
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
+
+    def _toggle_overhang(self, checked: bool):
+        try:
+            settings = self.settings_panel.to_settings()
+            angle = float(getattr(settings, "overhang_angle", 45.0))
+        except Exception:
+            angle = SliceSettings().overhang_angle
+        if hasattr(self.viewer, "set_overhang_visible"):
+            self.viewer.set_overhang_visible(bool(checked), angle=angle)
+        state = "on" if checked else "off"
+        self.statusBar().showMessage(f"Overhang view {state}")
+
+    def _open_config_folder(self):
+        path = self._app_config_dir()
+        os.makedirs(path, exist_ok=True)
+        self._open_path(path, "Configuration Folder")
+
+    def _check_for_updates(self):
+        url = "https://github.com/Electrovian/Project-EON-OpenSlicer/releases"
+        self._open_url(url, "Updates")
+
+    def _open_log_view(self):
+        if hasattr(self.main, "activity_logger") and self.main.activity_logger is not None:
+            path = self.main.activity_logger.log_dir
+        else:
+            path = os.path.join(self._project_root(), "logs")
+        os.makedirs(path, exist_ok=True)
+        self._open_path(path, "Logs")
+
+    def _open_user_guide(self):
+        base_dir = self._project_root()
+        candidates = [
+            os.path.join(base_dir, "README.md"),
+            os.path.join(base_dir, "Mobile", "MOBILE_DEPLOYMENT.md"),
+        ]
+        self._open_first_existing(candidates, "User Guide")
+
+    def _open_user_course(self):
+        base_dir = self._project_root()
+        candidates = [
+            os.path.join(base_dir, "Research", "Read.me"),
+            os.path.join(base_dir, "README.md"),
+        ]
+        self._open_first_existing(candidates, "User Course")
+
+    def _open_about_dialog(self):
+        version = self._read_version()
+        if not version:
+            version = "0.0.0"
+        QtWidgets.QMessageBox.information(
+            self.main,
+            "About EON-OpenSlicer",
+            f"EON-OpenSlicer\nVersion {version}\n\n"
+            "A centralized 3D printing lab management system.",
+        )
+
+    def _open_calibration_tutorial(self):
+        self._open_user_guide()
+
+    def _calibrate_temperature(self):
+        fields = [
+            {"key": "start_temp", "label": "Start temp (C)", "value": 220, "min": 120, "max": 320, "step": 5, "decimals": 0},
+            {"key": "end_temp", "label": "End temp (C)", "value": 190, "min": 120, "max": 320, "step": 5, "decimals": 0},
+            {"key": "step", "label": "Step (C)", "value": -5, "min": -30, "max": 30, "step": 1, "decimals": 0},
+            {"key": "block_height", "label": "Block height (mm)", "value": 5.0, "min": 1.0, "max": 30.0, "step": 0.5, "decimals": 1},
+            {"key": "tower_size", "label": "Tower size (mm)", "value": 20.0, "min": 5.0, "max": 60.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Temperature Tower", fields)
+        if params is None:
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_temperature_tower(
+            settings,
+            params["start_temp"],
+            params["end_temp"],
+            params["step"],
+            params["block_height"],
+            params["tower_size"],
+        )
+        self._write_calibration_gcode("temperature_tower.gcode", gcode, settings)
+
+    def _calibrate_flow_rate(self):
+        fields = [
+            {"key": "start_percent", "label": "Start flow (%)", "value": 90, "min": 50, "max": 150, "step": 1, "decimals": 0},
+            {"key": "end_percent", "label": "End flow (%)", "value": 110, "min": 50, "max": 150, "step": 1, "decimals": 0},
+            {"key": "step", "label": "Step (%)", "value": 5, "min": 1, "max": 20, "step": 1, "decimals": 0},
+            {"key": "block_height", "label": "Block height (mm)", "value": 2.0, "min": 0.4, "max": 10.0, "step": 0.2, "decimals": 1},
+            {"key": "square_size", "label": "Square size (mm)", "value": 20.0, "min": 5.0, "max": 60.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Flow Rate Test", fields)
+        if params is None:
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_flow_rate_test(
+            settings,
+            params["start_percent"],
+            params["end_percent"],
+            params["step"],
+            params["block_height"],
+            params["square_size"],
+        )
+        self._write_calibration_gcode("flow_rate_test.gcode", gcode, settings)
+
+    def _calibrate_pressure_advance(self):
+        fields = [
+            {"key": "start_value", "label": "Start value", "value": 0.0, "min": 0.0, "max": 1.0, "step": 0.01, "decimals": 3},
+            {"key": "end_value", "label": "End value", "value": 0.2, "min": 0.0, "max": 1.0, "step": 0.01, "decimals": 3},
+            {"key": "step", "label": "Step", "value": 0.02, "min": 0.005, "max": 0.2, "step": 0.005, "decimals": 3},
+            {"key": "line_length", "label": "Line length (mm)", "value": 80.0, "min": 20.0, "max": 200.0, "step": 5.0, "decimals": 1},
+            {"key": "line_count", "label": "Line count", "value": 5, "min": 1, "max": 20, "step": 1, "decimals": 0},
+            {"key": "spacing", "label": "Spacing (mm)", "value": 5.0, "min": 1.0, "max": 20.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Pressure Advance", fields)
+        if params is None:
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_pressure_advance_pattern(
+            settings,
+            params["start_value"],
+            params["end_value"],
+            params["step"],
+            params["line_length"],
+            int(params["line_count"]),
+            params["spacing"],
+        )
+        self._write_calibration_gcode("pressure_advance.gcode", gcode, settings)
+
+    def _calibrate_retraction(self):
+        fields = [
+            {"key": "start_distance", "label": "Start distance (mm)", "value": 0.4, "min": 0.0, "max": 10.0, "step": 0.1, "decimals": 2},
+            {"key": "end_distance", "label": "End distance (mm)", "value": 2.0, "min": 0.0, "max": 10.0, "step": 0.1, "decimals": 2},
+            {"key": "step", "label": "Step (mm)", "value": 0.2, "min": 0.05, "max": 2.0, "step": 0.05, "decimals": 2},
+            {"key": "block_height", "label": "Block height (mm)", "value": 5.0, "min": 1.0, "max": 30.0, "step": 0.5, "decimals": 1},
+            {"key": "tower_size", "label": "Tower size (mm)", "value": 20.0, "min": 5.0, "max": 60.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Retraction Test", fields)
+        if params is None:
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_retraction_tower(
+            settings,
+            params["start_distance"],
+            params["end_distance"],
+            params["step"],
+            params["block_height"],
+            params["tower_size"],
+        )
+        self._write_calibration_gcode("retraction_tower.gcode", gcode, settings)
+
+    def _calibrate_tolerance(self):
+        fields = [
+            {"key": "sizes", "label": "Sizes (comma-separated mm)", "value": "5, 10, 15", "type": "text"},
+            {"key": "spacing", "label": "Spacing (mm)", "value": 5.0, "min": 1.0, "max": 30.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Tolerance Test", fields)
+        if params is None:
+            return
+        try:
+            sizes = [float(val.strip()) for val in str(params["sizes"]).split(",") if val.strip()]
+        except Exception:
+            QtWidgets.QMessageBox.warning(self.main, "Tolerance Test", "Invalid sizes list.")
+            return
+        if not sizes:
+            QtWidgets.QMessageBox.warning(self.main, "Tolerance Test", "Enter at least one size.")
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_tolerance_test(settings, sizes, params["spacing"])
+        self._write_calibration_gcode("tolerance_test.gcode", gcode, settings)
+
+    def _calibrate_max_flowrate(self):
+        fields = [
+            {"key": "start_speed", "label": "Start speed (mm/s)", "value": 30, "min": 5, "max": 300, "step": 5, "decimals": 0},
+            {"key": "end_speed", "label": "End speed (mm/s)", "value": 120, "min": 5, "max": 300, "step": 5, "decimals": 0},
+            {"key": "step", "label": "Step (mm/s)", "value": 10, "min": 1, "max": 100, "step": 1, "decimals": 0},
+            {"key": "line_length", "label": "Line length (mm)", "value": 80.0, "min": 20.0, "max": 200.0, "step": 5.0, "decimals": 1},
+            {"key": "line_count", "label": "Line count", "value": 5, "min": 1, "max": 20, "step": 1, "decimals": 0},
+            {"key": "spacing", "label": "Spacing (mm)", "value": 5.0, "min": 1.0, "max": 20.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Max Flowrate Test", fields)
+        if params is None:
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_max_flowrate_test(
+            settings,
+            params["start_speed"],
+            params["end_speed"],
+            params["step"],
+            params["line_length"],
+            int(params["line_count"]),
+            params["spacing"],
+        )
+        self._write_calibration_gcode("max_flowrate_test.gcode", gcode, settings)
+
+    def _prompt_calibration_params(self, title: str, fields: list[dict]):
+        dlg = QtWidgets.QDialog(self.main)
+        dlg.setWindowTitle(title)
+        dlg.setModal(True)
+        layout = QtWidgets.QVBoxLayout(dlg)
+        form = QtWidgets.QFormLayout()
+        layout.addLayout(form)
+
+        widgets = {}
+        for field in fields:
+            key = field.get("key")
+            label = field.get("label", key)
+            field_type = field.get("type", "float")
+            if field_type == "text":
+                widget = QtWidgets.QLineEdit(dlg)
+                widget.setText(str(field.get("value", "")))
+            else:
+                if field.get("decimals", 0) == 0:
+                    widget = QtWidgets.QSpinBox(dlg)
+                    widget.setRange(int(field.get("min", 0)), int(field.get("max", 9999)))
+                    widget.setSingleStep(int(field.get("step", 1)))
+                    widget.setValue(int(field.get("value", 0)))
+                else:
+                    widget = QtWidgets.QDoubleSpinBox(dlg)
+                    widget.setDecimals(int(field.get("decimals", 2)))
+                    widget.setRange(float(field.get("min", -9999)), float(field.get("max", 9999)))
+                    widget.setSingleStep(float(field.get("step", 1.0)))
+                    widget.setValue(float(field.get("value", 0.0)))
+            form.addRow(QtWidgets.QLabel(str(label)), widget)
+            widgets[key] = widget
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, parent=dlg
+        )
+        layout.addWidget(buttons)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
+            return None
+        values = {}
+        for field in fields:
+            key = field.get("key")
+            widget = widgets.get(key)
+            if widget is None:
+                continue
+            if isinstance(widget, QtWidgets.QLineEdit):
+                values[key] = widget.text().strip()
+            else:
+                values[key] = widget.value()
+        return values
+
+    def _write_calibration_gcode(self, filename: str, gcode: str, settings: SliceSettings):
+        suggested_dir = os.getcwd()
+        if self._last_gcode_path:
+            suggested_dir = os.path.dirname(self._last_gcode_path)
+        suggested = os.path.join(suggested_dir, filename)
+        out_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self.main,
+            "Save Calibration G-code",
+            suggested,
+            "G-code files (*.gcode);;All files (*.*)",
+        )
+        if not out_path:
+            return
+        if not out_path.lower().endswith(".gcode"):
+            out_path = f"{out_path}.gcode"
+        try:
+            with open(out_path, "w", encoding="utf-8") as handle:
+                handle.write(gcode)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self.main, "Calibration", f"Failed to write gcode:\n{exc}")
+            return
+        self._last_gcode_path = out_path
+        if hasattr(self, "_analyze_gcode") and hasattr(self, "_update_preview_from_gcode"):
+            stats = self._analyze_gcode(out_path, settings)
+            self._update_preview_from_gcode(out_path, stats)
+            self._activate_mode("preview")
+        self.statusBar().showMessage(f"Saved calibration G-code to {out_path}")
+
+    def _open_url(self, url: str, title: str):
+        ok = QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
+        if not ok:
+            QtWidgets.QMessageBox.warning(self.main, title, f"Unable to open:\n{url}")
+
+    def _open_path(self, path: str, title: str):
+        ok = QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
+        if not ok:
+            QtWidgets.QMessageBox.warning(self.main, title, f"Unable to open:\n{path}")
+
+    def _open_first_existing(self, paths: list[str], title: str):
+        for path in paths:
+            if os.path.exists(path):
+                return self._open_path(os.path.abspath(path), title)
+        QtWidgets.QMessageBox.warning(self.main, title, "No documentation found.")
+
+    def _app_config_dir(self) -> str:
+        base = QtCore.QStandardPaths.writableLocation(QtCore.QStandardPaths.AppConfigLocation)
+        if not base:
+            base = os.path.join(os.path.expanduser("~"), ".eon_openslicer")
+        return os.path.join(base, "EON-OpenSlicer")
+
+    def _project_root(self) -> str:
+        here = os.path.abspath(__file__)
+        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(here))))
+
+    def _read_version(self) -> str | None:
+        init_path = os.path.join(self._project_root(), "App", "__init__.py")
+        if not os.path.exists(init_path):
+            return None
+        try:
+            with open(init_path, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    if line.strip().startswith("__version__"):
+                        parts = line.split("=", 1)
+                        if len(parts) > 1:
+                            return parts[1].strip().strip("\"' ")
+        except Exception:
+            return None
+        return None
 
     def _reset_window_layout(self):
         if hasattr(self, "_model_dock"):

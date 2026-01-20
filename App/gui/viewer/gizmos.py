@@ -17,6 +17,19 @@ class GizmoMixin:
 
     # -------------------- gizmo --------------------
 
+    def _color_with_alpha(self, color, alpha: float):
+        if not isinstance(color, (tuple, list)) or len(color) < 3:
+            return color
+        values = list(color)
+        if len(values) == 3:
+            values.append(1.0 if max(values) <= 1.0 else 255.0)
+        max_rgb = max(values[:3]) if values[:3] else 1.0
+        if max_rgb > 1.0:
+            values[3] = max(0.0, min(255.0, float(values[3]) * alpha))
+        else:
+            values[3] = max(0.0, min(1.0, float(values[3]) * alpha))
+        return tuple(values)
+
     def _build_gizmo(self):
         for axis, key in (("x", "gizmo_x"), ("y", "gizmo_y"), ("z", "gizmo_z")):
             line = gl.GLLinePlotItem(
@@ -40,21 +53,39 @@ class GizmoMixin:
 
             ring = gl.GLLinePlotItem(
                 color=theme_value(key, (1.0, 0.1, 0.1, 1.0)),
-                width=2.0,
+                width=2.4,
                 antialias=True,
             )
             ring.setVisible(False)
             self._gizmo_rotate_rings[axis] = ring
             self.addItem(ring)
 
-            ticks = gl.GLLinePlotItem(
+            ring_outer = gl.GLLinePlotItem(
+                color=theme_value(key, (1.0, 0.1, 0.1, 1.0)),
+                width=4.2,
+                antialias=True,
+            )
+            ring_outer.setVisible(False)
+            self._gizmo_rotate_rings_outer[axis] = ring_outer
+            self.addItem(ring_outer)
+
+            ticks_major = gl.GLLinePlotItem(
+                color=theme_value("gizmo_tick", (1.0, 1.0, 1.0, 1.0)),
+                width=1.6,
+                antialias=True,
+            )
+            ticks_major.setVisible(False)
+            self._gizmo_rotate_ticks_major[axis] = ticks_major
+            self.addItem(ticks_major)
+
+            ticks_minor = gl.GLLinePlotItem(
                 color=theme_value("gizmo_tick", (1.0, 1.0, 1.0, 1.0)),
                 width=1.0,
                 antialias=True,
             )
-            ticks.setVisible(False)
-            self._gizmo_rotate_ticks[axis] = ticks
-            self.addItem(ticks)
+            ticks_minor.setVisible(False)
+            self._gizmo_rotate_ticks_minor[axis] = ticks_minor
+            self.addItem(ticks_minor)
 
             arrows = gl.GLMeshItem(
                 meshdata=gl.MeshData(),
@@ -116,7 +147,11 @@ class GizmoMixin:
             item.setVisible(show_move)
         for axis, item in self._gizmo_rotate_rings.items():
             item.setVisible(show_rotate and (rotate_axis is None or axis == rotate_axis))
-        for axis, item in self._gizmo_rotate_ticks.items():
+        for axis, item in self._gizmo_rotate_rings_outer.items():
+            item.setVisible(show_rotate and (rotate_axis is None or axis == rotate_axis))
+        for axis, item in self._gizmo_rotate_ticks_major.items():
+            item.setVisible(show_rotate and (rotate_axis is None or axis == rotate_axis))
+        for axis, item in self._gizmo_rotate_ticks_minor.items():
             item.setVisible(show_rotate and (rotate_axis is None or axis == rotate_axis))
         for axis, item in self._gizmo_rotate_arrows.items():
             item.setVisible(show_rotate and (rotate_axis is None or axis == rotate_axis))
@@ -295,13 +330,16 @@ class GizmoMixin:
             points.append(origin + basis1 * (radius * math.cos(t)) + basis2 * (radius * math.sin(t)))
         return np.array(points, dtype=float)
 
-    def _tick_points_for_axis(self, axis: str, radius: float, tick_count: int = 60):
+    def _tick_points_for_axis(self,
+                              axis: str,
+                              radius: float,
+                              tick_count: int,
+                              tick_len: float):
         origin = self._gizmo_origin
         if origin is None:
             return np.zeros((0, 3), dtype=float)
         basis1, basis2 = self._ring_basis(axis)
         points = []
-        tick_len = radius * 0.08
         for i in range(tick_count):
             t = (2.0 * math.pi * i) / tick_count
             dir_vec = basis1 * math.cos(t) + basis2 * math.sin(t)
@@ -351,22 +389,39 @@ class GizmoMixin:
     def _update_rotate_gizmo(self):
         self._gizmo_ring_points = {}
         model_extent = float(self._gizmo_model_extent or (self._gizmo_size * 4.0))
-        radius = max(16.0, model_extent * 0.6)
+        radius = max(22.0, model_extent * 0.7)
         tick_color = theme_value("gizmo_tick", (1.0, 1.0, 1.0, 1.0))
-        arrow_len = max(6.0, radius * 0.12)
-        arrow_radius = arrow_len * 0.35
+        tick_minor = self._color_with_alpha(tick_color, 0.45)
+        arrow_len = max(7.0, radius * 0.1)
+        arrow_radius = arrow_len * 0.32
         for axis in ("x", "y", "z"):
             color = theme_value(f"gizmo_{axis}", (1.0, 0.1, 0.1, 1.0))
-            ring_points = self._ring_points_for_axis(axis, radius, 96)
+            ring_points = self._ring_points_for_axis(axis, radius, 128)
             self._gizmo_rotate_rings[axis].setData(pos=ring_points,
                                                    mode="line_strip",
                                                    color=self._color_array(color, len(ring_points)))
             self._gizmo_ring_points[axis] = ring_points
 
-            tick_points = self._tick_points_for_axis(axis, radius, 60)
-            self._gizmo_rotate_ticks[axis].setData(pos=tick_points,
-                                                   mode="lines",
-                                                   color=self._color_array(tick_color, len(tick_points)))
+            ring_outer = self._gizmo_rotate_rings_outer.get(axis)
+            if ring_outer is not None:
+                ring_outer.setData(
+                    pos=ring_points,
+                    mode="line_strip",
+                    color=self._color_array(self._color_with_alpha(color, 0.25), len(ring_points)),
+                )
+
+            tick_points_major = self._tick_points_for_axis(axis, radius, 24, radius * 0.12)
+            tick_points_minor = self._tick_points_for_axis(axis, radius, 72, radius * 0.06)
+            self._gizmo_rotate_ticks_major[axis].setData(
+                pos=tick_points_major,
+                mode="lines",
+                color=self._color_array(tick_color, len(tick_points_major)),
+            )
+            self._gizmo_rotate_ticks_minor[axis].setData(
+                pos=tick_points_minor,
+                mode="lines",
+                color=self._color_array(tick_minor, len(tick_points_minor)),
+            )
             self._update_rotate_arrows(axis, radius, arrow_len, arrow_radius, color)
 
     def _update_rotate_arrows(self, axis: str, radius: float, height: float, cone_radius: float, color):

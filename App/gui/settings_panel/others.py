@@ -176,15 +176,40 @@ class OtherSectionMixin:
             )
 
     def _update_support_controls(self, enabled: bool):
+        enabled = bool(enabled)
+        support_type = ""
+        support_style = ""
+        if hasattr(self, "support_type_combo"):
+            support_type = str(self.support_type_combo.currentData() or "").strip().lower()
+        if hasattr(self, "support_style_combo"):
+            support_style = str(self.support_style_combo.currentData() or "").strip().lower()
+        tree_mode = enabled and (support_type == "tree" or support_style == "tree")
+
         for control in (
             self.support_type_combo,
             self.support_style_combo,
             self.support_angle_spin,
             self.support_build_plate_check,
+            self.support_z_gap_spin,
+            self.support_xy_gap_spin,
+            self.support_spacing_spin,
+            self.support_interface_layers_spin,
+            self.support_interface_density_spin,
+            self.support_pattern_combo,
+            self.support_interface_pattern_combo,
+            self.support_speed_spin,
+            self.support_interface_speed_spin,
             self.support_base_combo,
             self.support_interface_combo,
         ):
-            control.setEnabled(bool(enabled))
+            control.setEnabled(enabled)
+
+        self.support_style_combo.setEnabled(enabled and support_type != "tree")
+        for control in (
+            self.tree_branch_angle_spin,
+            self.tree_merge_distance_spin,
+        ):
+            control.setEnabled(tree_mode)
 
     def _update_prime_controls(self, enabled: bool):
         for control in (
@@ -260,6 +285,19 @@ class OtherSectionMixin:
 
         self.setStyleSheet(
             "QWidget#SettingsPanel {"
+            f"  background: {panel_bg};"
+            "}"
+            "QStackedWidget#SettingsPages {"
+            f"  background: {panel_bg};"
+            "}"
+            "QScrollArea#SettingsScroll {"
+            f"  background: {panel_bg};"
+            "  border: none;"
+            "}"
+            "QScrollArea#SettingsScroll QWidget#qt_scrollarea_viewport {"
+            f"  background: {panel_bg};"
+            "}"
+            "QWidget#SettingsPage {"
             f"  background: {panel_bg};"
             "}"
             "QFrame#SettingsHeader {"
@@ -492,8 +530,20 @@ class OtherSectionMixin:
             support_style=self._combo_value(self.support_style_combo, "pillars"),
             overhang_angle=float(self.support_angle_spin.value()),
             support_build_plate_only=bool(self.support_build_plate_check.isChecked()),
+            support_z_gap=float(self.support_z_gap_spin.value()),
+            support_xy_gap=float(self.support_xy_gap_spin.value()),
+            interface_layers=int(self.support_interface_layers_spin.value()),
+            interface_density=float(self.support_interface_density_spin.value()) / 100.0,
+            support_spacing=float(self.support_spacing_spin.value()),
+            support_speed=float(self.support_speed_spin.value()),
+            support_interface_speed=float(self.support_interface_speed_spin.value()),
+            support_pattern=self._combo_value(self.support_pattern_combo, "rectilinear"),
+            support_interface_pattern=self._combo_value(self.support_interface_pattern_combo,
+                                                       "rectilinear"),
             support_filament_base=self._combo_value(self.support_base_combo, "default"),
             support_filament_interface=self._combo_value(self.support_interface_combo, "default"),
+            tree_branch_angle=float(self.tree_branch_angle_spin.value()),
+            tree_merge_distance=float(self.tree_merge_distance_spin.value()),
             prime_tower_enabled=bool(self.prime_tower_enable_check.isChecked()),
             prime_tower_width=float(self.prime_tower_width_spin.value()),
             prime_tower_square=bool(self.prime_tower_square_check.isChecked()),
@@ -664,10 +714,34 @@ class OtherSectionMixin:
             self.support_angle_spin.setValue(float(data["overhang_angle"]))
         if "support_build_plate_only" in data:
             self.support_build_plate_check.setChecked(bool(data["support_build_plate_only"]))
+        if "support_z_gap" in data:
+            self.support_z_gap_spin.setValue(float(data["support_z_gap"]))
+        if "support_xy_gap" in data:
+            self.support_xy_gap_spin.setValue(float(data["support_xy_gap"]))
+        if "interface_layers" in data:
+            self.support_interface_layers_spin.setValue(int(data["interface_layers"]))
+        if "interface_density" in data:
+            density = max(0.0, min(1.0, float(data["interface_density"]))) * 100.0
+            self.support_interface_density_spin.setValue(density)
+        if "support_spacing" in data:
+            self.support_spacing_spin.setValue(float(data["support_spacing"]))
+        if "support_speed" in data:
+            self.support_speed_spin.setValue(float(data["support_speed"]))
+        if "support_interface_speed" in data:
+            self.support_interface_speed_spin.setValue(float(data["support_interface_speed"]))
+        if "support_pattern" in data:
+            self._set_combo_value(self.support_pattern_combo, data["support_pattern"])
+        if "support_interface_pattern" in data:
+            self._set_combo_value(self.support_interface_pattern_combo,
+                                  data["support_interface_pattern"])
         if "support_filament_base" in data:
             self._set_combo_value(self.support_base_combo, data["support_filament_base"])
         if "support_filament_interface" in data:
             self._set_combo_value(self.support_interface_combo, data["support_filament_interface"])
+        if "tree_branch_angle" in data:
+            self.tree_branch_angle_spin.setValue(float(data["tree_branch_angle"]))
+        if "tree_merge_distance" in data:
+            self.tree_merge_distance_spin.setValue(float(data["tree_merge_distance"]))
         if "prime_tower_enabled" in data:
             self.prime_tower_enable_check.setChecked(bool(data["prime_tower_enabled"]))
         if "prime_tower_width" in data:

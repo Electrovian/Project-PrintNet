@@ -4,6 +4,7 @@ import math
 from typing import Dict, Iterable, List, Tuple
 
 import trimesh
+import threading
 
 from .geometry import Island2D, slice_mesh, polygons_with_holes
 
@@ -24,6 +25,9 @@ class MeshModel:
     _slice_cache_limit_bytes: int | None = field(default=None,
                                                  init=False,
                                                  repr=False)
+    _slice_cache_lock: threading.RLock = field(default_factory=threading.RLock,
+                                               init=False,
+                                               repr=False)
 
     @classmethod
     def from_file(cls, path: str) -> "MeshModel":
@@ -81,20 +85,22 @@ class MeshModel:
         except (TypeError, ValueError):
             tol = 0.0
         key = (round(float(z_height), 6), round(tol, 6))
-        cached = self._slice_cache.get(key)
-        if cached is not None:
-            self._slice_cache.move_to_end(key)
-            return cached
+        with self._slice_cache_lock:
+            cached = self._slice_cache.get(key)
+            if cached is not None:
+                self._slice_cache.move_to_end(key)
+                return cached
 
         loops = slice_mesh(self.mesh, z_height, tolerance=tol)
         islands = polygons_with_holes(loops)
-        self._slice_cache[key] = islands
-        self._slice_cache.move_to_end(key)
-        estimated = _estimate_islands_bytes(islands)
-        prev = self._slice_cache_bytes.get(key, 0)
-        self._slice_cache_bytes[key] = estimated
-        self._slice_cache_total_bytes += max(0, estimated - prev)
-        self._enforce_cache_limit()
+        with self._slice_cache_lock:
+            self._slice_cache[key] = islands
+            self._slice_cache.move_to_end(key)
+            estimated = _estimate_islands_bytes(islands)
+            prev = self._slice_cache_bytes.get(key, 0)
+            self._slice_cache_bytes[key] = estimated
+            self._slice_cache_total_bytes += max(0, estimated - prev)
+            self._enforce_cache_limit()
         return islands
 
     def slice_layers(self,
@@ -104,17 +110,19 @@ class MeshModel:
         return {float(z): self.slice_layer(float(z), tolerance=tolerance) for z in z_heights}
 
     def set_slice_cache_limit(self, max_mb: float | None):
-        if max_mb is None:
-            self._slice_cache_limit_bytes = None
-        else:
-            limit = max(1.0, float(max_mb))
-            self._slice_cache_limit_bytes = int(limit * 1024 * 1024)
-        self._enforce_cache_limit()
+        with self._slice_cache_lock:
+            if max_mb is None:
+                self._slice_cache_limit_bytes = None
+            else:
+                limit = max(1.0, float(max_mb))
+                self._slice_cache_limit_bytes = int(limit * 1024 * 1024)
+            self._enforce_cache_limit()
 
     def clear_slice_cache(self):
-        self._slice_cache.clear()
-        self._slice_cache_bytes.clear()
-        self._slice_cache_total_bytes = 0
+        with self._slice_cache_lock:
+            self._slice_cache.clear()
+            self._slice_cache_bytes.clear()
+            self._slice_cache_total_bytes = 0
 
     def _enforce_cache_limit(self):
         if self._slice_cache_limit_bytes is None:

@@ -14,6 +14,10 @@ class PreviewSegment:
     width: float
     feature: str
     is_extrude: bool
+    fan: float = 0.0
+    temperature: float = 0.0
+    layer_height: float = 0.0
+    layer_time: float = 0.0
 
 @dataclass
 class PreviewFeatureGroup:
@@ -25,6 +29,8 @@ class PreviewLayer:
     z: float
     features: Dict[str, PreviewFeatureGroup] = field(default_factory=dict)
     segments: List[PreviewSegment] = field(default_factory=list)
+    height: float = 0.0
+    time: float = 0.0
 
 @dataclass
 class GCodePreview:
@@ -35,6 +41,14 @@ class GCodePreview:
     max_flow: float
     min_width: float
     max_width: float
+    min_layer_height: float
+    max_layer_height: float
+    min_layer_time: float
+    max_layer_time: float
+    min_fan: float
+    max_fan: float
+    min_temp: float
+    max_temp: float
 
 def _arc_center_from_radius(start: Tuple[float, float],
                             end: Tuple[float, float],
@@ -122,6 +136,16 @@ def parse_gcode_preview(lines: Iterable[str],
     max_flow = 0.0
     min_width = float("inf")
     max_width = 0.0
+    min_fan = float("inf")
+    max_fan = 0.0
+    min_temp = float("inf")
+    max_temp = 0.0
+    min_layer_height = float("inf")
+    max_layer_height = 0.0
+    min_layer_time = float("inf")
+    max_layer_time = 0.0
+    fan_speed = 0.0
+    temperature = 0.0
 
     filament_area = None
     layer_height = None
@@ -165,6 +189,7 @@ def parse_gcode_preview(lines: Iterable[str],
 
     def add_segment_to_layers(seg: PreviewSegment):
         nonlocal min_speed, max_speed, min_flow, max_flow, min_width, max_width
+        nonlocal min_fan, max_fan, min_temp, max_temp
         layer = ensure_layer(seg.end[2])
         layer.segments.append(seg)
         group = layer.features.setdefault(seg.feature, PreviewFeatureGroup())
@@ -181,6 +206,12 @@ def parse_gcode_preview(lines: Iterable[str],
         if seg.width > 0.0:
             min_width = min(min_width, seg.width)
             max_width = max(max_width, seg.width)
+        if seg.fan > 0.0:
+            min_fan = min(min_fan, seg.fan)
+            max_fan = max(max_fan, seg.fan)
+        if seg.temperature > 0.0:
+            min_temp = min(min_temp, seg.temperature)
+            max_temp = max(max_temp, seg.temperature)
 
     def add_segment(seg: PreviewSegment):
         nonlocal skip_start
@@ -204,6 +235,8 @@ def parse_gcode_preview(lines: Iterable[str],
             return "retract"
         if "TRAVEL" in token:
             return "travel"
+        if "THIN" in token:
+            return "thin_wall"
         if "WALL" in token or "PERIMETER" in token:
             if "OUTER" in token:
                 return "outer_wall"
@@ -218,8 +251,6 @@ def parse_gcode_preview(lines: Iterable[str],
             return "bridge"
         if "GAP" in token:
             return "gap_infill"
-        if "THIN" in token:
-            return "thin_wall"
         if "IRON" in token:
             return "ironing"
         if "SKIRT" in token:
@@ -229,8 +260,6 @@ def parse_gcode_preview(lines: Iterable[str],
         if "RAFT" in token:
             return "raft"
         if "SUPPORT" in token:
-            if "INTERFACE" in token:
-                return "support_interface"
             return "support"
         if "SOLID" in token:
             return "solid_infill"
@@ -286,6 +315,33 @@ def parse_gcode_preview(lines: Iterable[str],
             continue
         if cmd == "M83":
             extruder_absolute = False
+            continue
+        if cmd in ("M106", "M107"):
+            if cmd == "M107":
+                fan_speed = 0.0
+                continue
+            fan_value = None
+            for part in parts[1:]:
+                axis = part[0].upper()
+                if axis != "S":
+                    continue
+                try:
+                    fan_value = float(part[1:])
+                except ValueError:
+                    continue
+            if fan_value is None:
+                fan_value = 255.0
+            fan_speed = max(0.0, min(255.0, fan_value))
+            continue
+        if cmd in ("M104", "M109"):
+            for part in parts[1:]:
+                axis = part[0].upper()
+                if axis != "S":
+                    continue
+                try:
+                    temperature = float(part[1:])
+                except ValueError:
+                    continue
             continue
         if cmd == "G28":
             axes = {part[0].upper() for part in parts[1:] if part}
@@ -387,7 +443,9 @@ def parse_gcode_preview(lines: Iterable[str],
                     seg_start = points[idx]
                     seg_end = points[idx + 1]
                     dist = math.hypot(seg_end[0] - seg_start[0], seg_end[1] - seg_start[1])
-                    flow = per_seg_e / dist if dist > 0 and delta_e > 0.0 else 0.0
+                    flow = 0.0
+                    if dist > 0 and per_seg_e > 0.0 and filament_area:
+                        flow = (per_seg_e * filament_area * speed) / dist
                     width = segment_width(dist, per_seg_e)
                     segment = PreviewSegment(
                         start=(seg_start[0], seg_start[1], position[2]),
@@ -398,6 +456,8 @@ def parse_gcode_preview(lines: Iterable[str],
                         width=width,
                         feature=feature,
                         is_extrude=is_extrude,
+                        fan=fan_speed,
+                        temperature=temperature,
                     )
                     add_segment(segment)
                 position = new_pos
@@ -407,7 +467,9 @@ def parse_gcode_preview(lines: Iterable[str],
         if dist <= 0 and delta_e == 0.0:
             position = new_pos
             continue
-        flow = delta_e / dist if dist > 0 and delta_e > 0.0 else 0.0
+        flow = 0.0
+        if dist > 0 and delta_e > 0.0 and filament_area:
+            flow = (delta_e * filament_area * speed) / dist
         width = segment_width(dist, delta_e)
         segment = PreviewSegment(
             start=(position[0], position[1], position[2]),
@@ -418,6 +480,8 @@ def parse_gcode_preview(lines: Iterable[str],
             width=width,
             feature=feature,
             is_extrude=is_extrude,
+            fan=fan_speed,
+            temperature=temperature,
         )
         add_segment(segment)
         position = new_pos
@@ -429,9 +493,42 @@ def parse_gcode_preview(lines: Iterable[str],
 
     if not layers:
         layers.append(PreviewLayer(z=0.0))
+    prev_z = None
+    for layer in layers:
+        if prev_z is None:
+            if settings is not None:
+                try:
+                    height = float(getattr(settings, "first_layer_height", None) or settings.layer_height)
+                except (TypeError, ValueError):
+                    height = 0.0
+            else:
+                height = 0.0
+        else:
+            height = float(layer.z - prev_z)
+        layer.height = max(0.0, height)
+        layer_time = 0.0
+        for seg in layer.segments:
+            dist = math.dist(seg.start, seg.end)
+            if seg.speed > 0:
+                layer_time += dist / seg.speed
+        layer.time = layer_time
+        for seg in layer.segments:
+            seg.layer_height = layer.height
+            seg.layer_time = layer.time
+        if layer.height > 0.0:
+            min_layer_height = min(min_layer_height, layer.height)
+            max_layer_height = max(max_layer_height, layer.height)
+        if layer.time > 0.0:
+            min_layer_time = min(min_layer_time, layer.time)
+            max_layer_time = max(max_layer_time, layer.time)
+        prev_z = layer.z
     min_speed = 0.0 if min_speed == float("inf") else min_speed
     min_flow = 0.0 if min_flow == float("inf") else min_flow
     min_width = 0.0 if min_width == float("inf") else min_width
+    min_fan = 0.0 if min_fan == float("inf") else min_fan
+    min_temp = 0.0 if min_temp == float("inf") else min_temp
+    min_layer_height = 0.0 if min_layer_height == float("inf") else min_layer_height
+    min_layer_time = 0.0 if min_layer_time == float("inf") else min_layer_time
     return GCodePreview(
         layers=layers,
         min_speed=min_speed,
@@ -440,6 +537,14 @@ def parse_gcode_preview(lines: Iterable[str],
         max_flow=max_flow,
         min_width=min_width,
         max_width=max_width,
+        min_layer_height=min_layer_height,
+        max_layer_height=max_layer_height,
+        min_layer_time=min_layer_time,
+        max_layer_time=max_layer_time,
+        min_fan=min_fan,
+        max_fan=max_fan,
+        min_temp=min_temp,
+        max_temp=max_temp,
     )
 
 def parse_gcode_preview_file(path: str,

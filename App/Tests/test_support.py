@@ -14,11 +14,12 @@ from slicer.mesh import MeshModel
 from slicer import support
 
 class SupportTests(unittest.TestCase):
-    def test_support_plan_has_columns(self):
+    def test_support_plan_has_layers(self):
         mesh = trimesh.creation.box(extents=(1.0, 1.0, 0.2))
         mesh.apply_translation((0.0, 0.0, 1.0))
         model = MeshModel(path="<memory>", mesh=mesh)
         settings = SliceSettings(overhang_angle=45.0,
+                                 support_enabled=True,
                                  support_spacing=0.5,
                                  support_z_gap=0.2,
                                  support_xy_gap=0.1,
@@ -27,8 +28,8 @@ class SupportTests(unittest.TestCase):
                                  interface_density=0.9)
         z_heights = [0.2, 0.4, 0.6, 0.8, 1.0]
         plan = support.generate_support_plan(model, z_heights, settings)
-        self.assertGreaterEqual(len(plan.columns), 1)
-        self.assertGreaterEqual(len(plan.interface_layers), 1)
+        self.assertGreaterEqual(len(plan.layers), 1)
+        self.assertTrue(any(layer.base_lines or layer.interface_lines for layer in plan.layers))
         self.assertEqual(len(plan.tree_branches), 0)
 
     def test_tree_support_branches_respect_angle(self):
