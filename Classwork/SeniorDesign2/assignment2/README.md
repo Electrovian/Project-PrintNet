@@ -14,6 +14,19 @@ This guide explains how to install, use, and interact with the PrintNet system.
 - 👉 [FAQ](faq.md)  
   Answers to common questions and troubleshooting tips.
 
+## 🎥 Videos
+
+This section contains short demonstration and walkthrough videos for PrintNet.
+
+Videos may include:
+- System overview and architecture explanation
+- User workflow (submitting a print job)
+- Admin workflow (monitoring printers)
+- Live demo of PrintNet in use
+
+
+See: [Videos](videos.md)
+
 ## Who is this for?
 - Students submitting 3D print jobs
 - Lab users interacting with PrintNet
