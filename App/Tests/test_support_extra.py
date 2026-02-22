@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 
@@ -10,9 +10,9 @@ TESTS = os.path.abspath(os.path.dirname(__file__))
 if TESTS not in sys.path:
     sys.path.insert(0, TESTS)
 
-from slicer import geometry
-from slicer import support
-from slicer.gcode.writer import SliceSettings
+from slicer_v2 import legacy_geometry as geometry
+from slicer_v2 import legacy_support as support
+from slicer_v2.legacy_gcode_writer import SliceSettings
 from harness import BaseTestCase, square_points
 
 
@@ -62,3 +62,4 @@ class SupportExtraTests(BaseTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

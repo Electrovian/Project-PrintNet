@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 import math
@@ -10,7 +10,7 @@ TESTS = os.path.abspath(os.path.dirname(__file__))
 if TESTS not in sys.path:
     sys.path.insert(0, TESTS)
 
-from slicer import path_planner
+from slicer_v2 import legacy_path_planner as path_planner
 from harness import BaseTestCase, circle_points
 
 
@@ -57,3 +57,4 @@ class PathPlannerExtraTests(BaseTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

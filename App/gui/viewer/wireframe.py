@@ -30,6 +30,8 @@ class WireframeMixin:
             return
         enable_edges = bool(enabled)
         m["wireframe"] = enable_edges
+        if enable_edges and m.get("meshdata_wireframe") is None and hasattr(self, "_ensure_model_wireframe_meshdata"):
+            self._ensure_model_wireframe_meshdata(model_id)
         if enable_edges and m.get("meshdata_wireframe") is not None:
             item.setMeshData(meshdata=m["meshdata_wireframe"])
             if hasattr(self, "_apply_model_color"):

@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple, TYPE_CHECKING, cast
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from slicer.gcode.writer import SliceSettings
+from slicer_v2.legacy_gcode_writer import SliceSettings
 from config.defaults import DEFAULTS
 from ..theme import theme_css
 from ..model_panel import ModelPanel

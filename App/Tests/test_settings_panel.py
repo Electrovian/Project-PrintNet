@@ -1,7 +1,7 @@
-import unittest
+﻿import unittest
 
 from qt_harness import QtTestCase
-from slicer.gcode.writer import SliceSettings
+from slicer_v2.legacy_gcode_writer import SliceSettings
 
 
 class SettingsPanelTests(QtTestCase):
@@ -127,3 +127,4 @@ class SettingsPanelTests(QtTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

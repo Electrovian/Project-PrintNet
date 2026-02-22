@@ -137,51 +137,60 @@
 
 ```mermaid
 flowchart TD
-    A[3D Mesh] --> B[Slice at Z-Heights]
-    B --> C[Raw 2D Polygons]
-    C --> D[Union Overlapping Polygons]
-    D --> E[Identify Islands with Holes]
-    E --> F[Apply Hole Compensation]
-    F --> G[Offset for Perimeters]
-    G --> H[Shell Generation Loop]
-    H --> I{More Shells?}
-    I -->|Yes| G
-    I -->|No| J[Inner Region Extraction]
-    J --> K[Thin Wall Detection]
-    J --> L[Gap Fill Detection]
-    J --> M[Infill Region]
-    M --> N[Generate Infill Lines]
-    N --> O[Clip to Region]
-    O --> P[Final Paths]
-    K --> P
-    L --> P
+    A[Combined Mesh] --> B[slicer_v2.mesh.run]
+    B --> C[slicer_v2.slice_grid.run]
+    C --> D[slicer_v2.regions.run]
+    D --> E[slicer_v2.islands.run]
+    E --> F[slicer_v2.perimeters.run]
+    F --> G[slicer_v2.infill.run]
+    F --> H[slicer_v2.supports.run]
+    G --> I[slicer_v2.bridges.run]
+    H --> I
+    I --> J[slicer_v2.travel.run]
+    J --> K[slicer_v2.gcode.run]
+    K --> L[Stage Artifacts + G-code Lines]
+
+    V[slicer_v2.validators] -. validate_context .-> B
+    B -. validate_stage_artifact .-> V
+    C -. validate_stage_artifact .-> V
+    D -. validate_stage_artifact .-> V
+    E -. validate_stage_artifact .-> V
+    F -. validate_stage_artifact .-> V
+    G -. validate_stage_artifact .-> V
+    H -. validate_stage_artifact .-> V
+    I -. validate_stage_artifact .-> V
+    J -. validate_stage_artifact .-> V
+    K -. validate_stage_artifact .-> V
+    K -. validate_stage_sequence .-> V
 ```
 
 ## Settings Hierarchy
 
 ```mermaid
 flowchart TD
-    A[User Input] --> B[settings_panel UI]
-    B --> C[SliceSettings Dataclass]
-    D[Printer Config] --> C
-    E[defaults.py] --> C
-    F[FirmwareProfile] --> C
+    A[settings_panel UI] --> E[SliceSettings Dataclass]
+    B[preset profile payloads] --> C[profile_compat merge]
+    D[settings.py defaults + aliases] --> C
+    C --> F[normalize_settings]
+    E --> F
+    G[runtime perf hints] --> F
+    H[create_context(resolved_settings)] --> I[SlicerContext]
+    F --> H
+    H --> I
 
-    C --> G[Layer Settings]
-    C --> H[Perimeter Settings]
-    C --> I[Infill Settings]
-    C --> J[Support Settings]
-    C --> K[Speed Settings]
-    C --> L[Material Settings]
-    C --> M[Advanced Settings]
+    I --> J[Geometry controls]
+    I --> K[Perimeter/Infill controls]
+    I --> L[Support controls]
+    I --> M[Motion + temperature controls]
+    I --> N[G-code macros + format]
+    I --> O[Validation toggles]
 
-    G --> N[layer_height, first_layer_height, etc.]
-    H --> O[wall_count, line_width, seam_position, etc.]
-    I --> P[infill_percent, pattern, angle, etc.]
-    J --> Q[support_type, density, interface, etc.]
-    K --> R[print_speed, travel_speed, bridge_speed, etc.]
-    L --> S[nozzle_diameter, filament_density, temperature, etc.]
-    M --> T[arc_fitting, combing, retraction, etc.]
+    J --> P[mesh/slice_grid/regions/islands]
+    K --> Q[perimeters/infill]
+    L --> R[supports/bridges]
+    M --> S[travel/gcode]
+    N --> S
+    O --> T[gcode_validation + pipeline validators]
 ```
 
 ## Summary of Architectural Strengths

@@ -2,6 +2,7 @@ from PyQt5 import QtCore
 
 from ...workers import Worker
 from config.defaults import DEFAULTS
+from config.runtime_printer_state import runtime_printer_state_from_defaults
 from .load import LoadMixin
 from .print import PrintMixin
 from .project import ProjectMixin
@@ -21,6 +22,7 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
         self._last_preview_data = None
         self._last_preview_text = None
         self._last_slice_meshes = None
+        self._last_slicer_backend = None
         self._slice_in_progress = False
         self._labels_visible = True
         self._model_clipboard = []
@@ -37,6 +39,7 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
         self._device_status_timer.setInterval(750)
         self._device_status_timer.timeout.connect(self._update_device_status)
         self._workers = set()
+        self.runtime_printer_state = runtime_printer_state_from_defaults(DEFAULTS.get("printer", {}))
 
     def __getattr__(self, name):
         main = self.__dict__.get("main")
@@ -70,6 +73,7 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
         self._last_preview_data = None
         self._last_preview_text = None
         self._last_slice_meshes = None
+        self._last_slicer_backend = None
         self._undo_timer = QtCore.QTimer(self)
         self._undo_timer.setSingleShot(True)
         self._undo_timer.timeout.connect(self._finalize_undo_snapshot)
@@ -81,6 +85,11 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
 
         self._activate_mode("prepare")
         self.statusBar().showMessage(DEFAULTS["app"]["status_ready"])
+        if hasattr(self.viewer, "set_bed_limits"):
+            self.viewer.set_bed_limits(self.runtime_printer_state.bed_size, self.runtime_printer_state.bed_z)
+        active_printer = getattr(getattr(self, "printer_manager", None), "active_printer", None)
+        if active_printer is not None and hasattr(self, "_apply_printer_profile"):
+            self._apply_printer_profile(active_printer, source="initialize")
         if self._device_status_timer is not None:
             self._device_status_timer.start()
 

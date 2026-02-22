@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 
@@ -8,7 +8,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from slicer.mesh_opt import simplify_mesh, wireframe_target_faces
+from slicer_v2.legacy_mesh_opt import simplify_mesh, wireframe_target_faces
 
 
 class MeshOptTests(unittest.TestCase):
@@ -25,3 +25,4 @@ class MeshOptTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

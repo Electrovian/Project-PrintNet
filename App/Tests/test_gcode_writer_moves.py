@@ -1,4 +1,4 @@
-from slicer.gcode.writer import GCodeWriter, SliceSettings, _normalize_gcode_lines
+﻿from slicer_v2.legacy_gcode_writer import GCodeWriter, SliceSettings, _normalize_gcode_lines
 
 
 def test_normalize_gcode_lines_from_string():
@@ -75,3 +75,4 @@ def test_retract_noop_when_distance_zero():
     writer = GCodeWriter(settings=settings)
     writer.retract()
     assert writer.lines == []
+

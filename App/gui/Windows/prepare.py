@@ -86,7 +86,11 @@ class PrepareView(QtCore.QObject):
         action_layout.setSpacing(6)
 
         self._slice_btn = QtWidgets.QPushButton("Slice plate", self._action_panel)
-        self._slice_btn.clicked.connect(self.main.slice_current_model)
+        slice_handler = getattr(self.main, "slice_current_plate", None)
+        if not callable(slice_handler):
+            slice_handler = getattr(self.main, "slice_current_model", None)
+        if callable(slice_handler):
+            self._slice_btn.clicked.connect(slice_handler)
         action_layout.addWidget(self._slice_btn)
 
         self._print_btn = QtWidgets.QPushButton("Send print", self._action_panel)

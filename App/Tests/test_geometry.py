@@ -1,4 +1,4 @@
-import math
+﻿import math
 import os
 import sys
 import unittest
@@ -10,7 +10,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from slicer import geometry
+from slicer_v2 import legacy_geometry as geometry
 
 def polygon_area(points):
     if len(points) < 3:
@@ -145,3 +145,4 @@ class GeometryValidationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

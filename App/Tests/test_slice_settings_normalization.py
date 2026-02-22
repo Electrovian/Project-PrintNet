@@ -1,6 +1,6 @@
-import pytest
+﻿import pytest
 
-from slicer.gcode.writer import SliceSettings
+from slicer_v2.legacy_gcode_writer import SliceSettings
 
 
 @pytest.mark.parametrize(
@@ -212,3 +212,4 @@ def test_ironing_type_enforced(ironing_type, ironing_enabled, expected_type, exp
     settings = SliceSettings(ironing_type=ironing_type, ironing_enabled=ironing_enabled)
     assert settings.ironing_type == expected_type
     assert settings.ironing_enabled == expected_enabled
+

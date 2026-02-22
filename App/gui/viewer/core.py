@@ -8,8 +8,8 @@ import pyqtgraph.opengl as gl
 from PyQt5 import QtCore, QtGui, QtWidgets
 import trimesh
 
-from slicer.geometry import arrange_rectangles, lowest_planar_face
-from slicer.mesh_opt import simplify_mesh, wireframe_target_faces
+from slicer_v2.legacy_geometry import arrange_rectangles, lowest_planar_face
+from slicer_v2.legacy_mesh_opt import simplify_mesh, wireframe_target_faces
 
 from ..auto_orient import (
     face_normals_and_areas,
@@ -336,7 +336,11 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         bed_span = max(float(self._bed_size[0]), float(self._bed_size[1]), size)
 
         self.opts["center"] = pg.Vector(0.0, 0.0, 0.0) # pyright: ignore[reportArgumentType]
-        self.opts["distance"] = float(max(bed_span * 2.0, 200.0)) # pyright: ignore[reportArgumentType]
+        if len(self.models) <= 1:
+            focus_span = max(size * 4.0, 60.0)
+            self.opts["distance"] = float(max(120.0, min(focus_span, bed_span * 2.0))) # pyright: ignore[reportArgumentType]
+        else:
+            self.opts["distance"] = float(max(bed_span * 2.0, 200.0)) # pyright: ignore[reportArgumentType]
         self._coerce_distance()
         self.update()
         return model_id
@@ -638,7 +642,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
                         self.set_selected_models([picked])
                 self.modelPicked.emit(picked)
 
-            # 2) Allow drag of selected model even if pick missed (Bambu-like)
+            # 2) Allow drag of selected model even if pick missed (slicer-like behavior)
             if self._selected_model_id is not None:
                 plane_z = 0.0
                 bounds_list = [self.models[mid].get("bounds") for mid in self._selected_model_ids if mid in self.models]
@@ -827,6 +831,49 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
 
     # -------------------- mesh rebuild + bounds --------------------
 
+    def _sanitize_faces_for_render(self, vertices: np.ndarray, faces: np.ndarray):
+        v = np.asarray(vertices, dtype=float)
+        f = np.asarray(faces, dtype=int)
+        if v.ndim != 2 or v.shape[1] != 3:
+            return None
+        if f.ndim != 2 or f.shape[1] != 3:
+            return None
+        if v.size == 0 or f.size == 0:
+            return None
+
+        max_index = len(v)
+        valid = (f >= 0).all(axis=1) & (f < max_index).all(axis=1)
+        f = f[valid]
+        if f.size == 0:
+            return None
+
+        non_degenerate = (f[:, 0] != f[:, 1]) & (f[:, 0] != f[:, 2]) & (f[:, 1] != f[:, 2])
+        f = f[non_degenerate]
+        if f.size == 0:
+            return None
+
+        p0 = v[f[:, 0]]
+        p1 = v[f[:, 1]]
+        p2 = v[f[:, 2]]
+        area = np.linalg.norm(np.cross(p1 - p0, p2 - p0), axis=1)
+        finite = np.isfinite(area)
+        f = f[finite & (area > 1e-14)]
+        if f.size == 0:
+            return None
+        return f
+
+    def _placeholder_meshdata(self):
+        verts = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [0.001, 0.0, 0.0],
+                [0.0, 0.001, 0.0],
+            ],
+            dtype=float,
+        )
+        faces = np.array([[0, 1, 2]], dtype=int)
+        return gl.MeshData(vertexes=verts, faces=faces)
+
     def _create_or_update_mesh_item(self, model_id: int):
         m = self.models[model_id]
         result = self._compute_transformed_vertices(m)
@@ -838,17 +885,16 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         m["bounds"] = (mn, mx)
         self._update_bed_state(model_id)
 
-        md = gl.MeshData(vertexes=v, faces=m["faces"])
+        render_faces = self._sanitize_faces_for_render(v, m["faces"])
+        if render_faces is None:
+            md = self._placeholder_meshdata()
+        else:
+            md = gl.MeshData(vertexes=v, faces=render_faces)
         m["meshdata_full"] = md
-        m["meshdata_wireframe"] = None
-        face_count = int(m["faces"].shape[0]) if m.get("faces") is not None else 0
-        target_faces = wireframe_target_faces(face_count)
-        if target_faces and target_faces < face_count:
-            simplified = simplify_mesh(v, m["faces"], target_faces)
-            if simplified is not None:
-                wire_v, wire_f = simplified
-                if wire_v is not None and wire_f is not None and wire_f.shape[0] > 0:
-                    m["meshdata_wireframe"] = gl.MeshData(vertexes=wire_v, faces=wire_f)
+        if bool(m.get("wireframe")):
+            m["meshdata_wireframe"] = self._build_wireframe_meshdata(v, render_faces if render_faces is not None else m["faces"])
+        else:
+            m["meshdata_wireframe"] = None
         base_color = theme_value("mesh_color", (0.0, 0.9, 0.4, 0.9))
         warn_color = theme_value("mesh_warning", (1.0, 0.25, 0.2, 0.95))
         color = warn_color if m.get("out_of_bounds") else base_color
@@ -876,6 +922,44 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
                 item.setVisible(False)
         if self._overhang_visible:
             self._update_overhang_item(model_id, vertices=v, faces=m.get("faces"))
+
+    def _build_wireframe_meshdata(self, vertices: np.ndarray, faces: np.ndarray):
+        safe_faces = self._sanitize_faces_for_render(vertices, faces)
+        if safe_faces is None:
+            return self._placeholder_meshdata()
+        faces = safe_faces
+        face_count = int(faces.shape[0]) if faces is not None else 0
+        target_faces = wireframe_target_faces(face_count)
+        if target_faces and target_faces < face_count:
+            simplified = simplify_mesh(vertices, faces, target_faces)
+            if simplified is not None:
+                wire_v, wire_f = simplified
+                if wire_v is not None and wire_f is not None and wire_f.shape[0] > 0:
+                    safe_wire_faces = self._sanitize_faces_for_render(wire_v, wire_f)
+                    if safe_wire_faces is not None:
+                        return gl.MeshData(vertexes=wire_v, faces=safe_wire_faces)
+        return gl.MeshData(vertexes=vertices, faces=faces)
+
+    def _ensure_model_wireframe_meshdata(self, model_id: int):
+        model = self.models.get(model_id)
+        if model is None:
+            return
+        if model.get("meshdata_wireframe") is not None:
+            return
+        result = self._compute_transformed_vertices(model)
+        if result is None:
+            return
+        vertices, offset, mn, mx = result
+        model["offset"] = offset
+        model["bounds"] = (mn, mx)
+        self._update_bed_state(model_id)
+        faces = model.get("faces")
+        if faces is None:
+            return
+        render_faces = self._sanitize_faces_for_render(vertices, faces)
+        if render_faces is None:
+            return
+        model["meshdata_wireframe"] = self._build_wireframe_meshdata(vertices, render_faces)
 
     def _compute_transformed_vertices(self, model: dict):
         v0 = model.get("base_vertices")

@@ -17,6 +17,20 @@ class GizmoMixin:
 
     # -------------------- gizmo --------------------
 
+    def _placeholder_meshdata(self):
+        # Avoid zero/empty mesh placeholders that can trigger invalid normal warnings
+        # in pyqtgraph's MeshData on some builds.
+        verts = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [0.001, 0.0, 0.0],
+                [0.0, 0.001, 0.0],
+            ],
+            dtype=float,
+        )
+        faces = np.array([[0, 1, 2]], dtype=int)
+        return gl.MeshData(vertexes=verts, faces=faces)
+
     def _color_with_alpha(self, color, alpha: float):
         if not isinstance(color, (tuple, list)) or len(color) < 3:
             return color
@@ -42,7 +56,7 @@ class GizmoMixin:
             self.addItem(line)
 
             cone = gl.GLMeshItem(
-                meshdata=gl.MeshData(),
+                meshdata=self._placeholder_meshdata(),
                 smooth=False,
                 color=theme_value(key, (1.0, 0.1, 0.1, 1.0)),
                 shader="shaded",
@@ -88,7 +102,7 @@ class GizmoMixin:
             self.addItem(ticks_minor)
 
             arrows = gl.GLMeshItem(
-                meshdata=gl.MeshData(),
+                meshdata=self._placeholder_meshdata(),
                 smooth=False,
                 color=theme_value(key, (1.0, 0.1, 0.1, 1.0)),
                 shader="shaded",

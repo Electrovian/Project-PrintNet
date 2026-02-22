@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 
@@ -6,7 +6,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from slicer.gcode.preview import parse_gcode_preview
+from slicer_v2.legacy_gcode_preview import parse_gcode_preview
 
 class GCodePreviewTests(unittest.TestCase):
     def test_parse_gcode_preview_layers_and_features(self):
@@ -32,3 +32,4 @@ class GCodePreviewTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

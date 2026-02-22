@@ -218,7 +218,13 @@ class ControlView(QtWidgets.QWidget):
             self._printer_combo.setEnabled(False)
             return
         self._printer_combo.setEnabled(True)
-        default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+        default_name = ""
+        main = self.parent()
+        runtime_state = getattr(main, "runtime_printer_state", None) if main is not None else None
+        if runtime_state is not None:
+            default_name = str(getattr(runtime_state, "name", "")).strip().lower()
+        if not default_name:
+            default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
         default_index = None
         for idx, printer in enumerate(self._printers):
             name = printer.get("name") if isinstance(printer, dict) else None

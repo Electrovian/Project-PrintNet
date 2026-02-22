@@ -6,10 +6,13 @@ import sys
 from pathlib import Path
 
 
-def _ensure_app_on_path() -> None:
-    app_dir = Path(__file__).resolve().parent
-    if str(app_dir) not in sys.path:
-        sys.path.insert(0, str(app_dir))
+def _ensure_project_paths() -> None:
+    mobile_dir = Path(__file__).resolve().parent
+    repo_root = mobile_dir.parent
+    app_dir = repo_root / "App"
+    for path in (str(mobile_dir), str(app_dir), str(repo_root)):
+        if path not in sys.path:
+            sys.path.insert(0, path)
 
 
 def _is_android() -> bool:
@@ -40,11 +43,11 @@ def is_mobile_platform() -> bool:
 
 
 def main():
-    _ensure_app_on_path()
+    _ensure_project_paths()
     if is_mobile_platform():
         print("Starting EON-OpenSlicer in mobile mode...")
         try:
-            from app_mobile import main as mobile_main
+            from Mobile.app_mobile import main as mobile_main
         except ImportError as exc:
             print(f"Error: Mobile dependencies not installed: {exc}")
             print("Please install: pip install -r Mobile/requirements-mobile.txt")
@@ -54,7 +57,7 @@ def main():
 
     print("Starting EON-OpenSlicer in desktop mode...")
     try:
-        from main import main as desktop_main
+        from App.main import main as desktop_main
     except ImportError as exc:
         print(f"Error: Desktop dependencies not installed: {exc}")
         print("Please install: pip install -r App/requirements.txt")

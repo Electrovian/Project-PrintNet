@@ -1,8 +1,8 @@
-import pytest
+﻿import pytest
 import trimesh
 
-from slicer.ai_checks import _check_mesh, _check_settings, _merge_reports, run_ai_checks, AiCheckReport
-from slicer.gcode.writer import SliceSettings
+from slicer_v2.legacy_ai_checks import _check_mesh, _check_settings, _merge_reports, run_ai_checks, AiCheckReport
+from slicer_v2.legacy_gcode_writer import SliceSettings
 
 
 def test_merge_reports_deduplicates():
@@ -76,3 +76,4 @@ def test_run_ai_checks_merges_settings_and_mesh_reports():
     report = run_ai_checks([mesh], settings)
     assert "High print speed detected; reduce for better surface quality." in report.suggestions
     assert "Overhangs detected with supports disabled; enable supports or adjust angle." in report.warnings
+

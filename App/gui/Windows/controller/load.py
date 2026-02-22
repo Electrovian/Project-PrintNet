@@ -109,7 +109,101 @@ def _sanitize_mesh_arrays(vertices: np.ndarray, faces: np.ndarray):
     return v, f
 
 
+def _format_extent_triplet(extents: np.ndarray) -> str:
+    e = np.asarray(extents, dtype=float).reshape(-1)
+    if e.size != 3:
+        return "unknown"
+    return f"{e[0]:.2f} x {e[1]:.2f} x {e[2]:.2f} mm"
+
+
+def _infer_import_unit_scale(mesh: trimesh.Trimesh):
+    # Mirror historical slicer volume-based checks and add a conservative fallback for
+    # ultra-detailed tiny imports that are commonly authored in inches.
+    volume = 0.0
+    try:
+        volume = abs(float(mesh.volume))
+    except Exception:
+        volume = 0.0
+
+    extents = np.asarray(getattr(mesh, "extents", np.zeros(3, dtype=float)), dtype=float).reshape(-1)
+    if extents.size != 3:
+        extents = np.zeros(3, dtype=float)
+    bbox_volume = float(extents[0] * extents[1] * extents[2]) if np.isfinite(extents).all() else 0.0
+    max_dim = float(np.max(extents)) if extents.size == 3 else 0.0
+    face_count = 0
+    try:
+        face_count = int(len(mesh.faces))
+    except Exception:
+        face_count = 0
+
+    if 0.0 < volume < 0.008:
+        return 1000.0, "meters", extents
+    if 0.0 < volume < 8.0:
+        return 25.4, "inches", extents
+    if face_count >= 100000 and 0.0 < max_dim <= 12.0 and 0.0 < bbox_volume < 800.0:
+        return 25.4, "inches", extents
+    return 1.0, "", extents
+
+
 class LoadMixin:
+    def _prefer_manual_stl_entry(self) -> bool:
+        if os.name != "nt":
+            return False
+        force_manual = str(os.environ.get("EON_FORCE_MANUAL_STL_ENTRY", "0")).strip().lower()
+        if force_manual in ("1", "true", "yes", "on"):
+            return True
+        prefer_manual = str(os.environ.get("EON_PREFER_MANUAL_STL_ENTRY", "0")).strip().lower()
+        return prefer_manual in ("1", "true", "yes", "on")
+
+    def _prompt_stl_paths_fallback(self):
+        initial_text = ""
+        try:
+            clipboard = QtWidgets.QApplication.clipboard()
+            clip_text = str(clipboard.text() if clipboard is not None else "").strip()
+            if clip_text.lower().endswith(".stl"):
+                initial_text = clip_text
+        except Exception:
+            initial_text = ""
+        text, ok = QtWidgets.QInputDialog.getMultiLineText(
+            self.main,
+            "Open STL files",
+            "Paste full STL path(s), one per line.\n"
+            "Example: C:\\Users\\Elect\\Downloads\\part.stl",
+            initial_text,
+        )
+        if not ok:
+            return []
+        paths = []
+        invalid = []
+        for raw in str(text or "").splitlines():
+            candidate = str(raw).strip().strip('"')
+            if not candidate:
+                continue
+            if not candidate.lower().endswith(".stl"):
+                invalid.append(candidate)
+                continue
+            if not os.path.isfile(candidate):
+                invalid.append(candidate)
+                continue
+            paths.append(candidate)
+        if invalid:
+            preview = "\n".join(invalid[:5])
+            extra = "\n..." if len(invalid) > 5 else ""
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                "Invalid STL path(s)",
+                f"These paths were ignored:\n{preview}{extra}",
+            )
+        return paths
+
+    def _simplify_prompt_triangle_threshold(self) -> int:
+        raw = str(os.environ.get("EON_SIMPLIFY_PROMPT_TRIANGLES", "100000")).strip()
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = 100000
+        return max(1000, value)
+
     def dragEnterEvent(self, a0: QtGui.QDragEnterEvent):
         event = a0
         if event.mimeData().hasUrls():
@@ -128,9 +222,26 @@ class LoadMixin:
 
     # -------------------------------------------------------------- open
     def open_stl_dialog(self):
-        paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
-            self.main, "Open STL files", "", "STL files (*.stl)"
-        )
+        status_bar = getattr(self, "statusBar", None)
+        if callable(status_bar):
+            status_bar().showMessage("Opening model file dialog...")
+        paths = []
+        if self._prefer_manual_stl_entry():
+            paths = self._prompt_stl_paths_fallback()
+        else:
+            try:
+                paths, _ = self._safe_get_open_file_names("Open STL files", "", "STL files (*.stl)")
+            except Exception as exc:
+                QtWidgets.QMessageBox.warning(
+                    self.main,
+                    "Open STL files",
+                    "File picker failed. Use manual path entry fallback.\n\n"
+                    f"Reason: {exc}",
+                )
+                paths = self._prompt_stl_paths_fallback()
+        if not paths and callable(status_bar):
+            status_bar().showMessage("No STL selected")
+            return
         for path in paths:
             self._add_model_from_path_async(path)
 
@@ -206,7 +317,16 @@ class LoadMixin:
             vertices = np.array(mesh.vertices, dtype=float)
             faces = np.array(mesh.faces, dtype=int)
             vertices, faces = _sanitize_mesh_arrays(vertices, faces)
-            return {"path": p, "name": os.path.basename(p), "v": vertices, "f": faces}
+            unit_scale, unit_source, extents = _infer_import_unit_scale(mesh)
+            return {
+                "path": p,
+                "name": os.path.basename(p),
+                "v": vertices,
+                "f": faces,
+                "unit_scale_hint": float(unit_scale),
+                "unit_source_hint": unit_source,
+                "raw_extents": np.asarray(extents, dtype=float),
+            }
 
         def report_progress(value: int):
             if cancelled["value"] or not progress_active["value"]:
@@ -221,6 +341,26 @@ class LoadMixin:
             close_dialog()
             if cancelled["value"]:
                 return
+            try:
+                unit_scale = float(payload.get("unit_scale_hint", 1.0))
+            except (TypeError, ValueError):
+                unit_scale = 1.0
+            unit_source = str(payload.get("unit_source_hint", "") or "").strip().lower()
+            if unit_scale > 1.0 and unit_source in ("meters", "inches"):
+                raw_extents = np.asarray(payload.get("raw_extents", np.zeros(3, dtype=float)), dtype=float)
+                converted_extents = raw_extents * unit_scale
+                answer = QtWidgets.QMessageBox.question(
+                    self.main,
+                    "Convert import units",
+                    f"{payload['name']} appears to be authored in {unit_source}.\n\n"
+                    f"Current size: {_format_extent_triplet(raw_extents)}\n"
+                    f"Converted size: {_format_extent_triplet(converted_extents)}\n\n"
+                    "Convert to millimeters?",
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                    QtWidgets.QMessageBox.Yes,
+                )
+                if answer == QtWidgets.QMessageBox.Yes:
+                    payload["v"] = np.asarray(payload["v"], dtype=float) * unit_scale
             try:
                 model_id = self.viewer.add_model_from_data(
                     payload["name"],
@@ -240,6 +380,13 @@ class LoadMixin:
             self._update_bed_warnings()
             self._push_undo_state()
             self._refresh_files_view()
+            if hasattr(self, "_invalidate_slice_cache"):
+                self._invalidate_slice_cache(clear_preview=True)
+            try:
+                self._open_simplify_dialog(model_id)
+            except Exception:
+                # Never block load completion on simplify prompt failures.
+                pass
 
         def on_err(msg):
             close_dialog()
@@ -261,7 +408,8 @@ class LoadMixin:
         triangles = int(len(faces)) if faces is not None else 0
         if triangles <= 0:
             return
-        if triangles < 1_000_000:
+        threshold = self._simplify_prompt_triangle_threshold()
+        if triangles < threshold:
             return
         dlg = SimplifyDialog(name, triangles, parent=self.main)
         dlg.setModal(False)
@@ -276,7 +424,7 @@ class LoadMixin:
         dlg.wireframeChanged.connect(lambda enabled: self.viewer.set_model_wireframe(model_id, enabled))
         dlg.applyRequested.connect(lambda target: self._simplify_model(model_id, target))
         dlg.finished.connect(on_closed)
-        self.viewer.set_model_wireframe(model_id, dlg.wireframe_enabled())
+        self.viewer.set_model_wireframe(model_id, prev_wireframe)
         self._simplify_dialog = dlg
         dlg.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
         dlg.show()
@@ -353,6 +501,8 @@ class LoadMixin:
                 self.statusBar().showMessage(f"Simplified to {len(payload['f'])} triangles")
                 self._update_bed_warnings()
                 self._push_undo_state()
+                if hasattr(self, "_invalidate_slice_cache"):
+                    self._invalidate_slice_cache(clear_preview=True)
 
         def on_err(msg):
             dlg.close()

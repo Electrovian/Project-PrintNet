@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 from datetime import datetime
 
 from PyQt5 import QtCore, QtWidgets
@@ -93,6 +94,13 @@ class ActivityLogger:
         self._tracked_ids = set()
         self.last_record = None
         self.last_record_ts = None
+        self._log_mouse_move = self._read_bool_env("EON_ACTIVITY_LOG_MOUSE_MOVE", False)
+        self._mouse_move_interval_s = self._read_interval_env(
+            "EON_ACTIVITY_MOUSE_MOVE_INTERVAL_MS",
+            default_ms=120,
+        )
+        self._last_mouse_move_ts = 0.0
+        self._last_mouse_move_pos = None
 
     def install(self, app):
         if app is None or self._event_filter is not None:
@@ -126,6 +134,8 @@ class ActivityLogger:
         button.clicked.connect(_on_clicked)
 
     def log_mouse_event(self, event_name, obj, event):
+        if event_name == "mouse_move" and not self._should_log_mouse_move(event):
+            return
         pos = event.pos()
         global_pos = event.globalPos()
         record = {
@@ -261,3 +271,34 @@ class ActivityLogger:
     def _default_log_dir(self):
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         return os.path.join(base_dir, "logs")
+
+    def _read_bool_env(self, key, default):
+        raw = str(os.environ.get(key, "1" if default else "0")).strip().lower()
+        if raw in ("1", "true", "yes", "on"):
+            return True
+        if raw in ("0", "false", "no", "off"):
+            return False
+        return bool(default)
+
+    def _read_interval_env(self, key, default_ms=120):
+        raw = str(os.environ.get(key, str(int(default_ms)))).strip()
+        try:
+            value_ms = int(raw)
+        except (TypeError, ValueError):
+            value_ms = int(default_ms)
+        value_ms = max(16, min(1000, value_ms))
+        return float(value_ms) / 1000.0
+
+    def _should_log_mouse_move(self, event):
+        if not self._log_mouse_move:
+            return False
+        now = time.monotonic()
+        global_pos = event.globalPos()
+        point = (int(global_pos.x()), int(global_pos.y()))
+        if self._last_mouse_move_pos == point:
+            return False
+        if now - self._last_mouse_move_ts < self._mouse_move_interval_s:
+            return False
+        self._last_mouse_move_ts = now
+        self._last_mouse_move_pos = point
+        return True

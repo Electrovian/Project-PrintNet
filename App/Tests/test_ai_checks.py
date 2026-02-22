@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 
@@ -8,8 +8,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from slicer.ai_checks import run_ai_checks
-from slicer.gcode.writer import SliceSettings
+from slicer_v2.legacy_ai_checks import run_ai_checks
+from slicer_v2.legacy_gcode_writer import SliceSettings
 
 
 class AiChecksTests(unittest.TestCase):
@@ -29,3 +29,4 @@ class AiChecksTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

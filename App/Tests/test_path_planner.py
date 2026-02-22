@@ -1,4 +1,4 @@
-import os
+﻿import os
 import random
 import sys
 import unittest
@@ -7,8 +7,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from slicer import path_planner
-from slicer.geometry import polygons_with_holes, point_in_island
+from slicer_v2 import legacy_path_planner as path_planner
+from slicer_v2.legacy_geometry import polygons_with_holes, point_in_island
 
 class PathPlannerTests(unittest.TestCase):
     def test_order_islands_nearest(self):
@@ -77,3 +77,4 @@ class PathPlannerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

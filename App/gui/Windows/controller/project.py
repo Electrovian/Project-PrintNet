@@ -30,6 +30,8 @@ class ProjectMixin:
         def _scale_to_vec(self, scale: Any) -> Any: ...
         def _vec3(self, value: Any, default: Any = (0, 0, 0)) -> Any: ...
         def _selected_model_index(self) -> int | None: ...
+        def _safe_get_open_file_name(self, caption: str, directory: str, file_filter: str) -> tuple[str, str]: ...
+        def _safe_get_save_file_name(self, caption: str, directory: str, file_filter: str) -> tuple[str, str]: ...
         def __getattr__(self, name: str) -> Any: ...
     def _new_project(self):
         self._current_project_path = None
@@ -59,8 +61,7 @@ class ProjectMixin:
             if stl_path:
                 base = os.path.splitext(os.path.basename(stl_path))[0]
                 suggested = os.path.join(os.path.dirname(stl_path), f"{base}.osproj")
-        out_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.main,
+        out_path, _ = self._safe_get_save_file_name(
             "Save Project",
             suggested,
             "EON-OpenSlicer Project (*.osproj);;All files (*.*)",
@@ -75,8 +76,7 @@ class ProjectMixin:
         start_dir = ""
         if self._current_project_path:
             start_dir = os.path.dirname(self._current_project_path)
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self.main,
+        path, _ = self._safe_get_open_file_name(
             "Open Project",
             start_dir,
             "EON-OpenSlicer Project (*.osproj);;All files (*.*)",

@@ -6,7 +6,7 @@ from typing import Any, Dict, TYPE_CHECKING, cast
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from config.defaults import DEFAULTS
-from slicer.gcode.writer import SliceSettings
+from slicer_v2.legacy_gcode_writer import SliceSettings
 from ..theme import theme_css
 
 if TYPE_CHECKING:
@@ -104,7 +104,13 @@ class OtherSectionMixin:
             self._printer_combo.setEnabled(False)
             return
         self._printer_combo.setEnabled(True)
-        default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+        default_name = ""
+        main = cast(MainWindow, self.parent())
+        runtime_state = getattr(main, "runtime_printer_state", None) if main is not None else None
+        if runtime_state is not None:
+            default_name = str(getattr(runtime_state, "name", "")).strip().lower()
+        if not default_name:
+            default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
         default_index = None
         for idx, printer in enumerate(self._printers):
             name = printer.get("name") if isinstance(printer, dict) else None

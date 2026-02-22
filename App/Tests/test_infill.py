@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 
@@ -6,8 +6,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from slicer import infill
-from slicer.geometry import polygons_with_holes
+from slicer_v2 import legacy_infill as infill
+from slicer_v2.legacy_geometry import polygons_with_holes
 
 class InfillTests(unittest.TestCase):
     @classmethod
@@ -50,3 +50,4 @@ class InfillTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

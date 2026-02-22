@@ -24,11 +24,13 @@ jobs:
           java-version: "17"
 
       - name: Install mobile dependencies
+        working-directory: Mobile
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-mobile.txt
 
       - name: Build Android
+        working-directory: Mobile
         run: |
           briefcase create android
           briefcase build android
@@ -38,7 +40,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: EON-OpenSlicer-android
-          path: dist/**
+          path: Mobile/dist/**
 
   ios:
     runs-on: macos-latest
@@ -51,11 +53,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install mobile dependencies
+        working-directory: Mobile
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-mobile.txt
 
       - name: Build iOS
+        working-directory: Mobile
         run: |
           briefcase create iOS
           briefcase build iOS
@@ -65,4 +69,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: EON-OpenSlicer-iOS
-          path: dist/**
+          path: Mobile/dist/**

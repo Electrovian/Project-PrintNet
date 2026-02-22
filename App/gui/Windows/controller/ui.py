@@ -6,6 +6,9 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
+import subprocess
+import sys
 from typing import Any, TYPE_CHECKING
 
 import numpy as np
@@ -13,7 +16,12 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from ...theme import export_theme, get_theme_name, register_theme, set_theme
 from config.defaults import DEFAULTS
-from slicer.gcode.writer import (
+from config.runtime_printer_state import (
+    RuntimePrinterState,
+    runtime_printer_state_from_defaults,
+    runtime_printer_state_from_profile,
+)
+from slicer_v2.legacy_gcode_writer import (
     SliceSettings,
     generate_flow_rate_test,
     generate_max_flowrate_test,
@@ -33,6 +41,302 @@ class UiMixin(UiMixinBase):
     def __getattr__(self, name: str) -> Any:
         # MainController owns the runtime __getattr__ proxy; this keeps type checkers quiet.
         raise AttributeError(name)
+
+    def _dialog_parent(self):
+        parent = getattr(self, "main", None)
+        return parent if isinstance(parent, QtWidgets.QWidget) else None
+
+    def _use_tk_file_dialog(self) -> bool:
+        if os.name != "nt":
+            return False
+        # Tk dialogs are opt-in; they may still crash on some Windows Python builds.
+        default_flag = "0"
+        flag = str(os.environ.get("EON_USE_TK_FILE_DIALOG", default_flag)).strip().lower()
+        return flag in ("1", "true", "yes", "on")
+
+    def _use_powershell_file_dialog(self) -> bool:
+        if os.name != "nt":
+            return False
+        # Use a WinForms dialog through powershell on Python 3.13 Windows.
+        default_flag = "1" if sys.version_info[:2] >= (3, 13) else "0"
+        flag = str(os.environ.get("EON_USE_PS_FILE_DIALOG", default_flag)).strip().lower()
+        return flag in ("1", "true", "yes", "on")
+
+    def _use_native_qt_file_dialog(self) -> bool:
+        # Windows should use the native Explorer-style file dialog by default.
+        default_flag = "1" if os.name == "nt" else "0"
+        flag = str(os.environ.get("EON_USE_NATIVE_FILE_DIALOG", default_flag)).strip().lower()
+        return flag in ("1", "true", "yes", "on")
+
+    def _qt_file_dialog_options(self):
+        options = QtWidgets.QFileDialog.Options()
+        if not self._use_native_qt_file_dialog():
+            options |= QtWidgets.QFileDialog.DontUseNativeDialog
+        return options
+
+    def _qt_filter_to_tk(self, file_filter: str):
+        value = str(file_filter or "").strip()
+        if not value:
+            return [("All files", "*.*")]
+        chunks = [part.strip() for part in value.split(";;") if part.strip()]
+        rows = []
+        for chunk in chunks:
+            match = re.match(r"^([^()]+)\(([^()]+)\)$", chunk)
+            if match is None:
+                rows.append((chunk, "*.*"))
+                continue
+            label = match.group(1).strip() or "Files"
+            patterns_raw = match.group(2).strip()
+            patterns = [part.strip() for part in patterns_raw.split() if part.strip()]
+            if not patterns:
+                patterns = ["*.*"]
+            rows.append((label, " ".join(patterns)))
+        if not rows:
+            rows.append(("All files", "*.*"))
+        return rows
+
+    def _qt_filter_to_winforms(self, file_filter: str) -> str:
+        value = str(file_filter or "").strip()
+        if not value:
+            return "All files|*.*"
+        chunks = [part.strip() for part in value.split(";;") if part.strip()]
+        entries: list[str] = []
+        for chunk in chunks:
+            match = re.match(r"^([^()]+)\(([^()]+)\)$", chunk)
+            if match is None:
+                label = chunk or "Files"
+                pattern = "*.*"
+            else:
+                label = match.group(1).strip() or "Files"
+                patterns_raw = match.group(2).strip()
+                parts = [part.strip() for part in patterns_raw.split() if part.strip()]
+                pattern = ";".join(parts) if parts else "*.*"
+            entries.extend([label, pattern])
+        if not entries:
+            entries = ["All files", "*.*"]
+        return "|".join(entries)
+
+    def _ps_open_file_names(self, caption: str, directory: str, file_filter: str):
+        if not self._use_powershell_file_dialog():
+            return None
+        init_dir = str(directory or os.getcwd())
+        wf_filter = self._qt_filter_to_winforms(file_filter)
+        script = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$d=New-Object System.Windows.Forms.OpenFileDialog; "
+            "$d.Title=$args[0]; "
+            "$d.InitialDirectory=$args[1]; "
+            "$d.Filter=$args[2]; "
+            "$d.Multiselect=$true; "
+            "$d.CheckFileExists=$true; "
+            "$d.RestoreDirectory=$true; "
+            "if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){"
+            "$d.FileNames | ForEach-Object { $_ }"
+            "}"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-STA", "-Command", script, str(caption or ""), init_dir, wf_filter],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        except Exception:
+            return None
+        if int(result.returncode) != 0:
+            return None
+        paths = [line.strip() for line in str(result.stdout or "").splitlines() if line.strip()]
+        return paths
+
+    def _ps_open_file_name(self, caption: str, directory: str, file_filter: str):
+        if not self._use_powershell_file_dialog():
+            return None
+        paths = self._ps_open_file_names(caption, directory, file_filter)
+        if paths is None:
+            return None
+        return str(paths[0]) if paths else ""
+
+    def _ps_save_file_name(self, caption: str, directory: str, file_filter: str):
+        if not self._use_powershell_file_dialog():
+            return None
+        init_dir = str(directory or os.getcwd())
+        wf_filter = self._qt_filter_to_winforms(file_filter)
+        script = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$d=New-Object System.Windows.Forms.SaveFileDialog; "
+            "$d.Title=$args[0]; "
+            "$d.InitialDirectory=$args[1]; "
+            "$d.Filter=$args[2]; "
+            "$d.RestoreDirectory=$true; "
+            "if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){"
+            "$d.FileName"
+            "}"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-STA", "-Command", script, str(caption or ""), init_dir, wf_filter],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        except Exception:
+            return None
+        if int(result.returncode) != 0:
+            return None
+        value = str(result.stdout or "").strip()
+        return value if value else ""
+
+    def _tk_open_file_names(self, caption: str, directory: str, file_filter: str):
+        if not self._use_tk_file_dialog():
+            return None
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+        except Exception:
+            return None
+        root = tk.Tk()
+        try:
+            root.withdraw()
+            root.attributes("-topmost", True)
+            root.update()
+            selected = filedialog.askopenfilenames(
+                parent=root,
+                title=str(caption or ""),
+                initialdir=str(directory or os.getcwd()),
+                filetypes=self._qt_filter_to_tk(file_filter),
+            )
+        finally:
+            root.destroy()
+        paths = [str(path) for path in (selected or []) if str(path).strip()]
+        return paths
+
+    def _tk_open_file_name(self, caption: str, directory: str, file_filter: str):
+        if not self._use_tk_file_dialog():
+            return None
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+        except Exception:
+            return None
+        root = tk.Tk()
+        try:
+            root.withdraw()
+            root.attributes("-topmost", True)
+            root.update()
+            selected = filedialog.askopenfilename(
+                parent=root,
+                title=str(caption or ""),
+                initialdir=str(directory or os.getcwd()),
+                filetypes=self._qt_filter_to_tk(file_filter),
+            )
+        finally:
+            root.destroy()
+        value = str(selected or "").strip()
+        return value if value else ""
+
+    def _tk_save_file_name(self, caption: str, directory: str, file_filter: str):
+        if not self._use_tk_file_dialog():
+            return None
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+        except Exception:
+            return None
+        root = tk.Tk()
+        try:
+            root.withdraw()
+            root.attributes("-topmost", True)
+            root.update()
+            selected = filedialog.asksaveasfilename(
+                parent=root,
+                title=str(caption or ""),
+                initialdir=str(directory or os.getcwd()),
+                filetypes=self._qt_filter_to_tk(file_filter),
+            )
+        finally:
+            root.destroy()
+        value = str(selected or "").strip()
+        return value if value else ""
+
+    def _safe_get_open_file_name(
+        self,
+        caption: str,
+        directory: str,
+        file_filter: str,
+    ) -> tuple[str, str]:
+        ps_path = self._ps_open_file_name(caption, directory, file_filter)
+        if ps_path is not None:
+            return str(ps_path), str(file_filter or "")
+        if os.name == "nt" and sys.version_info[:2] >= (3, 13):
+            raise RuntimeError(
+                "Explorer dialog unavailable (PowerShell path failed). "
+                "Falling back to manual path entry."
+            )
+        tk_path = self._tk_open_file_name(caption, directory, file_filter)
+        if tk_path is not None:
+            return tk_path, str(file_filter or "")
+        path, selected_filter = QtWidgets.QFileDialog.getOpenFileName(
+            self._dialog_parent(),
+            caption,
+            directory,
+            file_filter,
+            options=self._qt_file_dialog_options(),
+        )
+        return str(path or ""), str(selected_filter or "")
+
+    def _safe_get_open_file_names(
+        self,
+        caption: str,
+        directory: str,
+        file_filter: str,
+    ) -> tuple[list[str], str]:
+        ps_paths = self._ps_open_file_names(caption, directory, file_filter)
+        if ps_paths is not None:
+            return [str(path) for path in ps_paths], str(file_filter or "")
+        if os.name == "nt" and sys.version_info[:2] >= (3, 13):
+            raise RuntimeError(
+                "Explorer dialog unavailable (PowerShell path failed). "
+                "Falling back to manual path entry."
+            )
+        tk_paths = self._tk_open_file_names(caption, directory, file_filter)
+        if tk_paths is not None:
+            return tk_paths, str(file_filter or "")
+        paths, selected_filter = QtWidgets.QFileDialog.getOpenFileNames(
+            self._dialog_parent(),
+            caption,
+            directory,
+            file_filter,
+            options=self._qt_file_dialog_options(),
+        )
+        return [str(path) for path in (paths or [])], str(selected_filter or "")
+
+    def _safe_get_save_file_name(
+        self,
+        caption: str,
+        directory: str,
+        file_filter: str,
+    ) -> tuple[str, str]:
+        ps_path = self._ps_save_file_name(caption, directory, file_filter)
+        if ps_path is not None:
+            return str(ps_path), str(file_filter or "")
+        if os.name == "nt" and sys.version_info[:2] >= (3, 13):
+            raise RuntimeError(
+                "Explorer dialog unavailable (PowerShell path failed). "
+                "Falling back to manual path entry."
+            )
+        tk_path = self._tk_save_file_name(caption, directory, file_filter)
+        if tk_path is not None:
+            return tk_path, str(file_filter or "")
+        path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
+            self._dialog_parent(),
+            caption,
+            directory,
+            file_filter,
+            options=self._qt_file_dialog_options(),
+        )
+        return str(path or ""), str(selected_filter or "")
 
     # -------------------------------------------------- Model selection/removal
     def _on_model_selected(self, model_id: int):
@@ -263,36 +567,41 @@ class UiMixin(UiMixinBase):
         for mid in ids:
             name = self.viewer.get_model_name(mid) or f"Model {mid}"
             names.append(name)
-        bed = DEFAULTS.get("printer", {}).get("bed_size", (0, 0))
-        max_height = DEFAULTS.get("printer", {}).get("max_height", 0)
+        bed, max_height, _printer_name = self._effective_bed_limits()
         bed_str = f"{bed[0]}x{bed[1]} mm"
         msg = "Warning: " + ", ".join(names) + f" exceed bed {bed_str} or height {max_height} mm."
         self.statusBar().showMessage(msg)
         self._bed_warning_active = True
+
+    def _effective_bed_limits(self) -> tuple[tuple[float, float], float, str]:
+        state = getattr(self, "runtime_printer_state", None)
+        if isinstance(state, RuntimePrinterState):
+            return state.bed_size, float(state.bed_z), str(state.name)
+        defaults = DEFAULTS.get("printer", {})
+        bed_defaults = defaults.get("bed_size", (200.0, 200.0))
+        if not isinstance(bed_defaults, (list, tuple)) or len(bed_defaults) < 2:
+            bed_defaults = (200.0, 200.0)
+        bed_x = float(bed_defaults[0])
+        bed_y = float(bed_defaults[1])
+        bed_z = float(defaults.get("max_height", 200.0))
+        name = str(defaults.get("name", "Printer")).strip() or "Printer"
+        return (bed_x, bed_y), bed_z, name
 
     def _apply_printer_profile(self, printer: dict | None, source: str | None = None):
         if printer is None:
             return
         if hasattr(self, "printer_manager"):
             self.printer_manager.set_active_printer(printer)
-
-        defaults = DEFAULTS.get("printer", {})
-        bed_defaults = defaults.get("bed_size", (200, 200))
-
-        def _float_or(value, fallback):
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                return float(fallback)
-
-        bed_x = _float_or(printer.get("bed_x"), bed_defaults[0] if bed_defaults else 200)
-        bed_y = _float_or(printer.get("bed_y"), bed_defaults[1] if len(bed_defaults) > 1 else 200)
-        bed_z = _float_or(printer.get("bed_z"), defaults.get("max_height", 200))
-        name = str(printer.get("name", defaults.get("name", ""))).strip()
-        DEFAULTS.setdefault("printer", {})["bed_size"] = (bed_x, bed_y)
-        DEFAULTS["printer"]["max_height"] = bed_z
-        if name:
-            DEFAULTS["printer"]["name"] = name
+        existing_state = getattr(self, "runtime_printer_state", None)
+        if not isinstance(existing_state, RuntimePrinterState):
+            existing_state = runtime_printer_state_from_defaults(DEFAULTS.get("printer", {}))
+        self.runtime_printer_state = runtime_printer_state_from_profile(
+            printer,
+            fallback_state=existing_state,
+            source=source or "runtime",
+        )
+        bed_x, bed_y = self.runtime_printer_state.bed_size
+        bed_z = float(self.runtime_printer_state.bed_z)
 
         main = self.__dict__.get("main")
         viewer = main.__dict__.get("viewer") if main is not None else None
@@ -304,6 +613,10 @@ class UiMixin(UiMixinBase):
 
     def _sync_printer_selection(self, printer: dict, source: str | None = None):
         name = str(printer.get("name", "")).strip()
+        if not name:
+            state = getattr(self, "runtime_printer_state", None)
+            if isinstance(state, RuntimePrinterState):
+                name = str(state.name).strip()
         if not name:
             return
         if source != "settings" and hasattr(self, "settings_panel"):
@@ -502,8 +815,7 @@ class UiMixin(UiMixinBase):
         dlg.exec_()
 
     def _load_theme_from_file(self):
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self.main,
+        path, _ = self._safe_get_open_file_name(
             "Load Theme",
             "",
             "Theme JSON (*.json);;All files (*.*)",
@@ -544,8 +856,7 @@ class UiMixin(UiMixinBase):
             QtWidgets.QMessageBox.warning(self.main, "Theme", "No theme data available.")
             return
         default_name = f"{get_theme_name()}.json"
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.main,
+        path, _ = self._safe_get_save_file_name(
             "Save Theme",
             default_name,
             "Theme JSON (*.json);;All files (*.*)",
@@ -740,7 +1051,8 @@ class UiMixin(UiMixinBase):
                 if getattr(self, "_preview_wireframe_prev", None) is None:
                     self._preview_wireframe_prev = self.viewer.get_wireframe_enabled()
             if hasattr(self.viewer, "set_wireframe_enabled"):
-                self.viewer.set_wireframe_enabled(True)
+                # Keep preview focused on emitted toolpaths, not model mesh edges.
+                self.viewer.set_wireframe_enabled(False)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
             if hasattr(self.viewer, "set_labels_visible"):
@@ -827,8 +1139,10 @@ class UiMixin(UiMixinBase):
         if not self.viewer.get_model_ids():
             return
         settings = self.settings_panel.to_settings()
-        signature = self._build_slice_signature(settings)
-        if signature and signature == self._last_slice_signature and self._last_gcode_path:
+        reusable = None
+        if hasattr(self, "_resolve_reusable_gcode_path"):
+            reusable = self._resolve_reusable_gcode_path(settings)
+        if reusable:
             return
         self._slice_model(settings,
                           activate_preview=False,
@@ -972,6 +1286,8 @@ class UiMixin(UiMixinBase):
             self.viewer.set_selected_models(new_ids, emit_signal=False)
             self._sync_popups()
         self._refresh_files_view()
+        if hasattr(self, "_invalidate_slice_cache"):
+            self._invalidate_slice_cache(clear_preview=True)
         return new_ids
 
     def _remove_models(self, model_ids):
@@ -1167,6 +1483,8 @@ class UiMixin(UiMixinBase):
             self._undo_in_progress = False
         self._update_undo_redo_state()
         self._refresh_files_view()
+        if hasattr(self, "_invalidate_slice_cache"):
+            self._invalidate_slice_cache(clear_preview=True)
 
     def _undo(self):
         if len(self._undo_stack) <= 1:
@@ -1493,8 +1811,7 @@ class UiMixin(UiMixinBase):
         if self._last_gcode_path:
             suggested_dir = os.path.dirname(self._last_gcode_path)
         suggested = os.path.join(suggested_dir, filename)
-        out_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.main,
+        out_path, _ = self._safe_get_save_file_name(
             "Save Calibration G-code",
             suggested,
             "G-code files (*.gcode);;All files (*.*)",

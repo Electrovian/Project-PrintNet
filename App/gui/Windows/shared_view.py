@@ -219,7 +219,11 @@ class SharedView(QtCore.QObject):
     def build_shortcut_actions(self):
         self.main._slice_action = QtWidgets.QAction(self.main)
         self.main._slice_action.setShortcut(shortcut_key("slice_plate"))
-        self.main._slice_action.triggered.connect(self.main.slice_current_model)
+        slice_handler = getattr(self.main, "slice_current_plate", None)
+        if not callable(slice_handler):
+            slice_handler = getattr(self.main, "slice_current_model", None)
+        if callable(slice_handler):
+            self.main._slice_action.triggered.connect(slice_handler)
         self.main.addAction(self.main._slice_action)
 
         self.main._print_action = QtWidgets.QAction(self.main)
@@ -320,6 +324,11 @@ class SharedView(QtCore.QObject):
         dock_border = theme_css("popup_border")
         dock_bg = theme_css("popup_bg")
         dock_text = theme_css("popup_text")
+        input_bg = theme_css("popup_input_bg")
+        input_border = theme_css("popup_input_border")
+        input_text = theme_css("popup_input_text")
+        accent = theme_css("topbar_accent")
+        hover = theme_css("menu_hover_bg")
         self.main.setStyleSheet(
             "QMainWindow {"
             f"  background: {dock_bg};"
@@ -342,6 +351,36 @@ class SharedView(QtCore.QObject):
             f"  background: {dock_border};"
             "  width: 1px;"
             "  height: 1px;"
+            "}"
+            "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {"
+            f"  background: {input_bg};"
+            f"  color: {input_text};"
+            f"  border: 1px solid {input_border};"
+            "  border-radius: 4px;"
+            "  padding: 4px 8px;"
+            "  selection-background-color: rgba(58, 116, 255, 110);"
+            "}"
+            "QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {"
+            f"  border: 1px solid {accent};"
+            "}"
+            "QComboBox QAbstractItemView {"
+            f"  background: {input_bg};"
+            f"  color: {input_text};"
+            f"  border: 1px solid {input_border};"
+            f"  selection-background-color: {hover};"
+            "}"
+            "QTableWidget::item:selected {"
+            "  background: rgba(58, 116, 255, 90);"
+            "}"
+            "QPushButton {"
+            f"  background: {theme_css('action_button_bg')};"
+            f"  color: {theme_css('action_button_text')};"
+            f"  border: 1px solid {theme_css('action_panel_border')};"
+            "  border-radius: 4px;"
+            "  padding: 6px 10px;"
+            "}"
+            "QPushButton:hover {"
+            f"  background: {theme_css('action_button_hover_bg')};"
             "}"
         )
 

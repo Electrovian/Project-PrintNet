@@ -1,6 +1,6 @@
-import pytest
+﻿import pytest
 
-from slicer.gcode.preview import parse_gcode_preview
+from slicer_v2.legacy_gcode_preview import parse_gcode_preview
 
 
 BASE_FEATURE_CASES = [
@@ -51,3 +51,4 @@ def test_feature_mapping(prefix, token, expected):
     assert preview.layers
     assert preview.layers[0].segments
     assert preview.layers[0].segments[-1].feature == expected
+

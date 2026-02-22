@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 
@@ -6,7 +6,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from slicer.gcode.writer import (
+from slicer_v2.legacy_gcode_writer import (
     SliceSettings,
     generate_flow_rate_test,
     generate_max_flowrate_test,
@@ -36,3 +36,4 @@ class CalibrationGcodeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

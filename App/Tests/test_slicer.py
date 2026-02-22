@@ -1,4 +1,4 @@
-import math
+﻿import math
 import os
 import sys
 import unittest
@@ -9,9 +9,9 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from slicer.mesh import MeshModel
-from slicer.gcode.writer import SliceSettings
-from slicer.slicer.plan import build_z_heights, generate_layer_perimeters, generate_layer_plans
+from slicer_v2.legacy_mesh import MeshModel
+from slicer_v2.legacy_gcode_writer import SliceSettings
+from slicer_v2.legacy_slicer.plan import build_z_heights, generate_layer_perimeters, generate_layer_plans
 
 def polygon_area(points):
     if len(points) < 3:
@@ -136,3 +136,4 @@ class LayerPerimeterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
