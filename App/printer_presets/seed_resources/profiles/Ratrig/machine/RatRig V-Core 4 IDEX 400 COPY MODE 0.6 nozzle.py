@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+# source: profiles/Ratrig/machine/RatRig V-Core 4 IDEX 400 COPY MODE 0.6 nozzle.json
+DATA = {'before_layer_change_gcode': ';BEFORE_LAYER_CHANGE\n;[layer_z]\nG92 E0\n_ON_LAYER_CHANGE LAYER={layer_num + 1}',
+ 'change_filament_gcode': '',
+ 'deretraction_speed': ['120'],
+ 'extruder_clearance_height_to_lid': '140',
+ 'extruder_clearance_height_to_rod': '25',
+ 'extruder_clearance_radius': '45',
+ 'extruder_offset': ['0x0', '0x0'],
+ 'from': 'system',
+ 'inherits': 'fdm_klipper_common',
+ 'instantiation': 'true',
+ 'layer_change_gcode': ';AFTER_LAYER_CHANGE\n;[layer_z]',
+ 'machine_max_acceleration_e': ['5000', '5000'],
+ 'machine_max_acceleration_extruding': ['20000', '20000'],
+ 'machine_max_acceleration_retracting': ['20000', '20000'],
+ 'machine_max_acceleration_travel': ['20000', '20000'],
+ 'machine_max_acceleration_x': ['20000', '20000'],
+ 'machine_max_acceleration_y': ['20000', '20000'],
+ 'machine_max_acceleration_z': ['200', '200'],
+ 'machine_max_jerk_e': ['5', '5'],
+ 'machine_max_jerk_x': ['5', '5'],
+ 'machine_max_jerk_y': ['5', '5'],
+ 'machine_max_jerk_z': ['0.4', '0.4'],
+ 'machine_max_speed_e': ['120', '120'],
+ 'machine_max_speed_x': ['500', '500'],
+ 'machine_max_speed_y': ['500', '500'],
+ 'machine_max_speed_z': ['200', '200'],
+ 'machine_pause_gcode': 'PAUSE',
+ 'machine_start_gcode': 'G28\n'
+                        'IDEX_COPY\n'
+                        'START_PRINT EXTRUDER_TEMP={first_layer_temperature[0]},{first_layer_temperature[1]} '
+                        'EXTRUDER_OTHER_LAYER_TEMP={temperature[0]},{temperature[1]} '
+                        'BED_TEMP=[first_layer_bed_temperature] INITIAL_TOOL={initial_tool} '
+                        'TOTAL_LAYER_COUNT={total_layer_count} X0={first_layer_print_min[0]} '
+                        'Y0={first_layer_print_min[1]} X1={first_layer_print_max[0]} Y1={first_layer_print_max[1]}',
+ 'manual_filament_change': '0',
+ 'max_layer_height': ['0.3'],
+ 'min_layer_height': ['0.06'],
+ 'name': 'RatRig V-Core 4 IDEX 400 COPY MODE 0.6 nozzle',
+ 'nozzle_diameter': ['0.6', '0.6'],
+ 'printable_area': ['100x0', '300x0', '300x400', '100x400'],
+ 'printable_height': '400',
+ 'printer_model': 'RatRig V-Core 4 IDEX 400 COPY MODE',
+ 'printer_variant': '0.6',
+ 'printing_by_object_gcode': ';BETWEEN_OBJECTS\nG92 E0',
+ 'retract_before_wipe': ['70%'],
+ 'retract_lift_below': ['0.2'],
+ 'retraction_length': ['0.8'],
+ 'retraction_speed': ['120'],
+ 'setting_id': 'GM002',
+ 'single_extruder_multi_material': '0',
+ 'thumbnails': ['64x64/PNG', '100x100/PNG', '400x300/PNG'],
+ 'time_lapse_gcode': 'TIMELAPSE_TAKE_FRAME',
+ 'type': 'machine',
+ 'wipe': ['1'],
+ 'z_hop': ['0.2']}

@@ -1,0 +1,20 @@
+from __future__ import annotations
+
+# source: profiles/Creality/filament/Creality Generic PLA-CF @K1-all.json
+DATA = {'additional_cooling_fan_speed': ['0'],
+ 'compatible_printers': ['Creality K1 (0.4 nozzle)',
+                         'Creality K1 (0.6 nozzle)',
+                         'Creality K1 (0.8 nozzle)',
+                         'Creality K1C 0.4 nozzle',
+                         'Creality K1C 0.6 nozzle',
+                         'Creality K1C 0.8 nozzle',
+                         'Creality K1 SE 0.4 nozzle',
+                         'Creality K1 Max (0.4 nozzle)',
+                         'Creality K1 Max (0.6 nozzle)',
+                         'Creality K1 Max (0.8 nozzle)'],
+ 'from': 'system',
+ 'inherits': 'Creality Generic PLA-CF',
+ 'instantiation': 'true',
+ 'name': 'Creality Generic PLA-CF @K1-all',
+ 'setting_id': 'GFSL96_00',
+ 'type': 'filament'}

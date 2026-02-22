@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Anker/machine/Anker M5C 0.25 nozzle.json
+DATA = {'auxiliary_fan': '0',
+ 'bed_exclude_area': [],
+ 'default_filament_profile': ['Anker Generic PLA+'],
+ 'default_print_profile': '0.10mm Standard 0.25mm nozzle @Anker',
+ 'extruder_clearance_height_to_lid': '250',
+ 'extruder_clearance_height_to_rod': '30',
+ 'extruder_clearance_radius': '45',
+ 'from': 'system',
+ 'inherits': 'fdm_marlin_common',
+ 'instantiation': 'true',
+ 'max_layer_height': ['0.16'],
+ 'name': 'Anker M5C 0.25 nozzle',
+ 'nozzle_diameter': ['0.25'],
+ 'nozzle_type': 'brass',
+ 'printable_area': ['0x0', '220x0', '220x220', '0x220'],
+ 'printable_height': '250',
+ 'printer_model': 'Anker M5C',
+ 'printer_structure': 'i3',
+ 'printer_variant': '0.25',
+ 'retraction_length': ['0.4'],
+ 'setting_id': 'GM009',
+ 'type': 'machine',
+ 'upward_compatible_machine': []}

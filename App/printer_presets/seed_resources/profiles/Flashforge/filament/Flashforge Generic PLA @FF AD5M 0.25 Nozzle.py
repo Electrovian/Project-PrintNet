@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge Generic PLA @FF AD5M 0.25 Nozzle.json
+DATA = {'activate_air_filtration': ['1'],
+ 'compatible_printers': ['Flashforge Adventurer 5M 0.25 Nozzle',
+                         'Flashforge Adventurer 5M Pro 0.25 Nozzle',
+                         'Flashforge AD5X 0.25 nozzle'],
+ 'complete_print_exhaust_fan_speed': ['100'],
+ 'during_print_exhaust_fan_speed': ['100'],
+ 'filament_flow_ratio': ['1'],
+ 'filament_max_volumetric_speed': ['2.8'],
+ 'filament_settings_id': ['Flashforge Generic PLA @FF AD5M 0.25 Nozzle'],
+ 'from': 'system',
+ 'hot_plate_temp': ['45'],
+ 'hot_plate_temp_initial_layer': ['50'],
+ 'inherits': 'Flashforge Generic PLA',
+ 'instantiation': 'true',
+ 'name': 'Flashforge Generic PLA @FF AD5M 0.25 Nozzle',
+ 'overhang_fan_threshold': ['25%'],
+ 'pressure_advance': ['0.1'],
+ 'renamed_from': 'Flashforge PLA @FF AD5M 0.25 Nozzle',
+ 'setting_id': 'FFGP01_01',
+ 'slow_down_layer_time': ['8'],
+ 'slow_down_min_speed': ['15'],
+ 'type': 'filament'}

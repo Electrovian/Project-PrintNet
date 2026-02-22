@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Comgrow/filament/Comgrow Generic PETG.json
+DATA = {'compatible_printers': ['Comgrow T500 0.4 nozzle', 'Comgrow T500 0.6 nozzle', 'Comgrow T500 0.8 nozzle'],
+ 'fan_cooling_layer_time': ['30'],
+ 'fan_max_speed': ['25'],
+ 'fan_min_speed': ['10'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_id': 'GFG99',
+ 'filament_max_volumetric_speed': ['8'],
+ 'filament_retraction_length': ['0.5'],
+ 'filament_start_gcode': ['; filament start gcode\n'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pet',
+ 'instantiation': 'true',
+ 'name': 'Comgrow Generic PETG',
+ 'nozzle_temperature_initial_layer': ['260'],
+ 'overhang_fan_speed': ['90'],
+ 'overhang_fan_threshold': ['25%'],
+ 'reduce_fan_stop_start_freq': ['1'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_for_layer_cooling': ['1'],
+ 'slow_down_layer_time': ['8'],
+ 'slow_down_min_speed': ['10'],
+ 'type': 'filament'}

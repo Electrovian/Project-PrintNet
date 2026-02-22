@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "scanned_target_count": 6,
+  "online_target_count": 3,
+  "printer_count": 3,
+  "connector_types": [
+    "moonraker",
+    "octoprint",
+    "prusalink"
+  ],
+  "warnings_count": 0,
+  "merged_printer_count": 3,
+  "request_count": 6
+}

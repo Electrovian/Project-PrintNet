@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Anycubic/filament/Anycubic Generic PLA.json
+DATA = {'compatible_printers': ['Anycubic i3 Mega S 0.4 nozzle',
+                         'Anycubic Chiron 0.4 nozzle',
+                         'Anycubic Vyper 0.4 nozzle',
+                         'Anycubic Kobra 0.4 nozzle',
+                         'Anycubic Kobra Max 0.4 nozzle',
+                         'Anycubic Kobra Plus 0.4 nozzle',
+                         'Anycubic 4Max Pro 0.4 nozzle',
+                         'Anycubic 4Max Pro 2 0.4 nozzle',
+                         'Anycubic Kobra 2 0.4 nozzle',
+                         'Anycubic Kobra 3 0.2 nozzle',
+                         'Anycubic Kobra 3 0.4 nozzle',
+                         'Anycubic Kobra 3 0.6 nozzle',
+                         'Anycubic Kobra 3 0.8 nozzle'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_id': 'GFL99',
+ 'filament_max_volumetric_speed': ['12'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'true',
+ 'name': 'Anycubic Generic PLA',
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['8'],
+ 'type': 'filament'}

@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/filament/Qidi Generic ASA @Qidi X-Plus 4 0.4 nozzle.json
+DATA = {'activate_air_filtration': ['0'],
+ 'activate_chamber_temp_control': ['0'],
+ 'chamber_temperature': ['55'],
+ 'compatible_printers': ['Qidi X-Plus 4 0.4 nozzle'],
+ 'during_print_exhaust_fan_speed': ['0'],
+ 'fan_cooling_layer_time': ['40'],
+ 'filament_id': 'GFB99',
+ 'filament_max_volumetric_speed': ['16'],
+ 'filament_settings_id': ['Qidi Generic ASA @Qidi X-Plus 4 0.4 nozzle'],
+ 'from': 'system',
+ 'inherits': 'Qidi Generic ASA',
+ 'instantiation': 'true',
+ 'name': 'Qidi Generic ASA @Qidi X-Plus 4 0.4 nozzle',
+ 'nozzle_temperature': ['270'],
+ 'nozzle_temperature_initial_layer': ['250'],
+ 'overhang_fan_speed': ['100'],
+ 'pressure_advance': ['0.035'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['4'],
+ 'type': 'filament'}

@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+# source: profiles/WEMAKE3D/machine/fdm_machine_tinybotv1_common.json
+DATA = {'before_layer_change_gcode': ';BEFORE_LAYER_CHANGE\n;[layer_z]\nG92 E0\n',
+ 'change_filament_gcode': '',
+ 'deretraction_speed': ['30'],
+ 'extruder_clearance_height_to_lid': '140',
+ 'extruder_clearance_height_to_rod': '36',
+ 'extruder_clearance_radius': '65',
+ 'extruder_colour': ['#018001'],
+ 'extruder_offset': ['0x0'],
+ 'from': 'system',
+ 'inherits': 'fdm_machine_common',
+ 'instantiation': 'false',
+ 'layer_change_gcode': '',
+ 'machine_end_gcode': ';PRINT_END\n'
+                      'G91 ;Relative positionning\n'
+                      'G1 E-2 F2700 ;Retract a bit\n'
+                      'G1 E-8 X5 Y5 Z3 F3000 ;Retract\n'
+                      'G90 ;Absolute positionning\n'
+                      'G1 X10 Y200 F6000;Finish print\n'
+                      'M106 S0 ;Turn-off fan\n'
+                      'M104 S0 ;Turn-off hotend\n'
+                      'M140 S0 ;Turn-off bed\n'
+                      'M84',
+ 'machine_max_acceleration_e': ['8000', '8000'],
+ 'machine_max_acceleration_extruding': ['3000', '3000'],
+ 'machine_max_acceleration_retracting': ['8000', '8000'],
+ 'machine_max_acceleration_travel': ['3000', '3000'],
+ 'machine_max_acceleration_x': ['3000', '3000'],
+ 'machine_max_acceleration_y': ['2000', '2000'],
+ 'machine_max_acceleration_z': ['250', '250'],
+ 'machine_max_jerk_e': ['2.5', '2.5'],
+ 'machine_max_jerk_x': ['9', '9'],
+ 'machine_max_jerk_y': ['9', '9'],
+ 'machine_max_jerk_z': ['0.2', '0.4'],
+ 'machine_max_speed_e': ['120', '120'],
+ 'machine_max_speed_x': ['300', '200'],
+ 'machine_max_speed_y': ['300', '200'],
+ 'machine_max_speed_z': ['40', '40'],
+ 'machine_min_extruding_rate': ['0', '0'],
+ 'machine_min_travel_rate': ['0', '0'],
+ 'machine_pause_gcode': 'M600\n',
+ 'machine_start_gcode': 'G90 ; use absolute coordinates\n'
+                        'M83 ; extruder relative mode\n'
+                        'M204 S[machine_max_acceleration_extruding] T[machine_max_acceleration_retracting]\n'
+                        'M104 S[first_layer_temperature] ; set extruder temp\n'
+                        'M140 S[first_layer_bed_temperature] ; set bed temp\n'
+                        'G28 ; home all\n'
+                        'G29; UBL\n'
+                        '\n'
+                        'G1 Y1.0 Z0.3 F1000 ; move print head up\n'
+                        'M190 S[first_layer_bed_temperature] ; wait for bed temp\n'
+                        'M109 S[first_layer_temperature] ; wait for extruder temp\n'
+                        'G92 E0.0\n'
+                        '; initial load\n'
+                        'G1 X205.0 E19 F1000\n'
+                        'G1 Y1.6\n'
+                        'G1 X5.0 E19 F1000\n'
+                        'G92 E0.0\n'
+                        '; intro line\n'
+                        'G1 Y2.0 Z0.2 F1000\n'
+                        'G1 X65.0 E9.0 F1000\n'
+                        'G1 X105.0 E12.5 F1000\n'
+                        'G92 E0.0',
+ 'max_layer_height': ['0.3'],
+ 'min_layer_height': ['0.08'],
+ 'name': 'fdm_machine_tinybotv1_common',
+ 'nozzle_diameter': ['0.2', '0.3', '0.4', '0.6'],
+ 'printable_area': ['0x0', '210x0', '210x210', '0x210'],
+ 'printable_height': '400',
+ 'printer_settings_id': '',
+ 'printer_technology': 'FFF',
+ 'printer_variant': '0.4',
+ 'retract_before_wipe': ['70%'],
+ 'retract_length_toolchange': ['2'],
+ 'retract_restart_extra': ['0'],
+ 'retract_restart_extra_toolchange': ['0'],
+ 'retract_when_changing_layer': ['1'],
+ 'retraction_length': ['0.8'],
+ 'retraction_minimum_travel': ['1'],
+ 'retraction_speed': ['30'],
+ 'single_extruder_multi_material': '1',
+ 'thumbnails': '',
+ 'type': 'machine',
+ 'wipe': ['1'],
+ 'z_hop': ['0.4']}

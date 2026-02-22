@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/OpenEYE/process/0.08mm Extra Fine @OpenEYE Peacock V2.json
+DATA = {'compatible_printers': ['OpenEYE Peacock V2 0.4 nozzle'],
+ 'default_acceleration': '4000',
+ 'from': 'system',
+ 'gap_infill_speed': '50',
+ 'inherits': 'fdm_process_openeye_0.08_nozzle_0.4',
+ 'initial_layer_infill_speed': '70',
+ 'initial_layer_speed': '40',
+ 'inner_wall_speed': '120',
+ 'instantiation': 'true',
+ 'internal_solid_infill_speed': '120',
+ 'name': '0.08mm Extra Fine @OpenEYE Peacock V2',
+ 'outer_wall_acceleration': '2000',
+ 'outer_wall_speed': '60',
+ 'overhang_1_4_speed': '60',
+ 'overhang_2_4_speed': '30',
+ 'overhang_3_4_speed': '10',
+ 'prime_tower_brim_width': '3',
+ 'prime_tower_width': '60',
+ 'setting_id': 'GP136',
+ 'sparse_infill_pattern': 'gyroid',
+ 'sparse_infill_speed': '100',
+ 'top_surface_speed': '120',
+ 'type': 'process'}

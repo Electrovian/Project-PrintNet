@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "missing_files": [],
+  "required_file_count": 10,
+  "route_switch_found": true,
+  "dark_theme_found": true,
+  "default_material": "PLA",
+  "default_color": "Black",
+  "api_base_default": "http://127.0.0.1:8000/api/v1",
+  "contract_error_class": true,
+  "backend_client_class": true,
+  "health_ok": true,
+  "session_token_prefix_ok": true
+}

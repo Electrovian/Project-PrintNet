@@ -1,0 +1,20 @@
+{
+  "session_student_status": 200,
+  "session_operator_status": 200,
+  "session_student2_status": 200,
+  "student_token_prefix_ok": true,
+  "profiles_missing_status": 401,
+  "profiles_ok_status": 200,
+  "profiles_ok_count": 3,
+  "student_register_status": 403,
+  "operator_register_status": 200,
+  "student_mismatch_submit_status": 403,
+  "student_submit_status": 200,
+  "job_id_prefix_ok": true,
+  "foreign_status_status": 403,
+  "owner_status_status": 200,
+  "operator_status_status": 200,
+  "whoami_status": 200,
+  "whoami_role": "operator",
+  "ok": true
+}

@@ -1,0 +1,14 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/filament/Prusa Generic PLA @MK4S 0.6.json
+DATA = {'compatible_printers': ['Prusa MK4S 0.6 nozzle'],
+ 'fan_cooling_layer_time': '22',
+ 'filament_id': 'Generic PLA @MK4S 0.6',
+ 'from': 'system',
+ 'inherits': 'Prusa Generic PLA @MK4S',
+ 'instantiation': 'true',
+ 'name': 'Prusa Generic PLA @MK4S 0.6',
+ 'nozzle_temperature': '210',
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': '10',
+ 'type': 'filament'}

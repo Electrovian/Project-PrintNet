@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/OpenEYE/process/0.30mm Standard @OpenEYE Peacock V2 0.6 nozzle.json
+DATA = {'bridge_speed': '50',
+ 'compatible_printers': ['OpenEYE Peacock V2 0.6 nozzle'],
+ 'default_acceleration': '8000',
+ 'description': 'Standard profile for 0.6mm nozzle, prioritizing speed.',
+ 'from': 'system',
+ 'gap_infill_speed': '250',
+ 'inherits': 'fdm_process_openeye_0.30_nozzle_0.6',
+ 'initial_layer_infill_speed': '105',
+ 'initial_layer_speed': '50',
+ 'inner_wall_speed': '300',
+ 'instantiation': 'true',
+ 'internal_solid_infill_speed': '250',
+ 'name': '0.30mm Standard @OpenEYE Peacock V2 0.6 nozzle',
+ 'outer_wall_speed': '200',
+ 'overhang_3_4_speed': '30',
+ 'prime_tower_brim_width': '3',
+ 'prime_tower_width': '60',
+ 'setting_id': 'GP125',
+ 'sparse_infill_speed': '350',
+ 'top_surface_speed': '200',
+ 'travel_speed': '500',
+ 'type': 'process'}

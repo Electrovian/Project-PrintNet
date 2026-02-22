@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge TPU 95A.json
+DATA = {'compatible_printers': ['Flashforge Adventurer 5M 0.4 Nozzle',
+                         'Flashforge Adventurer 5M 0.6 Nozzle',
+                         'Flashforge Adventurer 5M 0.8 Nozzle',
+                         'Flashforge Adventurer 5M Pro 0.4 Nozzle',
+                         'Flashforge Adventurer 5M Pro 0.6 Nozzle',
+                         'Flashforge Adventurer 5M Pro 0.8 Nozzle',
+                         'Flashforge AD5X 0.4 nozzle',
+                         'Flashforge AD5X 0.6 nozzle',
+                         'Flashforge AD5X 0.8 nozzle'],
+ 'filament_settings_id': ['Flashforge TPU 95A'],
+ 'from': 'system',
+ 'inherits': 'Flashforge Generic TPU',
+ 'instantiation': 'true',
+ 'name': 'Flashforge TPU 95A',
+ 'setting_id': 'GFSA04',
+ 'type': 'filament'}

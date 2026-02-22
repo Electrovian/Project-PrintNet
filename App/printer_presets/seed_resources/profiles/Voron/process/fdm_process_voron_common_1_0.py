@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Voron/process/fdm_process_voron_common_1_0.json
+DATA = {'compatible_printers': ['Voron 0.1 1.0 nozzle',
+                         'Voron 2.4 250 1.0 nozzle',
+                         'Voron 2.4 300 1.0 nozzle',
+                         'Voron 2.4 350 1.0 nozzle',
+                         'Voron Trident 250 1.0 nozzle',
+                         'Voron Trident 300 1.0 nozzle',
+                         'Voron Trident 350 1.0 nozzle',
+                         'Voron Switchwire 250 1.0 nozzle'],
+ 'from': 'system',
+ 'inherits': 'fdm_process_voron_common',
+ 'initial_layer_line_width': '1.02',
+ 'initial_layer_print_height': '0.5',
+ 'inner_wall_line_width': '1.02',
+ 'instantiation': 'false',
+ 'internal_solid_infill_line_width': '1.02',
+ 'line_width': '1.02',
+ 'name': 'fdm_process_voron_common_1_0',
+ 'outer_wall_line_width': '1.02',
+ 'sparse_infill_line_width': '1.02',
+ 'support_line_width': '1.02',
+ 'top_surface_line_width': '1.02',
+ 'type': 'process'}

@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/BBL/filament/fdm_filament_dual_common.json
+DATA = {'filament_change_length': ['10'],
+ 'filament_deretraction_speed': ['nil', 'nil'],
+ 'filament_extruder_variant': ['Direct Drive Standard', 'Direct Drive High Flow'],
+ 'filament_flow_ratio': ['', ''],
+ 'filament_max_volumetric_speed': ['', ''],
+ 'filament_prime_volume': ['45'],
+ 'filament_retract_before_wipe': ['nil', 'nil'],
+ 'filament_retract_when_changing_layer': ['nil', 'nil'],
+ 'filament_retraction_length': ['nil', 'nil'],
+ 'filament_retraction_minimum_travel': ['nil', 'nil'],
+ 'filament_retraction_speed': ['nil', 'nil'],
+ 'filament_velocity_adaptation_factor': ['1'],
+ 'filament_wipe': ['nil', 'nil'],
+ 'filament_wipe_distance': ['nil', 'nil'],
+ 'filament_z_hop': ['nil', 'nil'],
+ 'filament_z_hop_types': ['nil', 'nil'],
+ 'from': 'system',
+ 'instantiation': 'false',
+ 'name': 'fdm_filament_dual_common',
+ 'nozzle_temperature': ['', ''],
+ 'nozzle_temperature_initial_layer': ['', ''],
+ 'type': 'filament'}

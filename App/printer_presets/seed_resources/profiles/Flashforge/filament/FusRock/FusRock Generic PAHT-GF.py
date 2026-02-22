@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/FusRock/FusRock Generic PAHT-GF.json
+DATA = {'compatible_printers': ['Flashforge Guider 3 Ultra 0.4 Nozzle', 'Flashforge Guider 2s 0.4 nozzle'],
+ 'filament_id': 'GFB99',
+ 'filament_max_volumetric_speed': ['15'],
+ 'filament_settings_id': ['FusRock Generic PAHT-GF'],
+ 'filament_type': ['PAHT-GF'],
+ 'from': 'system',
+ 'hot_plate_temp': ['70'],
+ 'hot_plate_temp_initial_layer': ['75'],
+ 'inherits': 'FusRock Generic PAHT-CF',
+ 'instantiation': 'true',
+ 'name': 'FusRock Generic PAHT-GF',
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['10'],
+ 'slow_down_min_speed': ['10'],
+ 'support_material_interface_fan_speed': ['20'],
+ 'type': 'filament'}

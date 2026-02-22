@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/filament/Prusa Generic PVA.json
+DATA = {'compatible_printers': ['Prusa MK3S 0.25 nozzle',
+                         'Prusa MK3S 0.4 nozzle',
+                         'Prusa MK3S 0.6 nozzle',
+                         'Prusa MK3S 0.8 nozzle',
+                         'Prusa MINI 0.25 nozzle',
+                         'Prusa MINI 0.4 nozzle',
+                         'Prusa MINI 0.6 nozzle',
+                         'Prusa MINI 0.8 nozzle',
+                         'Prusa MK4 0.25 nozzle',
+                         'Prusa MK4 0.4 nozzle',
+                         'Prusa MK4 0.6 nozzle',
+                         'Prusa MK4 0.8 nozzle'],
+ 'filament_flow_ratio': ['0.95'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pva',
+ 'instantiation': 'true',
+ 'name': 'Prusa Generic PVA',
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['7'],
+ 'slow_down_min_speed': ['10'],
+ 'type': 'filament'}

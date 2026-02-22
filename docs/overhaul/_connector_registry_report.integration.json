@@ -1,0 +1,16 @@
+{
+  "connector_types": [
+    "local_file",
+    "moonraker",
+    "octoprint",
+    "octoprint_legacy",
+    "prusalink"
+  ],
+  "descriptor_count": 5,
+  "local_resolved": "local_file",
+  "prusa_resolved": "prusalink",
+  "moon_resolved": "moonraker",
+  "octo_resolved": "octoprint",
+  "local_message": "Local queue placeholder: ready to send tmp6a7khh1t.gcode to a physical connector.",
+  "octo_message": "OCTOPRINT_API_KEY_REQUIRED: octoprint_api_key is required."
+}

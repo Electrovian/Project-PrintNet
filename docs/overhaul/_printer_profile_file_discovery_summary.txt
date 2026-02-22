@@ -1,0 +1,8 @@
+source_path: C:\Users\Elect\OneDrive\Documents\GitHub\Project-PrintNet\App\printer_presets\seed_resources\profiles
+discovered_at_utc: 2026-02-13T18:47:50.037036+00:00
+vendor_count: 61
+total_index_files: 61
+total_machine_files: 1359
+total_process_files: 2879
+total_filament_files: 5074
+warning_count: 19

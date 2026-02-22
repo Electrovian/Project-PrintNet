@@ -1,0 +1,22 @@
+from __future__ import annotations
+
+# source: profiles/CONSTRUCT3D/filament/C1 Generic PETG.json
+DATA = {'compatible_printers': ['Construct 1 0.4 nozzle', 'Construct 1 XL 0.6 nozzle'],
+ 'fan_cooling_layer_time': ['20'],
+ 'fan_max_speed': ['100'],
+ 'fan_min_speed': ['30'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_id': 'GFG99',
+ 'filament_max_volumetric_speed': ['35'],
+ 'filament_start_gcode': ['; filament start gcode\n'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pet',
+ 'instantiation': 'true',
+ 'name': 'C1 Generic PETG',
+ 'overhang_fan_speed': ['80'],
+ 'reduce_fan_stop_start_freq': ['1'],
+ 'setting_id': 'GFSG99',
+ 'slow_down_for_layer_cooling': ['1'],
+ 'slow_down_layer_time': ['6'],
+ 'slow_down_min_speed': ['15'],
+ 'type': 'filament'}

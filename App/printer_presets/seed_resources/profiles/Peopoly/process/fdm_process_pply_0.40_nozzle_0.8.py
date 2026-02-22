@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Peopoly/process/fdm_process_pply_0.40_nozzle_0.8.json
+DATA = {'bridge_flow': '1',
+ 'bridge_speed': '30',
+ 'from': 'system',
+ 'inherits': 'fdm_process_pply_common',
+ 'initial_layer_infill_speed': '80',
+ 'initial_layer_line_width': '0.82',
+ 'initial_layer_print_height': '0.4',
+ 'initial_layer_speed': '45',
+ 'inner_wall_line_width': '0.82',
+ 'instantiation': 'false',
+ 'internal_solid_infill_line_width': '0.82',
+ 'layer_height': '0.4',
+ 'line_width': '0.82',
+ 'name': 'fdm_process_pply_0.40_nozzle_0.8',
+ 'outer_wall_line_width': '0.82',
+ 'overhang_3_4_speed': '25',
+ 'overhang_4_4_speed': '5',
+ 'sparse_infill_line_width': '0.82',
+ 'sparse_infill_speed': '150',
+ 'support_line_width': '0.82',
+ 'top_surface_line_width': '0.82',
+ 'top_surface_pattern': 'monotonic',
+ 'top_surface_speed': '180',
+ 'type': 'process'}

@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/filament/QIDI ABS Odorless @Qidi Q1 Pro 0.4 nozzle.json
+DATA = {'activate_chamber_temp_control': ['0'],
+ 'chamber_temperature': ['55'],
+ 'compatible_printers': ['Qidi Q1 Pro 0.4 nozzle'],
+ 'during_print_exhaust_fan_speed': ['0'],
+ 'enable_pressure_advance': ['1'],
+ 'fan_max_speed': ['80'],
+ 'filament_flow_ratio': ['0.92'],
+ 'filament_id': 'GFB99',
+ 'filament_max_volumetric_speed': ['22'],
+ 'from': 'system',
+ 'hot_plate_temp_initial_layer': ['90'],
+ 'inherits': 'QIDI ABS Odorless',
+ 'instantiation': 'true',
+ 'name': 'QIDI ABS Odorless @Qidi Q1 Pro 0.4 nozzle',
+ 'nozzle_temperature': ['260'],
+ 'overhang_fan_speed': ['80'],
+ 'pressure_advance': ['0.023'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_min_speed': ['20'],
+ 'type': 'filament'}

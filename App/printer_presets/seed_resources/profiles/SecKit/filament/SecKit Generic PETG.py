@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/SecKit/filament/SecKit Generic PETG.json
+DATA = {'compatible_printers': ['SecKit SK-Tank 0.4 nozzle', 'SecKit Go3 0.4 nozzle'],
+ 'enable_pressure_advance': ['1'],
+ 'fan_cooling_layer_time': ['10'],
+ 'fan_max_speed': ['100'],
+ 'fan_min_speed': ['40'],
+ 'filament_flow_ratio': ['0.94'],
+ 'filament_id': 'GFG99',
+ 'filament_max_volumetric_speed': ['11'],
+ 'filament_z_hop': ['0'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pet',
+ 'instantiation': 'true',
+ 'name': 'SecKit Generic PETG',
+ 'nozzle_temperature': ['235'],
+ 'nozzle_temperature_initial_layer': ['240'],
+ 'nozzle_temperature_range_high': ['250'],
+ 'overhang_fan_speed': ['100'],
+ 'overhang_fan_threshold': ['25%'],
+ 'pressure_advance': ['0.045'],
+ 'reduce_fan_stop_start_freq': ['1'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_for_layer_cooling': ['1'],
+ 'slow_down_layer_time': ['8'],
+ 'slow_down_min_speed': ['10'],
+ 'type': 'filament'}

@@ -1,0 +1,52 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/filament/Prusament PVB @XL.json
+DATA = {'close_fan_the_first_x_layers': ['1'],
+ 'compatible_printers': ['Prusa XL 0.25 nozzle',
+                         'Prusa XL 0.3 nozzle',
+                         'Prusa XL 0.4 nozzle',
+                         'Prusa XL 0.5 nozzle',
+                         'Prusa XL 0.6 nozzle',
+                         'Prusa XL 0.8 nozzle'],
+ 'fan_max_speed': ['100'],
+ 'fan_min_speed': ['100'],
+ 'filament_cooling_final_speed': '3.5',
+ 'filament_cooling_initial_speed': '10',
+ 'filament_cooling_moves': '2',
+ 'filament_flow_ratio': ['1'],
+ 'filament_load_time': '10.5',
+ 'filament_loading_speed': '10',
+ 'filament_loading_speed_start': '50',
+ 'filament_max_volumetric_speed': ['8'],
+ 'filament_retract_lift_below': '0.6',
+ 'filament_start_gcode': ['; filament start gcode\n'
+                          'M900 K{if nozzle_diameter[0]==0.4}0.05{elsif nozzle_diameter[0]==0.25}0.14{elsif '
+                          'nozzle_diameter[0]==0.3}0.07{elsif nozzle_diameter[0]==0.35}0.06{elsif '
+                          'nozzle_diameter[0]==0.6}0.03{elsif nozzle_diameter[0]==0.5}0.035{elsif '
+                          'nozzle_diameter[0]==0.8}0.015{else}0{endif} ; Filament gcode\n'
+                          '\n'
+                          '{if printer_notes=~/.*PRINTER_MODEL_XLIS.*/}\n'
+                          'M572 S{if nozzle_diameter[0]==0.4}0.036{elsif nozzle_diameter[0]==0.5}0.025{elsif '
+                          'nozzle_diameter[0]==0.6}0.02{elsif nozzle_diameter[0]==0.8}0.014{elsif '
+                          'nozzle_diameter[0]==0.25}0.12{elsif nozzle_diameter[0]==0.3}0.08{else}0{endif} ; Filament '
+                          'gcode\n'
+                          '{endif}\n'
+                          '\n'
+                          'M142 S36 ; set heatbreak target temp'],
+ 'filament_unload_time': '8.5',
+ 'filament_unloading_speed': '100',
+ 'filament_unloading_speed_start': '100',
+ 'from': 'system',
+ 'full_fan_speed_layer': ['3'],
+ 'hot_plate_temp': '75',
+ 'hot_plate_temp_initial_layer': '75',
+ 'inherits': 'fdm_filament_pvb',
+ 'instantiation': 'true',
+ 'name': 'Prusament PVB @XL',
+ 'nozzle_temperature': '215',
+ 'nozzle_temperature_intial_layer': '215',
+ 'overhang_fan_speed': ['100'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['10'],
+ 'slow_down_min_speed': '15',
+ 'type': 'filament'}

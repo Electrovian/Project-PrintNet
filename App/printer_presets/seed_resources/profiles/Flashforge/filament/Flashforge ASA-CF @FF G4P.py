@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge ASA-CF @FF G4P.json
+DATA = {'activate_chamber_temp_control': ['1'],
+ 'chamber_temperature': ['60'],
+ 'compatible_printers': ['Flashforge Guider4 Pro 0.4 nozzle'],
+ 'complete_print_exhaust_fan_speed': ['50'],
+ 'cool_plate_temp': ['0'],
+ 'cool_plate_temp_initial_layer': ['0'],
+ 'during_print_exhaust_fan_speed': ['40'],
+ 'eng_plate_temp': ['100'],
+ 'eng_plate_temp_initial_layer': ['100'],
+ 'filament_settings_id': ['Flashforge ASA-CF @FF G4P'],
+ 'filament_start_gcode': ['; filament start gcode\n;right_extruder_material: ASA-CF\n'],
+ 'filament_type': ['ASA'],
+ 'from': 'system',
+ 'hot_plate_temp': ['100'],
+ 'hot_plate_temp_initial_layer': ['100'],
+ 'inherits': 'Flashforge Generic ABS',
+ 'instantiation': 'true',
+ 'name': 'Flashforge ASA-CF @FF G4P',
+ 'slow_down_layer_time': ['4'],
+ 'textured_plate_temp': ['100'],
+ 'textured_plate_temp_initial_layer': ['100'],
+ 'type': 'filament'}

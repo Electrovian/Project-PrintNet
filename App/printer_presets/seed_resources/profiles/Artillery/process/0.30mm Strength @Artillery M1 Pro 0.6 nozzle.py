@@ -1,0 +1,16 @@
+from __future__ import annotations
+
+# source: profiles/Artillery/process/0.30mm Strength @Artillery M1 Pro 0.6 nozzle.json
+DATA = {'from': 'system',
+ 'inherits': '0.24mm Draft @Artillery M1 Pro 0.6 nozzle',
+ 'initial_layer_infill_speed': '55',
+ 'initial_layer_speed': '35',
+ 'instantiation': 'true',
+ 'is_custom_defined': '0',
+ 'layer_height': '0.3',
+ 'name': '0.30mm Strength @Artillery M1 Pro 0.6 nozzle',
+ 'print_settings_id': '0.30mm Strength @Artillery M1 Pro 0.6 nozzle',
+ 'sparse_infill_density': '25%',
+ 'type': 'process',
+ 'version': '2.1.1.0',
+ 'wall_loops': '4'}

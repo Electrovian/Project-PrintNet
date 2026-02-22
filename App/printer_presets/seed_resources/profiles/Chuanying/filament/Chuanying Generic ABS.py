@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Chuanying/filament/Chuanying Generic ABS.json
+DATA = {'compatible_printers': ['Chuanying X1 0.4 Nozzle', 'Chuanying X1 0.6 Nozzle', 'Chuanying X1 0.8 Nozzle'],
+ 'enable_pressure_advance': ['1'],
+ 'filament_density': ['1.04'],
+ 'filament_diameter': ['1.75'],
+ 'filament_end_gcode': ['; filament end gcode\n'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_id': 'GFB99',
+ 'filament_max_volumetric_speed': ['15'],
+ 'filament_start_gcode': ['; filament start gcode\n;right_extruder_material: ABS\n'],
+ 'from': 'system',
+ 'hot_plate_temp': ['105'],
+ 'hot_plate_temp_initial_layer': ['105'],
+ 'inherits': 'fdm_filament_abs',
+ 'instantiation': 'true',
+ 'name': 'Chuanying Generic ABS',
+ 'pressure_advance': ['0.04'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['8'],
+ 'slow_down_min_speed': ['20'],
+ 'support_material_interface_fan_speed': ['80'],
+ 'temperature_vitrification': ['100'],
+ 'type': 'filament'}

@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/DeltaMaker/filament/fdm_filament_tpu.json
+DATA = {'close_fan_the_first_x_layers': ['3'],
+ 'fan_cooling_layer_time': ['30'],
+ 'fan_max_speed': ['5'],
+ 'fan_min_speed': ['5'],
+ 'filament_cost': ['20'],
+ 'filament_density': ['1.10'],
+ 'filament_max_volumetric_speed': ['0'],
+ 'filament_type': ['TPU'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_common',
+ 'instantiation': 'false',
+ 'name': 'fdm_filament_tpu',
+ 'nozzle_temperature': ['235'],
+ 'nozzle_temperature_initial_layer': ['240'],
+ 'nozzle_temperature_range_high': ['240'],
+ 'nozzle_temperature_range_low': ['235'],
+ 'overhang_fan_speed': ['80'],
+ 'overhang_fan_threshold': ['25%'],
+ 'reduce_fan_stop_start_freq': ['1'],
+ 'slow_down_for_layer_cooling': ['1'],
+ 'slow_down_layer_time': ['15'],
+ 'slow_down_min_speed': ['10'],
+ 'temperature_vitrification': ['110'],
+ 'type': 'filament'}

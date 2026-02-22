@@ -1,0 +1,7 @@
+layer_count: 2
+contour_count_input: 4
+island_count_total: 2
+hole_count_total: 2
+intra_layer_edge_count: 0
+vertical_edge_count: 1
+warning_count: 0

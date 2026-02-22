@@ -1,0 +1,24 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/filament/QIDI PLA Rapido Silk @Qidi Q1 Pro 0.4 nozzle.json
+DATA = {'activate_air_filtration': ['1'],
+ 'close_fan_the_first_x_layers': ['1'],
+ 'compatible_printers': ['Qidi Q1 Pro 0.4 nozzle'],
+ 'during_print_exhaust_fan_speed': ['100'],
+ 'fan_cooling_layer_time': ['60'],
+ 'filament_id': 'GFB99',
+ 'filament_max_volumetric_speed': ['7.5'],
+ 'filament_settings_id': ['QIDI PLA Rapido Silk @Qidi Q1 Pro 0.4 nozzle'],
+ 'from': 'system',
+ 'full_fan_speed_layer': ['3'],
+ 'hot_plate_temp': ['60'],
+ 'hot_plate_temp_initial_layer': ['60'],
+ 'inherits': 'QIDI PLA Rapido Silk',
+ 'instantiation': 'true',
+ 'name': 'QIDI PLA Rapido Silk @Qidi Q1 Pro 0.4 nozzle',
+ 'nozzle_temperature': ['210'],
+ 'nozzle_temperature_initial_layer': ['210'],
+ 'pressure_advance': ['0.034'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_min_speed': ['20'],
+ 'type': 'filament'}

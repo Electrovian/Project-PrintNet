@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Sovol/filament/Sovol SV06 Plus ACE TPU.json
+DATA = {'compatible_printers': ['Sovol SV06 Plus ACE 0.4 nozzle'],
+ 'fan_cooling_layer_time': ['80'],
+ 'fan_max_speed': ['100'],
+ 'fan_min_speed': ['100'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_id': 'GFL99',
+ 'filament_max_volumetric_speed': ['3.6'],
+ 'from': 'system',
+ 'full_fan_speed_layer': ['3'],
+ 'hot_plate_temp': ['60'],
+ 'hot_plate_temp_initial_layer': ['60'],
+ 'inherits': 'Generic TPU @System',
+ 'instantiation': 'true',
+ 'name': 'Sovol SV06 Plus ACE TPU',
+ 'nozzle_temperature': ['245'],
+ 'nozzle_temperature_initial_layer': ['250'],
+ 'nozzle_temperature_range_high': ['300'],
+ 'nozzle_temperature_range_low': ['190'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['5'],
+ 'slow_down_min_speed': ['10'],
+ 'type': 'filament'}

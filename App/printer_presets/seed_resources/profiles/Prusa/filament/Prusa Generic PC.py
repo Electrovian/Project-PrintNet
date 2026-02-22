@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/filament/Prusa Generic PC.json
+DATA = {'compatible_printers': ['Prusa MK3S 0.25 nozzle',
+                         'Prusa MK3S 0.4 nozzle',
+                         'Prusa MK3S 0.6 nozzle',
+                         'Prusa MK3S 0.8 nozzle',
+                         'Prusa MK4 0.25 nozzle',
+                         'Prusa MK4 0.4 nozzle',
+                         'Prusa MK4 0.6 nozzle',
+                         'Prusa MK4 0.8 nozzle',
+                         'Prusa MINI 0.25 nozzle',
+                         'Prusa MINI 0.4 nozzle',
+                         'Prusa MINI 0.6 nozzle',
+                         'Prusa MINI 0.8 nozzle'],
+ 'cool_plate_temp_initial_layer': ['0'],
+ 'eng_plate_temp': ['100'],
+ 'eng_plate_temp_initial_layer': ['100'],
+ 'filament_flow_ratio': ['0.94'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'from': 'system',
+ 'hot_plate_temp': ['100'],
+ 'hot_plate_temp_initial_layer': ['100'],
+ 'inherits': 'fdm_filament_pc',
+ 'instantiation': 'true',
+ 'name': 'Prusa Generic PC',
+ 'setting_id': 'GFSA04',
+ 'type': 'filament'}

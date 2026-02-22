@@ -1,0 +1,17 @@
+stage_count: 10
+layer_count: 12
+island_count_total: 10
+support_enabled: True
+support_type: normal
+support_density_percent: 25.0
+support_spacing_mm: 2.5
+support_xy_gap_mm: 0.25
+support_z_gap_mm: 0.2
+support_interface_layers: 2
+unsupported_island_count_total: 1
+support_region_count: 1
+support_path_count: 1
+support_path_length_mm_total: 1.0
+support_interface_path_count_total: 1
+warning_count: 0
+validation_ok: True

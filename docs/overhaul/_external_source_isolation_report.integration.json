@@ -1,0 +1,33 @@
+﻿{
+    "timestamp_utc":  "2026-02-13T03:51:40.7207395Z",
+    "success":  true,
+    "repo_root":  "C:\\Users\\Elect\\OneDrive\\Documents\\GitHub\\Project-PrintNet",
+    "mirror_root_relative":  "overhaul",
+    "checks":  [
+                   {
+                       "name":  "git_available",
+                       "status":  "ok",
+                       "message":  "git executable found"
+                   },
+                   {
+                       "name":  "gitignore_exists",
+                       "status":  "ok",
+                       "message":  "Found .gitignore"
+                   },
+                   {
+                       "name":  "ignore_rule",
+                       "status":  "ok",
+                       "message":  "Required ignore rule present"
+                   },
+                   {
+                       "name":  "mirror_directory",
+                       "status":  "ok",
+                       "message":  "Mirror directory exists"
+                   },
+                   {
+                       "name":  "tracked_files",
+                       "status":  "ok",
+                       "message":  "No tracked files under mirror root"
+                   }
+               ]
+}

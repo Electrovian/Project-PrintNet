@@ -269,11 +269,6 @@ class UiMixin(UiMixinBase):
         ps_path = self._ps_open_file_name(caption, directory, file_filter)
         if ps_path is not None:
             return str(ps_path), str(file_filter or "")
-        if os.name == "nt" and sys.version_info[:2] >= (3, 13):
-            raise RuntimeError(
-                "Explorer dialog unavailable (PowerShell path failed). "
-                "Falling back to manual path entry."
-            )
         tk_path = self._tk_open_file_name(caption, directory, file_filter)
         if tk_path is not None:
             return tk_path, str(file_filter or "")
@@ -295,11 +290,6 @@ class UiMixin(UiMixinBase):
         ps_paths = self._ps_open_file_names(caption, directory, file_filter)
         if ps_paths is not None:
             return [str(path) for path in ps_paths], str(file_filter or "")
-        if os.name == "nt" and sys.version_info[:2] >= (3, 13):
-            raise RuntimeError(
-                "Explorer dialog unavailable (PowerShell path failed). "
-                "Falling back to manual path entry."
-            )
         tk_paths = self._tk_open_file_names(caption, directory, file_filter)
         if tk_paths is not None:
             return tk_paths, str(file_filter or "")
@@ -321,11 +311,6 @@ class UiMixin(UiMixinBase):
         ps_path = self._ps_save_file_name(caption, directory, file_filter)
         if ps_path is not None:
             return str(ps_path), str(file_filter or "")
-        if os.name == "nt" and sys.version_info[:2] >= (3, 13):
-            raise RuntimeError(
-                "Explorer dialog unavailable (PowerShell path failed). "
-                "Falling back to manual path entry."
-            )
         tk_path = self._tk_save_file_name(caption, directory, file_filter)
         if tk_path is not None:
             return tk_path, str(file_filter or "")

@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+# source: profiles/BBL/machine/fdm_machine_common.json
+DATA = {'apply_top_surface_compensation': '0',
+ 'auxiliary_fan': '1',
+ 'bed_temperature_formula': 'by_first_filament',
+ 'best_object_pos': '0.5x0.5',
+ 'change_filament_gcode': '',
+ 'default_filament_profile': [],
+ 'default_print_profile': '0.16mm Optimal @BBL X1C',
+ 'deretraction_speed': ['40'],
+ 'enable_filament_ramming': '0',
+ 'enable_long_retraction_when_cut': '0',
+ 'enable_power_loss_recovery': 'printer_configuration',
+ 'enable_pre_heating': '0',
+ 'extruder_clearance_dist_to_rod': '33',
+ 'extruder_clearance_height_to_lid': '140',
+ 'extruder_clearance_height_to_rod': '34',
+ 'extruder_clearance_max_radius': '65',
+ 'extruder_colour': ['#FCE94F'],
+ 'extruder_offset': ['0x0'],
+ 'from': 'system',
+ 'gcode_flavor': 'marlin',
+ 'grab_length': ['0'],
+ 'hotend_cooling_rate': ['2'],
+ 'hotend_heating_rate': ['2'],
+ 'instantiation': 'false',
+ 'long_retractions_when_cut': ['0'],
+ 'machine_end_gcode': 'M400 ; wait for buffer to clear\n'
+                      'G92 E0 ; zero the extruder\n'
+                      'G1 E-4.0 F3600; retract \n'
+                      'G91\n'
+                      'G1 Z3;\n'
+                      'M104 S0 ; turn off hotend\n'
+                      'M140 S0 ; turn off bed\n'
+                      'M106 S0 ; turn off fan\n'
+                      'G90 \n'
+                      'G0 X110 Y200 F3600 \n'
+                      'print_end',
+ 'machine_load_filament_time': '29',
+ 'machine_max_acceleration_e': ['5000'],
+ 'machine_max_acceleration_extruding': ['10000'],
+ 'machine_max_acceleration_retracting': ['1000'],
+ 'machine_max_acceleration_x': ['10000'],
+ 'machine_max_acceleration_y': ['10000'],
+ 'machine_max_acceleration_z': ['100'],
+ 'machine_max_jerk_e': ['5'],
+ 'machine_max_jerk_x': ['8'],
+ 'machine_max_jerk_y': ['8'],
+ 'machine_max_jerk_z': ['3'],
+ 'machine_max_speed_e': ['60'],
+ 'machine_max_speed_x': ['500'],
+ 'machine_max_speed_y': ['500'],
+ 'machine_max_speed_z': ['10'],
+ 'machine_min_extruding_rate': ['0'],
+ 'machine_min_travel_rate': ['0'],
+ 'machine_prepare_compensation_time': '260',
+ 'machine_start_gcode': 'G0 Z20 F9000\n'
+                        'G92 E0; G1 E-10 F1200\n'
+                        'G28\n'
+                        'M970 Q1 A10 B10 C130 K0\n'
+                        'M970 Q1 A10 B131 C250 K1\n'
+                        'M974 Q1 S1 P0\n'
+                        'M970 Q0 A10 B10 C130 H20 K0\n'
+                        'M970 Q0 A10 B131 C250 K1\n'
+                        'M974 Q0 S1 P0\n'
+                        'M220 S100 ;Reset Feedrate\n'
+                        'M221 S100 ;Reset Flowrate\n'
+                        'G29 ;Home\n'
+                        'G90;\n'
+                        'G92 E0 ;Reset Extruder \n'
+                        'G1 Z2.0 F3000 ;Move Z Axis up \n'
+                        'G1 X10.1 Y20 Z0.28 F5000.0 ;Move to start position\n'
+                        'M109 S205;\n'
+                        'G1 X10.1 Y200.0 Z0.28 F1500.0 E15 ;Draw the first line\n'
+                        'G1 X10.4 Y200.0 Z0.28 F5000.0 ;Move to side a little\n'
+                        'G1 X10.4 Y20 Z0.28 F1500.0 E30 ;Draw the second line\n'
+                        'G92 E0 ;Reset Extruder \n'
+                        'G1 X110 Y110 Z2.0 F3000 ;Move Z Axis up',
+ 'machine_switch_extruder_time': '0',
+ 'machine_unload_filament_time': '29',
+ 'master_extruder_id': '1',
+ 'max_layer_height': ['0.28'],
+ 'min_layer_height': ['0.08'],
+ 'name': 'fdm_machine_common',
+ 'nozzle_diameter': ['0.4'],
+ 'nozzle_flush_dataset': ['0'],
+ 'nozzle_height': '4',
+ 'printable_height': '250',
+ 'printer_settings_id': '',
+ 'printer_structure': 'corexy',
+ 'printer_technology': 'FFF',
+ 'printer_variant': '0.4',
+ 'purge_in_prime_tower': '0',
+ 'retract_before_wipe': ['70%'],
+ 'retract_length_toolchange': ['1'],
+ 'retract_restart_extra': ['0'],
+ 'retract_restart_extra_toolchange': ['0'],
+ 'retract_when_changing_layer': ['1'],
+ 'retraction_distances_when_cut': ['18'],
+ 'retraction_length': ['5'],
+ 'retraction_minimum_travel': ['2'],
+ 'retraction_speed': ['60'],
+ 'scan_first_layer': '0',
+ 'silent_mode': '0',
+ 'single_extruder_multi_material': '1',
+ 'support_air_filtration': '0',
+ 'support_chamber_temp_control': '0',
+ 'support_object_skip_flush': '0',
+ 'time_lapse_gcode': '',
+ 'type': 'machine',
+ 'upward_compatible_machine': [],
+ 'wipe': ['1'],
+ 'wrapping_detection_gcode': '',
+ 'wrapping_exclude_area': [],
+ 'z_hop': ['0']}

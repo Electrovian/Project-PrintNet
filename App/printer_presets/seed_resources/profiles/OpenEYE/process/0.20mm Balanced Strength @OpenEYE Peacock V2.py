@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/OpenEYE/process/0.20mm Balanced Strength @OpenEYE Peacock V2.json
+DATA = {'bottom_shell_layers': '4',
+ 'compatible_printers': ['OpenEYE Peacock V2 0.4 nozzle'],
+ 'default_acceleration': '4000',
+ 'description': 'High quality profile for 0.2mm layer height, prioritizing strength and print quality.',
+ 'from': 'system',
+ 'inherits': 'fdm_process_openeye_0.20_nozzle_0.4',
+ 'initial_layer_speed': '50',
+ 'inner_wall_speed': '150',
+ 'instantiation': 'true',
+ 'internal_solid_infill_speed': '200',
+ 'name': '0.20mm Balanced Strength @OpenEYE Peacock V2',
+ 'outer_wall_acceleration': '2000',
+ 'outer_wall_speed': '60',
+ 'overhang_2_4_speed': '30',
+ 'overhang_3_4_speed': '10',
+ 'prime_tower_brim_width': '3',
+ 'prime_tower_width': '60',
+ 'setting_id': 'GP173',
+ 'sparse_infill_speed': '200',
+ 'top_shell_layers': '6',
+ 'top_surface_speed': '150',
+ 'type': 'process'}

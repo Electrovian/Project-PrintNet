@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/process/0.20mm Standard @X-Max 4.json
+DATA = {'bridge_flow': '1',
+ 'compatible_printers': ['Qidi X-Max 4 0.4 nozzle'],
+ 'default_acceleration': ['10000'],
+ 'elefant_foot_compensation': '0.15',
+ 'enable_arc_fitting': '1',
+ 'from': 'system',
+ 'gap_infill_speed': ['250'],
+ 'inherits': 'fdm_process_n_common',
+ 'inner_wall_acceleration': ['5000'],
+ 'inner_wall_speed': ['300'],
+ 'instantiation': 'true',
+ 'internal_solid_infill_speed': ['250'],
+ 'name': '0.20mm Standard @X-Max 4',
+ 'outer_wall_acceleration': ['3000'],
+ 'outer_wall_speed': ['200'],
+ 'setting_id': 'GP004',
+ 'small_perimeter_threshold': ['4'],
+ 'smooth_coefficient': '4',
+ 'sparse_infill_speed': ['270'],
+ 'top_color_penetration_layers': '5',
+ 'top_shell_layers': '5',
+ 'top_shell_thickness': '1.0',
+ 'travel_speed': ['500'],
+ 'type': 'process'}

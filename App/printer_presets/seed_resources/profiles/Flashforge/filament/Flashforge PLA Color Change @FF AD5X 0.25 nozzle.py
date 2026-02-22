@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge PLA Color Change @FF AD5X 0.25 nozzle.json
+DATA = {'compatible_printers': ['Flashforge AD5X 0.25 nozzle'],
+ 'complete_print_exhaust_fan_speed': ['80'],
+ 'cool_plate_temp': ['45'],
+ 'cool_plate_temp_initial_layer': ['45'],
+ 'during_print_exhaust_fan_speed': ['60'],
+ 'eng_plate_temp_initial_layer': ['60'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_max_volumetric_speed': ['8'],
+ 'filament_settings_id': ['Flashforge PLA Color Change @FF AD5X 0.25 nozzle'],
+ 'from': 'system',
+ 'hot_plate_temp': ['60'],
+ 'hot_plate_temp_initial_layer': ['60'],
+ 'inherits': 'Flashforge PLA @FF AD5M 0.25 Nozzle',
+ 'instantiation': 'true',
+ 'name': 'Flashforge PLA Color Change @FF AD5X 0.25 nozzle',
+ 'nozzle_temperature': ['210'],
+ 'nozzle_temperature_initial_layer': ['215'],
+ 'pressure_advance': ['0.025'],
+ 'setting_id': 'GFSA04_19',
+ 'slow_down_layer_time': ['6'],
+ 'slow_down_min_speed': ['20'],
+ 'textured_cool_plate_temp': ['45'],
+ 'textured_cool_plate_temp_initial_layer': ['45'],
+ 'textured_plate_temp_initial_layer': ['60'],
+ 'type': 'filament'}

@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/CoLiDo/filament/CoLiDo Generic PLA @CoLiDo DIY 4.0.json
+DATA = {'compatible_printers': ['CoLiDo DIY 4.0 0.4 nozzle'],
+ 'fan_cooling_layer_time': ['80'],
+ 'fan_max_speed': ['100'],
+ 'fan_min_speed': ['60'],
+ 'filament_flow_ratio': ['1.05'],
+ 'filament_id': 'GFA99',
+ 'filament_max_volumetric_speed': ['19.5'],
+ 'filament_vendor': ['CoLiDo'],
+ 'from': 'system',
+ 'hot_plate_temp': ['60'],
+ 'hot_plate_temp_initial_layer': ['60'],
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'true',
+ 'name': 'CoLiDo Generic PLA @CoLiDo DIY 4.0',
+ 'nozzle_temperature': ['220'],
+ 'nozzle_temperature_initial_layer': ['220'],
+ 'pressure_advance': ['0.03686'],
+ 'setting_id': 'GFSA99',
+ 'slow_down_layer_time': ['4'],
+ 'textured_plate_temp': ['65'],
+ 'textured_plate_temp_initial_layer': ['65'],
+ 'type': 'filament'}

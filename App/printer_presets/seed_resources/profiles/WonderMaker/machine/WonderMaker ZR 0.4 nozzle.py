@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/WonderMaker/machine/WonderMaker ZR 0.4 nozzle.json
+DATA = {'adaptive_bed_mesh_margin': '5',
+ 'bed_mesh_max': ['290', '290'],
+ 'bed_mesh_min': ['10', '10'],
+ 'bed_mesh_probe_distance': ['40', '40'],
+ 'default_bed_type': '4',
+ 'default_filament_profile': ['WonderMaker PLA Basic'],
+ 'default_print_profile': '0.20mm Standard @WonderMaker ZR',
+ 'enable_filament_ramming': '0',
+ 'from': 'system',
+ 'inherits': 'fdm_klipper_common',
+ 'instantiation': 'true',
+ 'machine_load_filament_time': '80',
+ 'machine_unload_filament_time': '40',
+ 'name': 'WonderMaker ZR 0.4 nozzle',
+ 'nozzle_diameter': ['0.4'],
+ 'printer_model': 'WonderMaker ZR',
+ 'purge_in_prime_tower': '0',
+ 'retract_before_wipe': ['80%'],
+ 'retract_restart_extra': ['0.02'],
+ 'retraction_length': ['0.6'],
+ 'retraction_minimum_travel': ['0.5'],
+ 'setting_id': 'GM001',
+ 'type': 'machine'}

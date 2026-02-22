@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/process/process_highflow_MK3.5.json
+DATA = {'bridge_acceleration': '1500',
+ 'default_acceleration': '4000',
+ 'from': 'system',
+ 'gap_infill_speed': '120',
+ 'inherits': 'process_common_MK3.5',
+ 'initial_layer_acceleration': '500',
+ 'initial_layer_infill_speed': '100',
+ 'initial_layer_speed': '40',
+ 'inner_wall_acceleration': '4000',
+ 'inner_wall_speed': '250',
+ 'instantiation': 'false',
+ 'internal_solid_infill_acceleration': '3000',
+ 'internal_solid_infill_speed': '250',
+ 'name': 'process_highflow_MK3.5',
+ 'outer_wall_acceleration': '4000',
+ 'outer_wall_speed': '200',
+ 'overhang_1_4_speed': '60',
+ 'small_perimeter_speed': '170',
+ 'sparse_infill_speed': '250',
+ 'top_surface_acceleration': '2000',
+ 'top_surface_speed': '100',
+ 'type': 'process'}

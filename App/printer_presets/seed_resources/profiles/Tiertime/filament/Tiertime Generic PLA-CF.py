@@ -1,0 +1,39 @@
+from __future__ import annotations
+
+# source: profiles/Tiertime/filament/Tiertime Generic PLA-CF.json
+DATA = {'additional_cooling_fan_speed': ['0'],
+ 'compatible_printers': ['Tiertime UP400 Pro 0.4 nozzle',
+                         'Tiertime UP400 Pro 0.6 nozzle',
+                         'Tiertime UP400 Pro 0.8 nozzle',
+                         'Tiertime UP310 Pro 0.4 nozzle'],
+ 'cool_plate_temp': ['45'],
+ 'cool_plate_temp_initial_layer': ['45'],
+ 'fan_cooling_layer_time': ['80'],
+ 'fan_max_speed': ['80'],
+ 'fan_min_speed': ['60'],
+ 'filament_flow_ratio': ['0.95'],
+ 'filament_id': 'GFL98',
+ 'filament_start_gcode': ['; filament start gcode\n'
+                          '{if  (bed_temperature[current_extruder] '
+                          '>55)||(bed_temperature_initial_layer[current_extruder] >55)}M106 P3 S200\n'
+                          '{elsif(bed_temperature[current_extruder] '
+                          '>50)||(bed_temperature_initial_layer[current_extruder] >50)}M106 P3 S150\n'
+                          '{elsif(bed_temperature[current_extruder] '
+                          '>45)||(bed_temperature_initial_layer[current_extruder] >45)}M106 P3 S50\n'
+                          '{endif}\n'
+                          '\n'
+                          '{if activate_air_filtration[current_extruder] && support_air_filtration}\n'
+                          'M106 P3 S{during_print_exhaust_fan_speed_num[current_extruder]} \n'
+                          '{endif}'],
+ 'filament_type': ['PLA-CF'],
+ 'from': 'system',
+ 'hot_plate_temp': ['65'],
+ 'hot_plate_temp_initial_layer': ['65'],
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'true',
+ 'name': 'Tiertime Generic PLA-CF',
+ 'required_nozzle_HRC': ['40'],
+ 'slow_down_layer_time': ['7'],
+ 'textured_plate_temp': ['65'],
+ 'textured_plate_temp_initial_layer': ['65'],
+ 'type': 'filament'}

@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Eryone/filament/Eryone PETG.json
+DATA = {'close_fan_the_first_x_layers': ['2'],
+ 'compatible_printers': ['Thinker X400 0.4 nozzle'],
+ 'fan_min_speed': ['90'],
+ 'filament_end_gcode': ['; filament end gcode \nSET_FAN_SPEED FAN=filter_fan SPEED=0\n'],
+ 'filament_id': 'EFL93',
+ 'filament_max_volumetric_speed': ['14'],
+ 'filament_settings_id': ['Eryone PETG'],
+ 'filament_start_gcode': ['; filament start gcode\nSET_FAN_SPEED FAN=filter_fan SPEED=1'],
+ 'filament_type': ['PETG'],
+ 'filament_vendor': ['Eryone'],
+ 'from': 'system',
+ 'hot_plate_temp': ['75'],
+ 'hot_plate_temp_initial_layer': ['75'],
+ 'inherits': 'Eryone Standard PLA',
+ 'instantiation': 'true',
+ 'name': 'Eryone PETG',
+ 'nozzle_temperature': ['245'],
+ 'nozzle_temperature_initial_layer': ['245'],
+ 'nozzle_temperature_range_high': ['270'],
+ 'nozzle_temperature_range_low': ['225'],
+ 'overhang_fan_threshold': ['25%'],
+ 'setting_id': 'EFSA03',
+ 'slow_down_layer_time': ['7'],
+ 'type': 'filament'}

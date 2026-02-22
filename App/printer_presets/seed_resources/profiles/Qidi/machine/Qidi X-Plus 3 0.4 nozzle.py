@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/machine/Qidi X-Plus 3 0.4 nozzle.json
+DATA = {'change_filament_gcode': '',
+ 'default_filament_profile': ['Qidi Generic PLA'],
+ 'default_print_profile': '0.20mm Standard @Qidi XPlus3',
+ 'deretraction_speed': ['0'],
+ 'from': 'system',
+ 'gcode_flavor': 'klipper',
+ 'inherits': 'fdm_qidi_x3_common',
+ 'instantiation': 'true',
+ 'machine_pause_gcode': 'M0',
+ 'max_layer_height': ['0.32'],
+ 'min_layer_height': ['0.08'],
+ 'name': 'Qidi X-Plus 3 0.4 nozzle',
+ 'nozzle_diameter': ['0.4'],
+ 'nozzle_type': 'hardened_steel',
+ 'printable_area': ['0x0', '280x0', '280x280', '0x280'],
+ 'printable_height': '270',
+ 'printer_model': 'Qidi X-Plus 3',
+ 'printer_settings_id': 'Qidi',
+ 'retract_length_toolchange': ['2'],
+ 'retraction_length': ['1'],
+ 'retraction_minimum_travel': ['1'],
+ 'setting_id': 'GM001',
+ 'single_extruder_multi_material': '1',
+ 'type': 'machine'}

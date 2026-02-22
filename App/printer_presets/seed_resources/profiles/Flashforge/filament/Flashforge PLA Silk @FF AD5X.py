@@ -1,0 +1,24 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge PLA Silk @FF AD5X.json
+DATA = {'compatible_printers': ['Flashforge AD5X 0.4 nozzle'],
+ 'cool_plate_temp': ['50'],
+ 'cool_plate_temp_initial_layer': ['50'],
+ 'eng_plate_temp_initial_layer': ['60'],
+ 'filament_flow_ratio': ['0.96'],
+ 'filament_settings_id': ['Flashforge PLA Silk @FF AD5X'],
+ 'filament_type': ['SILK'],
+ 'from': 'system',
+ 'hot_plate_temp': ['60'],
+ 'hot_plate_temp_initial_layer': ['60'],
+ 'inherits': 'Flashforge Generic PLA-Silk',
+ 'instantiation': 'true',
+ 'name': 'Flashforge PLA Silk @FF AD5X',
+ 'nozzle_temperature': ['230'],
+ 'nozzle_temperature_initial_layer': ['230'],
+ 'pressure_advance': ['0.027'],
+ 'setting_id': 'GFSA04',
+ 'textured_cool_plate_temp': ['50'],
+ 'textured_cool_plate_temp_initial_layer': ['50'],
+ 'textured_plate_temp_initial_layer': ['60'],
+ 'type': 'filament'}

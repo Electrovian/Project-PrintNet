@@ -1,0 +1,24 @@
+{
+  "source_path": "C:\\Users\\Elect\\OneDrive\\Documents\\GitHub\\Project-PrintNet\\overhaul\\eon_engine_mirror\\resources\\profiles",
+  "built_at_utc": "2026-02-13T04:49:44.247844+00:00",
+  "index_path": "C:\\Users\\Elect\\OneDrive\\Documents\\GitHub\\Project-PrintNet\\docs\\_profile_storage_index.integration.json",
+  "record_count": 2391,
+  "vendor_count": 5,
+  "category_counts": {
+    "filament": 1861,
+    "machine": 140,
+    "process": 390
+  },
+  "duplicate_id_count": 0,
+  "warning_count": 3,
+  "warnings": [
+    "mapping_warning_count:6093",
+    "mapping_unknown_key_count:223273",
+    "empty_mapped_settings_count:18"
+  ],
+  "query_counts": {
+    "process": 390,
+    "machine": 140,
+    "filament": 1861
+  }
+}

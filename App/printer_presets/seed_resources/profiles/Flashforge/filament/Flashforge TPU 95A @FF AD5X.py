@@ -1,0 +1,20 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge TPU 95A @FF AD5X.json
+DATA = {'compatible_printers': ['Flashforge AD5X 0.4 nozzle'],
+ 'cool_plate_temp': ['40'],
+ 'cool_plate_temp_initial_layer': ['40'],
+ 'eng_plate_temp': ['45'],
+ 'eng_plate_temp_initial_layer': ['45'],
+ 'fan_cooling_layer_time': ['30'],
+ 'filament_max_volumetric_speed': ['3.6'],
+ 'filament_settings_id': ['Flashforge TPU 95A @FF AD5X'],
+ 'from': 'system',
+ 'inherits': 'Flashforge Generic TPU',
+ 'instantiation': 'true',
+ 'name': 'Flashforge TPU 95A @FF AD5X',
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['12'],
+ 'textured_plate_temp': ['45'],
+ 'textured_plate_temp_initial_layer': ['45'],
+ 'type': 'filament'}

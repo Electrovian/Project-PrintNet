@@ -1,0 +1,144 @@
+﻿EON-OpenSlicer Overhaul - General Thoughts Log
+
+Date: 2026-02-12
+
+- Keep upstream source mirrors in ignored local folders only; never commit raw mirror drops.
+- Keep a strict separation between imported profile data and first-party runtime code.
+- Prioritize plate-based slice/print correctness and connector reliability before deeper UI polish.
+- Enforce one source of truth: docs/overhaul/task-checklist.md task IDs are the execution contract.
+
+Date: 2026-02-13
+
+- Offline-first is a release gate: core slice/send workflows must run without internet after install.
+- Mirror path in use: overhaul/eon_engine_mirror (ignored in git, local reference only).
+- User provided a permission statement for upstream logic/process reuse; keep branding/assets first-party only.
+
+Update 2026-02-13:
+- Added scripts/generate-module-inventory.ps1 and generated baseline inventories in docs/.
+- Added scripts/sync-overhaul-source.ps1 and synced local profile mirror to overhaul/eon_core_seed/resources/profiles (10147 files).
+- Fixed .gitignore scoping to /overhaul/ so docs/overhaul remains tracked.
+
+Update 2026-02-13 (Adaptive Layer Planning):
+- Added App/slicer_v2/adaptive_layers.py with deterministic fixed/adaptive layer scheduling and exact Z-closure.
+- Wired App/slicer_v2/slice_grid.py to use adaptive planning and emit adaptive report metadata.
+- Added adaptive normalization keys, tests, smoke/integration scripts, and gate docs for checklist T151-T160.
+
+Update 2026-02-13 (Island Graph and Adjacency):
+- Added App/slicer_v2/island_graph.py and new App/slicer_v2/islands.py stage between regions and perimeters.
+- Added contour-to-island nesting logic, same-layer adjacency edges, and cross-layer adjacency edges.
+- Added tests/scripts/docs and stage wiring updates for checklist T161-T170.
+
+Update 2026-02-13 (Perimeter Classic Mode):
+- Added App/slicer_v2/perimeter_classic.py and integrated classic shell planning in App/slicer_v2/perimeters.py.
+- Planner now consumes island graphs for deterministic shell loop counts and length estimates.
+- Added unit/integration scripts and completion artifacts for checklist T171-T180.
+
+Update 2026-02-13 (Perimeter Variable-Width Mode):
+- Added App/slicer_v2/perimeter_variable.py and perimeter mode routing in App/slicer_v2/perimeters.py.
+- Added normalized settings for perimeter mode, wall sequencing, first-layer single wall, and variable width bounds.
+- Added variable-width tests/scripts/docs and integration gate artifacts for checklist T181-T190.
+
+Update 2026-02-13 (Infill Planning Patterns):
+- Added App/slicer_v2/infill_patterns.py for deterministic rectilinear/grid/gyroid sparse infill planning.
+- Updated App/slicer_v2/infill.py to consume island graphs and emit richer layer/path metadata.
+- Added infill angle normalization keys plus tests/scripts/docs for checklist T191-T200.
+
+Update 2026-02-13 (Solid Layers and Bridge Planning):
+- Added App/slicer_v2/solid_bridges.py integration outputs to App/slicer_v2/bridges.py for per-layer solid/bridge metadata.
+- Added bridge settings alias coverage, solid/bridge smoke + integration scripts, and report ignore patterns.
+- Added completion docs and tests for checklist T201-T210, including error taxonomy and gate criteria.
+
+Update 2026-02-13 (Support Planning MVP):
+- Added App/slicer_v2/support_planning.py with deterministic unsupported-island support estimation.
+- Updated App/slicer_v2/supports.py and App/slicer_v2/settings.py with support density/spacing/gap/interface controls.
+- Added support smoke/unit/integration scripts, docs, and checklist artifacts for T211-T220.
+
+Update 2026-02-13 (Travel Planning and Combing):
+- Added App/slicer_v2/travel_planning.py with deterministic move planning, combing, retract, and Z-hop metadata.
+- Updated App/slicer_v2/travel.py and App/slicer_v2/settings.py to use normalized combing/retract/Z-hop controls.
+- Added travel planning smoke/unit/integration scripts, docs, and checklist artifacts for T221-T230.
+
+Update 2026-02-13 (Extrusion Volume and Flow Model):
+- Added App/slicer_v2/extrusion_flow.py to model per-feature extrusion volume, filament length, mass, and cost.
+- Updated App/slicer_v2/gcode.py and App/slicer_v2/settings.py to emit/use extrusion flow estimates and material flow controls.
+- Added extrusion flow smoke/unit/integration scripts, docs, and checklist artifacts for T231-T240.
+
+Update 2026-02-13 (G-code Emission Semantics):
+- Added App/slicer_v2/gcode_emission.py for deterministic setup/layer/teardown semantic command emission.
+- Updated App/slicer_v2/gcode.py and App/slicer_v2/settings.py with firmware/macro/extrusion-mode controls.
+- Added gcode emission smoke/unit/integration scripts, docs, and checklist artifacts for T241-T250.
+
+Update 2026-02-13 (G-code Validation and Sanity Checks):
+- Added App/slicer_v2/gcode_validation.py to validate parse integrity, bounds, and monotonicity on emitted G-code.
+- Updated App/slicer_v2/gcode.py and App/slicer_v2/settings.py with configurable validation controls and strict failure mode.
+- Added gcode validation smoke/unit/integration scripts, docs, and checklist artifacts for T251-T260.
+
+Update 2026-02-13 (Desktop Plate-Based Slice/Print Flow):
+- Updated App/gui/Windows/controller/print.py to add plate-first APIs and make print/export/device-send flow consume full plate meshes.
+- Added reusable G-code signature checks so device send only reuses cache when plate/settings match.
+- Added desktop plate flow smoke/unit/integration scripts, docs, and checklist artifacts for T261-T270.
+
+Update 2026-02-13 (Desktop Runtime Printer State Management):
+- Added App/config/runtime_printer_state.py and wired controller/runtime UI flows to use runtime state instead of mutating DEFAULTS.
+- Updated Device/Control/Preview/Settings printer default resolution to prefer runtime active printer name.
+- Added runtime state unit/integration scripts, docs, and gate artifacts for T271-T280.
+
+Update 2026-02-13 (Connector Abstraction and Registry):
+- Added App/connectors package with typed connector interface, capability descriptors, error taxonomy, and registry resolution.
+- Integrated App/integrations/printer_manager.py with registry-driven print dispatch while preserving legacy OctoPrint safe behavior.
+- Added connector registry smoke/unit/integration scripts, docs, and gate artifacts for T281-T290.
+
+Update 2026-02-13 (OctoPrint Connector Operations):
+- Added App/connectors/octoprint.py with connect/upload/start/pause/resume/cancel/status operations mapped to OctoPrint HTTP endpoints.
+- Updated default connector registry inference to resolve OctoPrint metadata to connector type octoprint, while retaining explicit octoprint_legacy compatibility.
+- Added OctoPrint connector smoke/unit/integration scripts, tests, docs, and gate artifacts for T291-T300.
+
+Update 2026-02-13 (Moonraker Connector Operations):
+- Added App/connectors/moonraker.py with connect/upload/start/pause/resume/cancel/status operations mapped to Moonraker API endpoints.
+- Updated connector registry default set/inference to include connector type moonraker from moonraker_url metadata.
+- Added Moonraker connector smoke/unit/integration scripts, tests, docs, and gate artifacts for T301-T310.
+
+Update 2026-02-13 (PrusaLink Connector Operations):
+- Added App/connectors/prusalink.py with connect/upload/start/pause/resume/cancel/status operations mapped to PrusaLink API endpoints.
+- Updated connector registry default set/inference to include connector type prusalink from prusalink_url metadata.
+- Added PrusaLink connector smoke/unit/integration scripts, tests, docs, and gate artifacts for T311-T320.
+
+Update 2026-02-13 (Local Wi-Fi Onboarding Flow):
+- Added App/connectors/local_wifi.py with bounded host/CIDR discovery and protocol detection for OctoPrint, Moonraker, and PrusaLink endpoints.
+- Updated App/integrations/printer_manager.py with discovery helpers that merge onboarding candidates into runtime printer state.
+- Added local Wi-Fi onboarding smoke/unit/integration scripts, tests, docs, and gate artifacts for T321-T330.
+
+Update 2026-02-13 (Desktop Test Automation and Regression):
+- Added App/testing/desktop_regression.py with typed regression case contracts, bounded case execution, and report helpers.
+- Added default desktop regression suite for plate flow, runtime printer state, connector registry, and local Wi-Fi onboarding.
+- Added desktop regression smoke/unit/integration scripts, tests, docs, and gate artifacts for T331-T340.
+
+Update 2026-02-13 (Backend FastAPI Modular Monolith):
+- Added Website/backend/printnet_backend modular backend package with app factory, route modules, settings, services, and error mapping.
+- Added compatibility layer so backend automation works in environments without installed FastAPI/uvicorn while keeping real FastAPI wiring for deployment.
+- Added backend smoke/unit/integration scripts, docs, and gate artifacts for T341-T350.
+
+Update 2026-02-13 (Frontend React UX Implementation):
+- Added Website/frontend React scaffold with route-driven pages for submit, queue, and printer views plus dark-mode UX styling.
+- Added frontend contracts and backend client modules for deterministic payload normalization and API endpoint mapping.
+- Added frontend smoke/unit/integration scripts, docs, and gate artifacts for T351-T360.
+
+Update 2026-02-13 (Authentication and Role Enforcement):
+- Added backend auth context and role guard module with enforced token checks across protected profile/printer/job endpoints.
+- Added ownership enforcement so student users can only submit and view their own jobs while operator/admin retain broader access.
+- Added frontend role policy helpers, protected client auth-token requirements, and auth role unit/integration smoke artifacts for T361-T370.
+
+Update 2026-02-13 (Queue Worker and Job Orchestration):
+- Added backend in-memory queue orchestrator module with worker heartbeat tracking and bounded worker tick execution.
+- Added queue routes for snapshot, heartbeat, and tick operations with role-aware visibility and operator/admin worker controls.
+- Added queue lifecycle tests, smoke/unit/integration scripts, frontend queue client methods, and gate artifacts for T371-T380.
+
+Update 2026-02-13 (Kubernetes Packaging and Deployment):
+- Added Helm chart scaffolding under deploy/helm/printnet with templates for backend, worker, frontend, Redis, Mongo, namespace, and ingress.
+- Added k3d deployment automation script using helm upgrade/install with namespace bootstrap and cluster creation checks.
+- Added kubernetes packaging smoke/unit/integration scripts, deployment artifact tests, and gate documentation for T381-T390.
+
+Update 2026-02-13 (Observability, Security Hardening, and Release Readiness):
+- Added backend observability subsystem with bounded metrics, redacted audit records, and required release-check state tracking.
+- Added secure ops routes for metrics/audit/release readiness plus admin check updates with role enforcement and telemetry counters.
+- Added observability/security/release readiness smoke/unit/integration scripts, frontend client contracts, and gate documentation for T391-T400.

@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/process/0.20mm Standard @FF AD5X.json
+DATA = {'brim_type': 'auto_brim',
+ 'compatible_printers': ['Flashforge AD5X 0.4 nozzle'],
+ 'elefant_foot_compensation': '0.1',
+ 'enable_prime_tower': '1',
+ 'exclude_object': '1',
+ 'filter_out_gap_fill': '0.1',
+ 'from': 'system',
+ 'gap_fill_target': 'topbottom',
+ 'inherits': '0.20mm Standard @Flashforge AD5M Pro 0.4 Nozzle',
+ 'initial_layer_print_height': '0.25',
+ 'instantiation': 'true',
+ 'name': '0.20mm Standard @FF AD5X',
+ 'only_one_wall_top': '1',
+ 'prime_tower_width': '45',
+ 'print_settings_id': '0.20mm Standard @FF AD5X',
+ 'setting_id': 'GP002',
+ 'skirt_loops': '0',
+ 'support_bottom_z_distance': '0.16',
+ 'support_interface_spacing': '0.2',
+ 'support_top_z_distance': '0.16',
+ 'support_type': 'tree(auto)',
+ 'type': 'process'}

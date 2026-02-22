@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Custom/filament/Generic ABS @MyToolChanger.json
+DATA = {'compatible_printers': ['MyToolChanger 0.4 nozzle',
+                         'MyToolChanger 0.2 nozzle',
+                         'MyToolChanger 0.6 nozzle',
+                         'MyToolChanger 0.8 nozzle'],
+ 'filament_cooling_final_speed': ['3.5'],
+ 'filament_cooling_initial_speed': ['10'],
+ 'filament_cooling_moves': ['2'],
+ 'filament_load_time': ['10.5'],
+ 'filament_loading_speed': ['10'],
+ 'filament_loading_speed_start': ['50'],
+ 'filament_multitool_ramming': ['1'],
+ 'filament_multitool_ramming_flow': ['40'],
+ 'filament_stamping_distance': ['45'],
+ 'filament_stamping_loading_speed': ['29'],
+ 'filament_unload_time': ['8.5'],
+ 'filament_unloading_speed': ['100'],
+ 'from': 'system',
+ 'inherits': 'Generic ABS @System',
+ 'instantiation': 'true',
+ 'name': 'Generic ABS @MyToolChanger',
+ 'renamed_from': 'My Generic ABS @MyToolChanger',
+ 'setting_id': 'GFB99_MTC_0',
+ 'type': 'filament'}

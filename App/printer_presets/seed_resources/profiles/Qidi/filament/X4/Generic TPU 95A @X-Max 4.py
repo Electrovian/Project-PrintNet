@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/filament/X4/Generic TPU 95A @X-Max 4.json
+DATA = {'compatible_printers': [],
+ 'filament_adhesiveness_category': ['600'],
+ 'filament_density': ['1.21'],
+ 'filament_flow_ratio': ['1'],
+ 'filament_id': 'QD_3_0_50',
+ 'filament_max_volumetric_speed': ['4'],
+ 'filament_type': ['TPU'],
+ 'filament_vendor': ['Generic'],
+ 'from': 'system',
+ 'hot_plate_temp': ['35'],
+ 'hot_plate_temp_initial_layer': ['35'],
+ 'inherits': 'fdm_filament_x4_common',
+ 'instantiation': 'false',
+ 'name': 'Generic TPU 95A@X-Max 4-Series',
+ 'nozzle_temperature': ['230'],
+ 'nozzle_temperature_initial_layer': ['230'],
+ 'nozzle_temperature_range_high': ['250'],
+ 'nozzle_temperature_range_low': ['200'],
+ 'pressure_advance': ['0.1'],
+ 'setting_id': 'GFSR99',
+ 'temperature_vitrification': ['30'],
+ 'type': 'filament'}

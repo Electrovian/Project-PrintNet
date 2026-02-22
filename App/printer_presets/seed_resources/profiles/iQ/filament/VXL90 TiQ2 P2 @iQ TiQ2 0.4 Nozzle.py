@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+# source: profiles/iQ/filament/VXL90 TiQ2 P2 @iQ TiQ2 0.4 Nozzle.json
+DATA = {'close_fan_the_first_x_layers': ['3'],
+ 'compatible_printers': ['iQ TiQ2 0.4 Nozzle'],
+ 'compatible_prints': ['0.20mm Standard @iQ TiQ2 P2 - PACF Pro Fiberthree + VXL90 Xioneer (0.4 Nozzle)'],
+ 'complete_print_exhaust_fan_speed': ['70'],
+ 'default_filament_colour': ['#FFFFFF'],
+ 'during_print_exhaust_fan_speed': ['70'],
+ 'enable_pressure_advance': ['0'],
+ 'fan_cooling_layer_time': ['30'],
+ 'fan_max_speed': ['80'],
+ 'fan_min_speed': ['10'],
+ 'filament_cooling_final_speed': ['3.5'],
+ 'filament_cooling_initial_speed': ['10'],
+ 'filament_cooling_moves': ['2'],
+ 'filament_cost': ['150'],
+ 'filament_density': ['1.1'],
+ 'filament_diameter': ['1.75'],
+ 'filament_end_gcode': ['; filament end gcode\n'
+                        '{if current_extruder==0}\n'
+                        'G1 Z{layer_z+2} F900 ; safe distance for T0 while tool change\n'
+                        'G1 X-17 Y1 F9000\n'
+                        'G1 X-17 Y45 F9000\n'
+                        'G1 Y1 F9000\n'
+                        'G1 Y45 F9000\n'
+                        '{endif}\n'
+                        '\n'
+                        '{if current_extruder==1}\n'
+                        '{if current_extruder==0}T1{endif}\n'
+                        'G1 X-23 Y3 F9000\n'
+                        'G1 Y45 F9000\n'
+                        'G1 Y3 F9000\n'
+                        'G1 Y45 F9000\n'
+                        '{endif}'],
+ 'filament_flow_ratio': ['1'],
+ 'filament_id': 'IQM1011',
+ 'filament_is_support': ['1'],
+ 'filament_loading_speed': ['10'],
+ 'filament_loading_speed_start': ['50'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'filament_notes': ['Filament file version 1.0 20251103'],
+ 'filament_retraction_length': ['4'],
+ 'filament_retraction_speed': ['nil'],
+ 'filament_settings_id': ['VXL90 TiQ2 P2 @iQ TiQ2 0.4 Nozzle'],
+ 'filament_soluble': ['1'],
+ 'filament_stamping_distance': ['45'],
+ 'filament_stamping_loading_speed': ['29'],
+ 'filament_start_gcode': ['; Filament gcode\n'
+                          '{if current_extruder==0}\n'
+                          'G1 X-17 Y1 F9000\n'
+                          'G1 Y45 F9000\n'
+                          'G1 Y1 F9000\n'
+                          'G1 Y45 F9000\n'
+                          '{if layer_z==0}G1 Z{first_layer_height + 2.0}{endif}\n'
+                          '{if layer_z==0}G1 X[first_layer_print_min_0] Y[first_layer_print_min_1]{endif}\n'
+                          '{if layer_z==0}G1 Z{layer_z}{endif}\n'
+                          '{endif}\n'
+                          '\n'
+                          '{if current_extruder==1}\n'
+                          'G1 X-23 Y3 F9000\n'
+                          'G1 Y45 F9000\n'
+                          'G1 Y3 F9000\n'
+                          'G1 Y45 F9000\n'
+                          '{endif}'],
+ 'filament_toolchange_delay': ['0'],
+ 'filament_type': ['VXL90 Xioneer'],
+ 'filament_unloading_speed': ['100'],
+ 'filament_unloading_speed_start': ['100'],
+ 'filament_vendor': ['iQ Materials'],
+ 'from': 'system',
+ 'hot_plate_temp': ['100'],
+ 'hot_plate_temp_initial_layer': ['100'],
+ 'idle_temperature': ['205'],
+ 'inherits': 'fdm_filament_common',
+ 'instantiation': 'true',
+ 'is_custom_defined': '0',
+ 'name': 'VXL90 TiQ2 P2 @iQ TiQ2 0.4 Nozzle',
+ 'nozzle_temperature': ['235'],
+ 'nozzle_temperature_initial_layer': ['235'],
+ 'nozzle_temperature_range_high': ['250'],
+ 'nozzle_temperature_range_low': ['220'],
+ 'overhang_fan_speed': ['80'],
+ 'overhang_fan_threshold': ['25%'],
+ 'setting_id': 'IQS1011',
+ 'slow_down_layer_time': ['3'],
+ 'slow_down_min_speed': ['10'],
+ 'temperature_vitrification': ['110'],
+ 'type': 'filament',
+ 'version': '2.3.1.10'}

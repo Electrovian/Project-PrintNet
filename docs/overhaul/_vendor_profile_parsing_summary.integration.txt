@@ -1,0 +1,8 @@
+source_path: C:\Users\Elect\OneDrive\Documents\GitHub\Project-PrintNet\overhaul\eon_engine_mirror\resources\profiles
+parsed_at_utc: 2026-02-13T04:10:18.877399+00:00
+vendor_count: 5
+total_machine_files_parsed: 140
+total_process_files_parsed: 390
+total_filament_files_parsed: 1861
+total_type_mismatches: 102
+total_warnings: 103

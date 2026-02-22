@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge HS PLA @FF G4 0.25 nozzle.json
+DATA = {'additional_cooling_fan_speed': ['40'],
+ 'compatible_printers': ['Flashforge Guider4 0.25 nozzle'],
+ 'complete_print_exhaust_fan_speed': ['40'],
+ 'during_print_exhaust_fan_speed': ['40'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'filament_settings_id': ['Flashforge HS PLA @FF G4 0.25 nozzle'],
+ 'from': 'system',
+ 'hot_plate_temp': ['55'],
+ 'hot_plate_temp_initial_layer': ['55'],
+ 'inherits': 'Flashforge PLA @FF AD5M 0.25 Nozzle',
+ 'instantiation': 'true',
+ 'name': 'Flashforge HS PLA @FF G4 0.25 nozzle',
+ 'nozzle_temperature': ['210'],
+ 'nozzle_temperature_initial_layer': ['210'],
+ 'overhang_fan_threshold': ['50%'],
+ 'pressure_advance': ['0.026'],
+ 'slow_down_layer_time': ['4'],
+ 'slow_down_min_speed': ['20'],
+ 'type': 'filament'}

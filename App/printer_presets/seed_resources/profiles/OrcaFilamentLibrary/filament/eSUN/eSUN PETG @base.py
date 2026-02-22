@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/OrcaFilamentLibrary/filament/eSUN/eSUN PETG @base.json
+DATA = {'compatible_printers': [],
+ 'fan_max_speed': ['100'],
+ 'fan_min_speed': ['30'],
+ 'filament_density': ['1.27'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_id': 'ESN03',
+ 'filament_max_volumetric_speed': ['20'],
+ 'filament_vendor': ['eSUN'],
+ 'from': 'system',
+ 'hot_plate_temp': ['65'],
+ 'hot_plate_temp_initial_layer': ['65'],
+ 'inherits': 'fdm_filament_pet',
+ 'instantiation': 'false',
+ 'name': 'eSUN PETG @base',
+ 'nozzle_temperature': ['240'],
+ 'nozzle_temperature_initial_layer': ['240'],
+ 'nozzle_temperature_range_high': ['250'],
+ 'nozzle_temperature_range_low': ['230'],
+ 'temperature_vitrification': ['64'],
+ 'textured_plate_temp': ['65'],
+ 'textured_plate_temp_initial_layer': ['65'],
+ 'type': 'filament'}

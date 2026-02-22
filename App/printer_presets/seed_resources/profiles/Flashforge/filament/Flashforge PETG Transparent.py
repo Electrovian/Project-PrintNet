@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge PETG Transparent.json
+DATA = {'additional_cooling_fan_speed': ['60'],
+ 'compatible_printers': ['Flashforge Adventurer 5M 0.4 Nozzle',
+                         'Flashforge Adventurer 5M 0.6 Nozzle',
+                         'Flashforge Adventurer 5M 0.8 Nozzle',
+                         'Flashforge Adventurer 5M Pro 0.4 Nozzle',
+                         'Flashforge Adventurer 5M Pro 0.6 Nozzle',
+                         'Flashforge Adventurer 5M Pro 0.8 Nozzle',
+                         'Flashforge AD5X 0.4 nozzle',
+                         'Flashforge AD5X 0.6 nozzle',
+                         'Flashforge AD5X 0.8 nozzle'],
+ 'filament_settings_id': ['Flashforge PETG Transparent'],
+ 'from': 'system',
+ 'inherits': 'Flashforge Generic PETG',
+ 'instantiation': 'true',
+ 'name': 'Flashforge PETG Transparent',
+ 'nozzle_temperature': ['265'],
+ 'nozzle_temperature_range_high': ['265'],
+ 'overhang_fan_speed': ['100'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_min_speed': ['20'],
+ 'support_material_interface_fan_speed': ['100'],
+ 'type': 'filament'}

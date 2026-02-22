@@ -1,0 +1,8 @@
+stage_count: 10
+infill_pattern: grid
+infill_percent: 20.0
+infill_density_ratio: 0.2
+infill_path_count: 10
+infill_path_length_mm_total: 10.0
+warning_count: 0
+validation_ok: True

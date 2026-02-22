@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Snapmaker/filament/Snapmaker PLA Silk @U1 base.json
+DATA = {'default_filament_colour': [''],
+ 'filament_cooling_final_speed': ['60'],
+ 'filament_cooling_initial_speed': ['35'],
+ 'filament_cooling_moves': ['2'],
+ 'filament_cost': ['70'],
+ 'filament_density': ['1.32'],
+ 'filament_end_gcode': [''],
+ 'filament_id': '11813638720',
+ 'filament_load_time': ['2'],
+ 'filament_loading_speed': ['35'],
+ 'filament_loading_speed_start': ['35'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'filament_retraction_length': ['0.5'],
+ 'filament_unload_time': ['2'],
+ 'filament_unloading_speed': ['35'],
+ 'filament_unloading_speed_start': ['35'],
+ 'from': 'system',
+ 'hot_plate_temp_initial_layer': ['65'],
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'false',
+ 'name': 'Snapmaker PLA Silk @U1 base',
+ 'nozzle_temperature': ['230'],
+ 'nozzle_temperature_initial_layer': ['230'],
+ 'type': 'filament'}

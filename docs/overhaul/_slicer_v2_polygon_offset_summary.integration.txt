@@ -1,0 +1,7 @@
+generated_at_utc: 2026-02-13T13:49:05.813466+00:00
+input_count: 2
+cleaned_count: 1
+output_count: 1
+dropped_count: 1
+offset_distance: 0.5
+warning_count: 1

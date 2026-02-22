@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Generic TPU 85A @FF AD5X.json
+DATA = {'compatible_printers': ['Flashforge AD5X 0.4 nozzle'],
+ 'cool_plate_temp': ['40'],
+ 'cool_plate_temp_initial_layer': ['40'],
+ 'eng_plate_temp': ['45'],
+ 'eng_plate_temp_initial_layer': ['45'],
+ 'fan_cooling_layer_time': ['30'],
+ 'filament_max_volumetric_speed': ['3.2'],
+ 'filament_retract_when_changing_layer': ['0'],
+ 'filament_retraction_length': ['1.5'],
+ 'filament_settings_id': ['Generic TPU 85A @FF AD5X'],
+ 'filament_wipe': ['0'],
+ 'filament_wipe_distance': ['2.5'],
+ 'from': 'system',
+ 'inherits': 'Flashforge Generic TPU',
+ 'instantiation': 'true',
+ 'name': 'Generic TPU 85A @FF AD5X',
+ 'pressure_advance': ['0.04'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['12'],
+ 'textured_plate_temp': ['45'],
+ 'textured_plate_temp_initial_layer': ['45'],
+ 'type': 'filament'}

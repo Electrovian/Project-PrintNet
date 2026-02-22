@@ -1,0 +1,10 @@
+ok: True
+case_count: 4
+passed_case_count: 4
+failed_case_count: 0
+total_duration_s: 2.927
+failed_case_ids: []
+case=desktop_plate_flow, ok=True, exit_code=0, duration_s=0.864
+case=desktop_runtime_printer_state, ok=True, exit_code=0, duration_s=0.685
+case=connector_registry, ok=True, exit_code=0, duration_s=0.709
+case=local_wifi_onboarding, ok=True, exit_code=0, duration_s=0.669

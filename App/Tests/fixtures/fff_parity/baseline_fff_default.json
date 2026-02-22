@@ -1,0 +1,755 @@
+{
+  "generated_at_utc": "2026-02-22T00:26:59.672134+00:00",
+  "manifest_path": "App/Tests/fixtures/fff_parity/corpus_manifest.json",
+  "profile_path": "App/Tests/fixtures/fff_parity/profile_fff_default.json",
+  "model_count": 12,
+  "executed_model_count": 12,
+  "failed_model_count": 0,
+  "skipped_model_count": 0,
+  "stage_order_expected": [
+    "mesh",
+    "slice_grid",
+    "regions",
+    "islands",
+    "perimeters",
+    "infill",
+    "supports",
+    "bridges",
+    "travel",
+    "gcode"
+  ],
+  "results": [
+    {
+      "model_id": "bridge_obj",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/bridge.obj",
+      "status": "ok",
+      "runtime_ms": 222.93450008146465,
+      "error": "",
+      "metrics": {
+        "layer_count": 40,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 195,
+          "infill": 222,
+          "support": 0,
+          "solid": 144,
+          "bridge": 2159,
+          "travel": 377,
+          "gcode_extrusion": 40
+        },
+        "path_lengths_mm": {
+          "perimeter": 8215.928190532039,
+          "infill": 2383.355262170048,
+          "support": 0.0,
+          "solid": 4320.0,
+          "bridge": 15120.471390000008,
+          "travel": 10935.097041895673,
+          "extrusion": 30039.75484270209
+        },
+        "bridge_candidate_ratio_avg": 0.7333998057073469,
+        "bridge_support_surface_ratio_avg": 0.2651239344262294,
+        "tree_branch_count_total": 0,
+        "tree_trunk_count_total": 0,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    },
+    {
+      "model_id": "cube_hole_obj",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/cube_with_hole.obj",
+      "status": "ok",
+      "runtime_ms": 238.38029999751598,
+      "error": "",
+      "metrics": {
+        "layer_count": 50,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 300,
+          "infill": 312,
+          "support": 343,
+          "solid": 288,
+          "bridge": 1515,
+          "travel": 905,
+          "gcode_extrusion": 50
+        },
+        "path_lengths_mm": {
+          "perimeter": 15750.0,
+          "infill": 3655.6149981230897,
+          "support": 8805.299999999997,
+          "solid": 5760.0,
+          "bridge": 12827.750040000012,
+          "travel": 16740.744504546674,
+          "extrusion": 46798.665038123094
+        },
+        "bridge_candidate_ratio_avg": 0.6217642700156986,
+        "bridge_support_surface_ratio_avg": 0.36555428571428594,
+        "tree_branch_count_total": 50,
+        "tree_trunk_count_total": 50,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    },
+    {
+      "model_id": "concave_hole_obj",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/cube_with_concave_hole.obj",
+      "status": "ok",
+      "runtime_ms": 308.0991000169888,
+      "error": "",
+      "metrics": {
+        "layer_count": 50,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 300,
+          "infill": 311,
+          "support": 343,
+          "solid": 288,
+          "bridge": 1539,
+          "travel": 904,
+          "gcode_extrusion": 50
+        },
+        "path_lengths_mm": {
+          "perimeter": 15723.320264343443,
+          "infill": 3657.7149981230896,
+          "support": 8437.799999999996,
+          "solid": 5760.0,
+          "bridge": 13068.333039999996,
+          "travel": 16754.788745031416,
+          "extrusion": 46647.16830246657
+        },
+        "bridge_candidate_ratio_avg": 0.6389824803767663,
+        "bridge_support_surface_ratio_avg": 0.34866993197278895,
+        "tree_branch_count_total": 50,
+        "tree_trunk_count_total": 50,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    },
+    {
+      "model_id": "concave_hole_enlarged_obj",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/cube_with_concave_hole_enlarged.obj",
+      "status": "ok",
+      "runtime_ms": 697.8000999661162,
+      "error": "",
+      "metrics": {
+        "layer_count": 80,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 480,
+          "infill": 740,
+          "support": 869,
+          "solid": 462,
+          "bridge": 4021,
+          "travel": 2009,
+          "gcode_extrusion": 80
+        },
+        "path_lengths_mm": {
+          "perimeter": 40663.166180178516,
+          "infill": 15245.086365883762,
+          "support": 30797.774300250006,
+          "solid": 14926.447074000002,
+          "bridge": 82609.99428925464,
+          "travel": 60794.25453303452,
+          "extrusion": 184242.4682095668
+        },
+        "bridge_candidate_ratio_avg": 0.6588305918243855,
+        "bridge_support_surface_ratio_avg": 0.34002415471791897,
+        "tree_branch_count_total": 80,
+        "tree_trunk_count_total": 80,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    },
+    {
+      "model_id": "concave_hole_enlarged_standing_obj",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/cube_with_concave_hole_enlarged_standing.obj",
+      "status": "ok",
+      "runtime_ms": 3321.0765999974683,
+      "error": "",
+      "metrics": {
+        "layer_count": 161,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 726,
+          "infill": 1084,
+          "support": 0,
+          "solid": 234,
+          "bridge": 8424,
+          "travel": 1649,
+          "gcode_extrusion": 161
+        },
+        "path_lengths_mm": {
+          "perimeter": 39224.66547413313,
+          "infill": 14738.00659891845,
+          "support": 0.0,
+          "solid": 6615.130625999999,
+          "bridge": 92698.11430572462,
+          "travel": 30911.019415371975,
+          "extrusion": 153275.91700477595
+        },
+        "bridge_candidate_ratio_avg": 0.7320029295935391,
+        "bridge_support_surface_ratio_avg": 0.2709872230319454,
+        "tree_branch_count_total": 0,
+        "tree_trunk_count_total": 0,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    },
+    {
+      "model_id": "overhang_obj",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/overhang.obj",
+      "status": "ok",
+      "runtime_ms": 153.120799921453,
+      "error": "",
+      "metrics": {
+        "layer_count": 31,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 93,
+          "infill": 400,
+          "support": 0,
+          "solid": 441,
+          "bridge": 2617,
+          "travel": 462,
+          "gcode_extrusion": 31
+        },
+        "path_lengths_mm": {
+          "perimeter": 12966.698573518668,
+          "infill": 11592.069336194962,
+          "support": 0.0,
+          "solid": 22049.569142999982,
+          "bridge": 73244.7261299676,
+          "travel": 16733.246193435538,
+          "extrusion": 119853.06318268125
+        },
+        "bridge_candidate_ratio_avg": 0.7543370066187955,
+        "bridge_support_surface_ratio_avg": 0.24463515649302053,
+        "tree_branch_count_total": 0,
+        "tree_trunk_count_total": 0,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    },
+    {
+      "model_id": "pyramid_obj",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/pyramid.obj",
+      "status": "ok",
+      "runtime_ms": 400.0606999034062,
+      "error": "",
+      "metrics": {
+        "layer_count": 200,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 582,
+          "infill": 545,
+          "support": 0,
+          "solid": 147,
+          "bridge": 3482,
+          "travel": 927,
+          "gcode_extrusion": 200
+        },
+        "path_lengths_mm": {
+          "perimeter": 19575.406939370834,
+          "infill": 6144.7938249620365,
+          "support": 0.0,
+          "solid": 2858.8500000000004,
+          "bridge": 39255.47125499998,
+          "travel": 10224.655578318052,
+          "extrusion": 67834.52201933284
+        },
+        "bridge_candidate_ratio_avg": 0.7159338930770843,
+        "bridge_support_surface_ratio_avg": 0.28406610692291606,
+        "tree_branch_count_total": 0,
+        "tree_trunk_count_total": 0,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    },
+    {
+      "model_id": "sloping_hole_obj",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/sloping_hole.obj",
+      "status": "ok",
+      "runtime_ms": 1113.0594999995083,
+      "error": "",
+      "metrics": {
+        "layer_count": 50,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 300,
+          "infill": 650,
+          "support": 686,
+          "solid": 576,
+          "bridge": 2933,
+          "travel": 1586,
+          "gcode_extrusion": 50
+        },
+        "path_lengths_mm": {
+          "perimeter": 32526.846423340005,
+          "infill": 14261.845130329433,
+          "support": 30695.070000000014,
+          "solid": 23040.0,
+          "bridge": 29266.63124813548,
+          "travel": 58848.62375689302,
+          "extrusion": 129790.39280180498
+        },
+        "bridge_candidate_ratio_avg": 0.6377680878160127,
+        "bridge_support_surface_ratio_avg": 0.377248532525148,
+        "tree_branch_count_total": 50,
+        "tree_trunk_count_total": 50,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    },
+    {
+      "model_id": "two_hollow_squares_obj",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/two_hollow_squares.obj",
+      "status": "ok",
+      "runtime_ms": 231.61860008258373,
+      "error": "",
+      "metrics": {
+        "layer_count": 14,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 168,
+          "infill": 0,
+          "support": 130,
+          "solid": 290,
+          "bridge": 564,
+          "travel": 284,
+          "gcode_extrusion": 14
+        },
+        "path_lengths_mm": {
+          "perimeter": 5342.19601054732,
+          "infill": 0.0,
+          "support": 1617.717866142874,
+          "solid": 2887.7847999285714,
+          "bridge": 1119.0641281592004,
+          "travel": 9128.368486072071,
+          "extrusion": 10966.762804777965
+        },
+        "bridge_candidate_ratio_avg": 0.9007108900240183,
+        "bridge_support_surface_ratio_avg": 0.0994398693014785,
+        "tree_branch_count_total": 28,
+        "tree_trunk_count_total": 28,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    },
+    {
+      "model_id": "small_dorito_obj",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/small_dorito.obj",
+      "status": "ok",
+      "runtime_ms": 437.57220008410513,
+      "error": "",
+      "metrics": {
+        "layer_count": 140,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 411,
+          "infill": 387,
+          "support": 0,
+          "solid": 197,
+          "bridge": 3165,
+          "travel": 658,
+          "gcode_extrusion": 140
+        },
+        "path_lengths_mm": {
+          "perimeter": 17496.866003242547,
+          "infill": 4546.193277241586,
+          "support": 0.0,
+          "solid": 6111.783805808079,
+          "bridge": 28542.32160963396,
+          "travel": 10986.894288170548,
+          "extrusion": 56697.16469592616
+        },
+        "bridge_candidate_ratio_avg": 0.6986373681562893,
+        "bridge_support_surface_ratio_avg": 0.31054800583516057,
+        "tree_branch_count_total": 0,
+        "tree_trunk_count_total": 0,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    },
+    {
+      "model_id": "20mmbox_lf_stl",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/test_stl/ASCII/20mmbox-LF.stl",
+      "status": "ok",
+      "runtime_ms": 331.06570004019886,
+      "error": "",
+      "metrics": {
+        "layer_count": 100,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 300,
+          "infill": 612,
+          "support": 0,
+          "solid": 288,
+          "bridge": 3479,
+          "travel": 812,
+          "gcode_extrusion": 100
+        },
+        "path_lengths_mm": {
+          "perimeter": 20253.67707672885,
+          "infill": 9598.77400344669,
+          "support": 0.0,
+          "solid": 5760.0,
+          "bridge": 59324.30930999995,
+          "travel": 14982.01437034578,
+          "extrusion": 94936.76039017549
+        },
+        "bridge_candidate_ratio_avg": 0.7318100000000014,
+        "bridge_support_surface_ratio_avg": 0.2681900000000004,
+        "tree_branch_count_total": 0,
+        "tree_trunk_count_total": 0,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    },
+    {
+      "model_id": "20mmbox_cr_stl",
+      "mesh_path": "overhaul/eon_engine_mirror/tests/data/test_stl/ASCII/20mmbox-CR.stl",
+      "status": "ok",
+      "runtime_ms": 323.63410003017634,
+      "error": "",
+      "metrics": {
+        "layer_count": 100,
+        "stage_order": [
+          "mesh",
+          "slice_grid",
+          "regions",
+          "islands",
+          "perimeters",
+          "infill",
+          "supports",
+          "bridges",
+          "travel",
+          "gcode"
+        ],
+        "stage_presence": [
+          "bridges",
+          "gcode",
+          "infill",
+          "islands",
+          "mesh",
+          "parity",
+          "perimeters",
+          "regions",
+          "slice_grid",
+          "supports",
+          "travel"
+        ],
+        "settings_digest": "ab3d8d67a14f06bd2ef6fdf374d6e5487e8bca57bea09296a02b76379e4be8ce",
+        "settings_key_count": 105,
+        "path_counts": {
+          "perimeter": 300,
+          "infill": 612,
+          "support": 0,
+          "solid": 288,
+          "bridge": 3479,
+          "travel": 812,
+          "gcode_extrusion": 100
+        },
+        "path_lengths_mm": {
+          "perimeter": 20253.67707672885,
+          "infill": 9598.77400344669,
+          "support": 0.0,
+          "solid": 5760.0,
+          "bridge": 59324.30930999995,
+          "travel": 14982.01437034578,
+          "extrusion": 94936.76039017549
+        },
+        "bridge_candidate_ratio_avg": 0.7318100000000014,
+        "bridge_support_surface_ratio_avg": 0.2681900000000004,
+        "tree_branch_count_total": 0,
+        "tree_trunk_count_total": 0,
+        "gcode_validation_ok": true,
+        "gcode_validation_error_count": 0
+      }
+    }
+  ]
+}

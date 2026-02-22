@@ -1,0 +1,14 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/filament/Prusa Generic ASA @CORE One 0.8.json
+DATA = {'compatible_printers': ['Prusa CORE One 0.8 nozzle'],
+ 'fan_max_speed': ['30'],
+ 'filament_id': 'Prusa Generic ASA @CORE One 0.8',
+ 'from': 'system',
+ 'inherits': 'Prusa Generic ASA @CORE One',
+ 'instantiation': 'true',
+ 'name': 'Prusa Generic ASA @CORE One 0.8',
+ 'overhang_fan_speed': ['30'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['20'],
+ 'type': 'filament'}

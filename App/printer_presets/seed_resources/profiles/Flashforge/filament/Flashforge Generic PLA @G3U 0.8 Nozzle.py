@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge Generic PLA @G3U 0.8 Nozzle.json
+DATA = {'additional_cooling_fan_speed': ['80'],
+ 'compatible_printers': ['Flashforge Guider 3 Ultra 0.8 Nozzle'],
+ 'fan_cooling_layer_time': ['50'],
+ 'filament_flow_ratio': ['0.97'],
+ 'filament_max_volumetric_speed': ['23'],
+ 'filament_minimal_purge_on_wipe_tower': ['5'],
+ 'filament_settings_id': ['Flashforge Generic PLA @G3U 0.8 Nozzle'],
+ 'filament_start_gcode': ['; filament start gcode\n\n\n'],
+ 'filament_unloading_speed': ['40'],
+ 'filament_unloading_speed_start': ['40'],
+ 'from': 'system',
+ 'hot_plate_temp': ['55'],
+ 'inherits': 'Flashforge Generic PLA',
+ 'instantiation': 'false',
+ 'name': 'Flashforge Generic PLA @G3U 0.8 Nozzle',
+ 'nozzle_temperature': ['225'],
+ 'nozzle_temperature_initial_layer': ['225'],
+ 'nozzle_temperature_range_low': ['200'],
+ 'pressure_advance': ['0.042'],
+ 'setting_id': 'FFGP02_01',
+ 'slow_down_layer_time': ['15'],
+ 'slow_down_min_speed': ['15'],
+ 'type': 'filament'}

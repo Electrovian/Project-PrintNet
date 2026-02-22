@@ -1,0 +1,10 @@
+source_path: C:\Users\Elect\OneDrive\Documents\GitHub\Project-PrintNet\overhaul\eon_engine_mirror\resources\profiles
+built_at_utc: 2026-02-13T04:49:44.247844+00:00
+index_path: C:\Users\Elect\OneDrive\Documents\GitHub\Project-PrintNet\docs\_profile_storage_index.integration.json
+record_count: 2391
+vendor_count: 5
+process_count: 390
+machine_count: 140
+filament_count: 1861
+duplicate_id_count: 0
+warning_count: 3

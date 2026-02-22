@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/filament/Prusa Generic PETG @MK3.5 0.6.json
+DATA = {'compatible_printers': ['Prusa MK3.5 0.6 nozzle'],
+ 'enable_pressure_advance': ['1'],
+ 'fan_cooling_layer_time': ['30'],
+ 'fan_max_speed': ['50'],
+ 'fan_min_speed': ['30'],
+ 'filament_flow_ratio': ['1'],
+ 'filament_id': 'GFG99_3',
+ 'filament_max_volumetric_speed': ['8'],
+ 'from': 'system',
+ 'hot_plate_temp': ['85'],
+ 'hot_plate_temp_initial_layer': ['85'],
+ 'inherits': 'fdm_filament_pet',
+ 'instantiation': 'true',
+ 'name': 'Prusa Generic PETG @MK3.5 0.6',
+ 'nozzle_temperature': ['240'],
+ 'nozzle_temperature_initial_layer': ['230'],
+ 'overhang_fan_speed': ['50'],
+ 'overhang_fan_threshold': ['25%'],
+ 'pressure_advance': ['0.025'],
+ 'reduce_fan_stop_start_freq': ['1'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_for_layer_cooling': ['1'],
+ 'slow_down_layer_time': ['17'],
+ 'slow_down_min_speed': ['10'],
+ 'type': 'filament'}

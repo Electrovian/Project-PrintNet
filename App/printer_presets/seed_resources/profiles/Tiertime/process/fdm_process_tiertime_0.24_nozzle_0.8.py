@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Tiertime/process/fdm_process_tiertime_0.24_nozzle_0.8.json
+DATA = {'bridge_flow': '1',
+ 'bridge_speed': '30',
+ 'from': 'system',
+ 'inherits': 'fdm_process_tiertime_common',
+ 'initial_layer_infill_speed': '55',
+ 'initial_layer_line_width': '0.82',
+ 'initial_layer_print_height': '0.24',
+ 'initial_layer_speed': '35',
+ 'inner_wall_line_width': '0.82',
+ 'instantiation': 'false',
+ 'internal_solid_infill_line_width': '0.82',
+ 'ironing_inset': '0.41',
+ 'layer_height': '0.24',
+ 'line_width': '0.82',
+ 'name': 'fdm_process_tiertime_0.24_nozzle_0.8',
+ 'outer_wall_line_width': '0.82',
+ 'overhang_3_4_speed': '20',
+ 'sparse_infill_line_width': '0.82',
+ 'sparse_infill_speed': '100',
+ 'support_line_width': '0.82',
+ 'top_surface_line_width': '0.82',
+ 'top_surface_speed': '120',
+ 'tree_support_tip_diameter': '2',
+ 'type': 'process'}

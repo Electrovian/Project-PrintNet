@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/OrcaFilamentLibrary/filament/Numakers/Numakers PLA+ @base.json
+DATA = {'filament_cost': ['20.99'],
+ 'filament_density': ['1.24'],
+ 'filament_flow_ratio': ['0.99'],
+ 'filament_id': 'OGFNMK00',
+ 'filament_long_retractions_when_cut': ['1'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'filament_retraction_distances_when_cut': ['18'],
+ 'filament_scarf_gap': ['0%'],
+ 'filament_scarf_height': ['10%'],
+ 'filament_scarf_length': ['10'],
+ 'filament_scarf_seam_type': ['none'],
+ 'filament_vendor': ['Numakers'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'false',
+ 'name': 'Numakers PLA+ @base',
+ 'nozzle_temperature': ['225'],
+ 'nozzle_temperature_initial_layer': ['225'],
+ 'nozzle_temperature_range_high': ['255'],
+ 'nozzle_temperature_range_low': ['200'],
+ 'temperature_vitrification': ['55'],
+ 'type': 'filament'}
