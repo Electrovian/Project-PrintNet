@@ -1,11 +1,24 @@
+from __future__ import annotations
+
 from pathlib import Path
-from typing import List, Dict, Optional
+from pathlib import Path
+from typing import Any, Mapping, Sequence, Optional
 
 from slicer_v2.service import slice_file
 from slicer_v2.legacy_gcode_writer import SliceSettings
 from connectors.errors import ConnectorError, LocalWifiOnboardingError
 from connectors.local_wifi import LocalWifiOnboarding
 from connectors.registry import ConnectorRegistry, build_default_connector_registry
+
+from connectors.errors import (
+    ConnectorError,
+    LocalWifiOnboardingError,
+    UnsupportedConnectorError,
+)
+from connectors.local_wifi import LocalWifiOnboarding
+from connectors.registry import ConnectorRegistry, build_default_connector_registry
+from slicer.gcode.writer import SliceSettings
+from slicer.slicer.emit import slice_file
 
 
 class PrinterManager:
@@ -25,15 +38,15 @@ class PrinterManager:
         # For now we just use the first printer.
         self.active_printer = printers[0] if printers else None
 
-    def set_active_printer(self, printer: Dict | None):
-        self.active_printer = printer
+    def set_active_printer(self, printer: Mapping[str, Any] | None):
+        self.active_printer = dict(printer) if isinstance(printer, Mapping) else None
 
     def slice_and_print(self, stl_path: str, settings: SliceSettings) -> str:
         gcode_path = slice_file(stl_path, settings=settings)
         return self.print_gcode(gcode_path, printer=self.active_printer)
 
-    def print_gcode(self, gcode_path: str, printer: Dict | None = None) -> str:
-        active = printer or self.active_printer
+    def print_gcode(self, gcode_path: str, printer: Mapping[str, Any] | None = None) -> str:
+        active = dict(printer) if isinstance(printer, Mapping) else self.active_printer
         if not active:
             return (f"No printer configured. G-code generated at "
                     f"{gcode_path}")

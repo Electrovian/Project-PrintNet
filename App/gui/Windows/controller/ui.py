@@ -21,6 +21,11 @@ from config.runtime_printer_state import (
     runtime_printer_state_from_defaults,
     runtime_printer_state_from_profile,
 )
+from config.runtime_printer_state import (
+    RuntimePrinterState,
+    runtime_printer_state_from_defaults,
+    runtime_printer_state_from_profile,
+)
 from slicer_v2.legacy_gcode_writer import (
     SliceSettings,
     generate_flow_rate_test,
@@ -584,6 +589,23 @@ class UiMixin(UiMixinBase):
         name = str(defaults.get("name", "Printer")).strip() or "Printer"
         return (bed_x, bed_y), bed_z, name
 
+    def _effective_bed_limits(self) -> tuple[tuple[float, float], float, str]:
+        state = self.__dict__.get("runtime_printer_state")
+        if isinstance(state, RuntimePrinterState):
+            return (
+                (float(state.bed_x), float(state.bed_y)),
+                float(state.bed_z),
+                str(state.name),
+            )
+
+        fallback = runtime_printer_state_from_defaults(DEFAULTS.get("printer", {}))
+        self.runtime_printer_state = fallback
+        return (
+            (float(fallback.bed_x), float(fallback.bed_y)),
+            float(fallback.bed_z),
+            str(fallback.name),
+        )
+
     def _apply_printer_profile(self, printer: dict | None, source: str | None = None):
         if printer is None:
             return
@@ -601,9 +623,11 @@ class UiMixin(UiMixinBase):
         bed_z = float(self.runtime_printer_state.bed_z)
 
         main = self.__dict__.get("main")
-        viewer = main.__dict__.get("viewer") if main is not None else None
+        viewer = self.__dict__.get("viewer")
+        if viewer is None and main is not None:
+            viewer = main.__dict__.get("viewer")
         if viewer is not None and hasattr(viewer, "set_bed_limits"):
-            viewer.set_bed_limits((bed_x, bed_y), bed_z)
+            viewer.set_bed_limits((next_state.bed_x, next_state.bed_y), next_state.bed_z)
         if viewer is not None:
             self._update_bed_warnings()
         self._sync_printer_selection(printer, source=source)

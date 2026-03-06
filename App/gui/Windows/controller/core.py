@@ -3,7 +3,6 @@ from PyQt5 import QtCore
 from ...workers import Worker
 from config.defaults import DEFAULTS
 from config.runtime_printer_state import runtime_printer_state_from_defaults
-from .activity_sync import ActivitySyncMixin
 from .load import LoadMixin
 from .print import PrintMixin
 from .project import ProjectMixin
