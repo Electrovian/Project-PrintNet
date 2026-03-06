@@ -5,7 +5,6 @@ import os
 import re
 import tempfile
 import uuid
-import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
@@ -41,15 +40,6 @@ def _sanitize_gcode_basename(value: str, default: str = "plate") -> str:
     cleaned = cleaned.replace(" ", "_").strip("._")
     cleaned = re.sub(r"_+", "_", cleaned)
     return cleaned or default
-
-
-def _sanitize_gcode_basename(name: str) -> str:
-    text = str(name or "").strip()
-    if not text:
-        return "plate"
-    text = re.sub(r"[^A-Za-z0-9]+", "_", text)
-    text = re.sub(r"_+", "_", text).strip("_")
-    return text or "plate"
 
 
 class PrintMixin:
@@ -418,19 +408,6 @@ class PrintMixin:
             self._log_slicer_activity("slice_engine_error", engine="v2", error=str(exc))
             raise RuntimeError(f"slicer_v2 failed: {exc}") from exc
 
-    def _resolve_reusable_gcode_path(self, settings: SliceSettings):
-        gcode_path = str(self._last_gcode_path or "").strip()
-        if not gcode_path:
-            return None
-        if not os.path.exists(gcode_path):
-            return None
-        signature = self._build_slice_signature(settings)
-        if not signature:
-            return None
-        if signature != self._last_slice_signature:
-            return None
-        return gcode_path
-
     def _slice_model(self,
                      settings: SliceSettings,
                      activate_preview: bool,
@@ -504,7 +481,6 @@ class PrintMixin:
         worker.signals.error.connect(on_err)
         self._start_worker(worker)
 
-    def slice_current_plate(self):
     def slice_current_plate(self):
         settings = self.settings_panel.to_settings()
         self._slice_model(settings, activate_preview=True, show_dialog=True, show_errors=True)
@@ -647,7 +623,6 @@ class PrintMixin:
             self._send_existing_gcode(printer, gcode_path)
             return
         self.print_current_plate(printer=printer)
-        self.print_current_plate(printer=printer)
 
     def _on_device_save_requested(self):
         self.export_gcode()
@@ -679,144 +654,6 @@ class PrintMixin:
         worker.signals.finished.connect(on_done)
         worker.signals.error.connect(on_err)
         self._start_worker(worker)
-
-    def _runtime_performance(self) -> dict[str, Any]:
-        limits = self.__dict__.get("performance_limits")
-        if isinstance(limits, dict):
-            return dict(limits)
-        return {}
-
-    def _log_slicer_activity(self, action: str, **payload):
-        main = self.__dict__.get("main")
-        logger = main.__dict__.get("activity_logger") if main is not None else None
-        if logger is None:
-            return
-        if hasattr(logger, "log_slicer_event"):
-            logger.log_slicer_event(action=action, payload=payload)
-            return
-        if hasattr(logger, "log"):
-            logger.log(action=action, payload=payload)
-
-    def _slicer_engine_preference(self) -> str:
-        # During the V2 migration this path is intentionally fixed to V2.
-        _ = os.environ.get("EON_USE_SLICER_V2", "")
-        return "v2"
-
-    def _slice_with_v2_pipeline(
-        self,
-        *,
-        meshes,
-        combined_mesh,
-        settings,
-        source_path: str,
-        output_gcode_path: str | None,
-    ):
-        _ = meshes
-        mesh = combined_mesh if combined_mesh is not None else self._get_plate_mesh()
-        if mesh is None:
-            raise RuntimeError("No mesh data available for slicing.")
-        return slice_trimesh(
-            mesh,
-            output_gcode_path=output_gcode_path,
-            settings=settings,
-            source_path=source_path,
-        )
-
-    def _slice_with_selected_engine(
-        self,
-        *,
-        meshes,
-        combined_mesh,
-        settings,
-        source_path: str,
-        output_gcode_path: str | None,
-    ):
-        engine = self._slicer_engine_preference()
-        if engine != "v2":
-            engine = "v2"
-        self._last_slicer_backend = engine
-        try:
-            result = self._slice_with_v2_pipeline(
-                meshes=meshes,
-                combined_mesh=combined_mesh,
-                settings=settings,
-                source_path=source_path,
-                output_gcode_path=output_gcode_path,
-            )
-        except Exception as exc:
-            self._log_slicer_activity("slice_engine_error", engine=engine, error=str(exc))
-            raise
-        self._log_slicer_activity("slice_engine_selected", engine=engine)
-        return result
-
-    def _runtime_performance(self) -> dict[str, Any]:
-        limits = self.__dict__.get("performance_limits")
-        if isinstance(limits, dict):
-            return dict(limits)
-        return {}
-
-    def _log_slicer_activity(self, action: str, **payload):
-        main = self.__dict__.get("main")
-        logger = main.__dict__.get("activity_logger") if main is not None else None
-        if logger is None:
-            return
-        if hasattr(logger, "log_slicer_event"):
-            logger.log_slicer_event(action=action, payload=payload)
-            return
-        if hasattr(logger, "log"):
-            logger.log(action=action, payload=payload)
-
-    def _slicer_engine_preference(self) -> str:
-        # During the V2 migration this path is intentionally fixed to V2.
-        _ = os.environ.get("EON_USE_SLICER_V2", "")
-        return "v2"
-
-    def _slice_with_v2_pipeline(
-        self,
-        *,
-        meshes,
-        combined_mesh,
-        settings,
-        source_path: str,
-        output_gcode_path: str | None,
-    ):
-        _ = meshes
-        mesh = combined_mesh if combined_mesh is not None else self._get_plate_mesh()
-        if mesh is None:
-            raise RuntimeError("No mesh data available for slicing.")
-        return slice_trimesh(
-            mesh,
-            output_gcode_path=output_gcode_path,
-            settings=settings,
-            source_path=source_path,
-        )
-
-    def _slice_with_selected_engine(
-        self,
-        *,
-        meshes,
-        combined_mesh,
-        settings,
-        source_path: str,
-        output_gcode_path: str | None,
-    ):
-        engine = self._slicer_engine_preference()
-        if engine != "v2":
-            engine = "v2"
-        self._last_slicer_backend = engine
-        try:
-            result = self._slice_with_v2_pipeline(
-                meshes=meshes,
-                combined_mesh=combined_mesh,
-                settings=settings,
-                source_path=source_path,
-                output_gcode_path=output_gcode_path,
-            )
-        except Exception as exc:
-            self._log_slicer_activity("slice_engine_error", engine=engine, error=str(exc))
-            raise
-        self._log_slicer_activity("slice_engine_selected", engine=engine)
-        return result
 
     def _read_gcode_preview(self, path: str, max_lines: int = 600) -> tuple[str, int]:
         try:
