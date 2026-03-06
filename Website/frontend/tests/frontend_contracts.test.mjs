@@ -25,6 +25,11 @@ test("resolveApiBaseUrl uses location-like fallback", () => {
   assert.equal(value, "https://example.com:443/api/v1");
 });
 
+test("resolveApiBaseUrl maps localhost frontend ports to backend default port", () => {
+  const value = resolveApiBaseUrl("", { protocol: "http:", hostname: "127.0.0.1", port: "8080" });
+  assert.equal(value, "http://127.0.0.1:8000/api/v1");
+});
+
 test("default form and print options are stable", () => {
   assert.equal(DEFAULT_CONTACT_FORM.name, "");
   assert.equal(DEFAULT_PRINT_OPTIONS.material, "PLA");

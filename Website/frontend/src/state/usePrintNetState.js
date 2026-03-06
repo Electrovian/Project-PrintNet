@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildBackendClient } from "../api/backendClient.js";
 import { DEFAULT_CONTACT_FORM, DEFAULT_PRINT_OPTIONS } from "../config.js";
-import { normalizeRole } from "../auth/rolePolicy.js";
 
 function defaultMaintenance() {
   return {
@@ -124,28 +123,18 @@ export function usePrintNetState() {
       const text = String(message || "").trim();
       setMaintenance(enabled ? { active: true, message: text } : defaultMaintenance());
     },
-    setRole(value) {
-      try {
-        const normalized = normalizeRole(value);
-        setAuthSession((prev) => ({ ...prev, role: normalized }));
-      } catch (err) {
-        setStatusLine(`Failed: ${String(err?.message || err)}`);
-      }
-    },
     async signIn(payload = {}) {
       try {
         setStatusLine("Signing in...");
-        const requestedRole = normalizeRole(payload?.role || authSession.role || "student");
         const requestedUserId = String(payload?.userId || "").trim() || "web-user";
         const session = await apiClient.createSession({
-          userId: requestedUserId,
-          role: requestedRole
+          userId: requestedUserId
         });
         const token = String(session?.session?.token || "").trim();
         setAuthSession({
           token,
           userId: String(session?.session?.user_id || requestedUserId),
-          role: String(session?.session?.role || requestedRole)
+          role: String(session?.session?.role || authSession.role || "student")
         });
         setMaintenance(defaultMaintenance());
         setStatusLine("Signed in.");
@@ -200,8 +189,7 @@ export function usePrintNetState() {
       try {
         setStatusLine("Submitting job...");
         const session = await apiClient.createSession({
-          userId: contactForm.email || contactForm.name || "web-user",
-          role: authSession.role
+          userId: contactForm.email || contactForm.name || "web-user"
         });
         const token = String(session?.session?.token || "").trim();
         setAuthSession({

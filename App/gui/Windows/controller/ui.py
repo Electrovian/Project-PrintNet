@@ -626,12 +626,8 @@ class UiMixin(UiMixinBase):
         viewer = self.__dict__.get("viewer")
         if viewer is None and main is not None:
             viewer = main.__dict__.get("viewer")
-        viewer = self.__dict__.get("viewer")
-        if viewer is None and main is not None:
-            viewer = main.__dict__.get("viewer")
         if viewer is not None and hasattr(viewer, "set_bed_limits"):
-            viewer.set_bed_limits((next_state.bed_x, next_state.bed_y), next_state.bed_z)
-            viewer.set_bed_limits((next_state.bed_x, next_state.bed_y), next_state.bed_z)
+            viewer.set_bed_limits((bed_x, bed_y), bed_z)
         if viewer is not None:
             self._update_bed_warnings()
         self._sync_printer_selection(printer, source=source)
@@ -1883,8 +1879,19 @@ class UiMixin(UiMixinBase):
         return os.path.join(base, "EON-OpenSlicer")
 
     def _project_root(self) -> str:
-        here = os.path.abspath(__file__)
-        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(here))))
+        current = os.path.abspath(os.path.dirname(__file__))
+        for _ in range(10):
+            if os.path.isdir(os.path.join(current, ".git")):
+                return current
+            has_app = os.path.isdir(os.path.join(current, "App"))
+            has_website = os.path.isdir(os.path.join(current, "Website"))
+            if has_app and has_website:
+                return current
+            parent = os.path.dirname(current)
+            if parent == current:
+                break
+            current = parent
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
 
     def _read_version(self) -> str | None:
         init_path = os.path.join(self._project_root(), "App", "__init__.py")

@@ -117,7 +117,7 @@ def resolve_performance_limits(overrides: Optional[dict] = None) -> Dict[str, in
     if max_threads is None:
         max_threads = _recommend_threads(total_mb, cpu_count)
     max_threads = max(1, int(max_threads))
-    if cpu_count > 2:
+    if cpu_count > 2 and max_threads != 1:
         max_threads = max(2, max_threads)
         max_threads = min(max_threads, cpu_count)
 

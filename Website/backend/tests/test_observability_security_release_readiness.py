@@ -16,6 +16,8 @@ class ObservabilitySecurityReleaseReadinessTests(unittest.TestCase):
     def setUp(self):
         settings = BackendSettings(
             enable_docs=False,
+            operator_user_ids=("operator-1",),
+            admin_user_ids=("admin-1",),
             release_required_checks=(
                 "backend_health",
                 "authz_enforced",

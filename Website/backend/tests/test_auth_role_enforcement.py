@@ -13,7 +13,13 @@ from printnet_backend.settings import BackendSettings  # noqa: E402
 
 class AuthRoleEnforcementTests(unittest.TestCase):
     def setUp(self):
-        app = create_app(settings=BackendSettings(enable_docs=False))
+        app = create_app(
+            settings=BackendSettings(
+                enable_docs=False,
+                operator_user_ids=("operator-1",),
+                admin_user_ids=("admin-1",),
+            )
+        )
         self.client = create_test_client(app)
 
         self.student_token = self._create_session("student-1", "student")

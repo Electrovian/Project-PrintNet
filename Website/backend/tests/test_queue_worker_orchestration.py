@@ -15,6 +15,7 @@ class QueueWorkerOrchestrationTests(unittest.TestCase):
     def setUp(self):
         settings = BackendSettings(
             enable_docs=False,
+            operator_user_ids=("operator-1",),
             queue_name="q-lab",
             queue_worker_max_jobs_per_tick=2,
             queue_worker_heartbeat_ttl_seconds=30,

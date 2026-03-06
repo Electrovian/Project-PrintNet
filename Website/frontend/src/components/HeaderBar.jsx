@@ -1,4 +1,4 @@
-export function HeaderBar({ route, onRouteChange, statusLine, role, onRoleChange, tabs, authSession, onSignOut }) {
+export function HeaderBar({ route, onRouteChange, statusLine, role, tabs, authSession, onSignOut }) {
   const availableTabs = Array.isArray(tabs) && tabs.length > 0
     ? tabs
     : [
@@ -28,14 +28,7 @@ export function HeaderBar({ route, onRouteChange, statusLine, role, onRoleChange
         <div className="session-pill" title={String(authSession?.userId || "")}>
           {String(authSession?.userId || "signed-in user")}
         </div>
-        <label className="role-picker">
-          <span>Role</span>
-          <select value={role} onChange={(event) => onRoleChange(event.target.value)}>
-            <option value="student">Student</option>
-            <option value="operator">Operator</option>
-            <option value="admin">Admin</option>
-          </select>
-        </label>
+        <div className="session-pill">{String(role || "student")}</div>
         <button type="button" className="signout-btn" onClick={onSignOut}>
           Sign Out
         </button>

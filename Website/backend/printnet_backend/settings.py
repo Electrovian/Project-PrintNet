@@ -10,6 +10,9 @@ class BackendSettings:
     app_version: str = "0.1.0"
     api_prefix: str = "/api/v1"
     default_role: str = "student"
+    allow_client_role_override: bool = False
+    operator_user_ids: tuple[str, ...] = tuple()
+    admin_user_ids: tuple[str, ...] = tuple()
     enable_docs: bool = True
     queue_name: str = "default"
     queue_worker_max_jobs_per_tick: int = 1
@@ -32,6 +35,18 @@ class BackendSettings:
         if not api_prefix.startswith("/"):
             api_prefix = "/" + api_prefix
         default_role = str(source.get("BACKEND_DEFAULT_ROLE", "student")).strip().lower() or "student"
+        allow_client_role_override_raw = str(source.get("BACKEND_ALLOW_CLIENT_ROLE_OVERRIDE", "0")).strip().lower()
+        allow_client_role_override = allow_client_role_override_raw in ("1", "true", "yes", "on")
+        operator_user_ids = _read_csv(
+            source,
+            key="BACKEND_OPERATOR_USER_IDS",
+            default="",
+        )
+        admin_user_ids = _read_csv(
+            source,
+            key="BACKEND_ADMIN_USER_IDS",
+            default="",
+        )
         enable_docs_raw = str(source.get("BACKEND_ENABLE_DOCS", "1")).strip().lower()
         enable_docs = enable_docs_raw not in ("0", "false", "no", "off")
         queue_name = str(source.get("BACKEND_QUEUE_NAME", "default")).strip() or "default"
@@ -73,6 +88,9 @@ class BackendSettings:
             app_version=app_version,
             api_prefix=api_prefix,
             default_role=default_role,
+            allow_client_role_override=allow_client_role_override,
+            operator_user_ids=operator_user_ids,
+            admin_user_ids=admin_user_ids,
             enable_docs=enable_docs,
             queue_name=queue_name,
             queue_worker_max_jobs_per_tick=queue_worker_max_jobs_per_tick,

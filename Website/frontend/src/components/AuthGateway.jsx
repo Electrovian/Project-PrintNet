@@ -175,7 +175,7 @@ function ConnectionMapBackdrop({ graph }) {
   );
 }
 
-export function AuthGateway({ defaultRole, onRoleChange, onAuthenticate, statusLine }) {
+export function AuthGateway({ onAuthenticate, statusLine }) {
   const graph = useMemo(() => buildGraph(), []);
   const [mode, setMode] = useState("signin");
   const [form, setForm] = useState({
@@ -209,8 +209,7 @@ export function AuthGateway({ defaultRole, onRoleChange, onAuthenticate, statusL
     try {
       const userId = normalizeUserId(form);
       await onAuthenticate({
-        userId,
-        role: defaultRole || "student"
+        userId
       });
     } catch (err) {
       setMessage(String(err?.message || err || "Unable to authenticate."));
@@ -229,8 +228,7 @@ export function AuthGateway({ defaultRole, onRoleChange, onAuthenticate, statusL
       const suffix = provider.toLowerCase();
       const userId = normalizeUserId(form);
       await onAuthenticate({
-        userId: `${userId.split("@")[0]}@${suffix}.sso`,
-        role: defaultRole || "student"
+        userId: `${userId.split("@")[0]}@${suffix}.sso`
       });
     } catch (err) {
       setMessage(String(err?.message || err || "Unable to authenticate."));
@@ -334,15 +332,6 @@ export function AuthGateway({ defaultRole, onRoleChange, onAuthenticate, statusL
                 />
               </label>
             ) : null}
-
-            <label className="role-picker auth-role-picker">
-              <span>Role</span>
-              <select value={defaultRole} onChange={(event) => onRoleChange(event.target.value)}>
-                <option value="student">Student</option>
-                <option value="operator">Operator</option>
-                <option value="admin">Admin</option>
-              </select>
-            </label>
 
             <button className="auth-submit" type="submit" disabled={busy}>
               {busy ? "Connecting..." : submitLabel}

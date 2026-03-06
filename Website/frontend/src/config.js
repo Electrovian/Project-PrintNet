@@ -40,12 +40,27 @@ export function resolveApiBaseUrl(explicitBaseUrl = "", locationLike = null) {
   if (normalizedExplicit) {
     return normalizedExplicit.replace(/\/+$/, "");
   }
+  const runtimeOverride =
+    typeof globalThis === "object" && globalThis !== null
+      ? String(globalThis.__PRINTNET_API_BASE_URL || "").trim()
+      : "";
+  if (runtimeOverride) {
+    return runtimeOverride.replace(/\/+$/, "");
+  }
   if (locationLike && typeof locationLike === "object") {
     const protocol = String(locationLike.protocol || API_DEFAULTS.protocol + ":")
       .replace(/:$/, "")
       .trim();
     const hostname = String(locationLike.hostname || API_DEFAULTS.host).trim();
-    const port = String(locationLike.port || API_DEFAULTS.port).trim();
+    const currentPort = String(locationLike.port || "").trim();
+    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+    if (!isLocalHost) {
+      const maybePort = currentPort ? `:${currentPort}` : "";
+      return `${protocol}://${hostname}${maybePort}${API_DEFAULTS.prefix}`;
+    }
+    const port = currentPort && currentPort !== String(API_DEFAULTS.port)
+      ? String(API_DEFAULTS.port)
+      : (currentPort || String(API_DEFAULTS.port));
     const maybePort = port ? `:${port}` : "";
     return `${protocol}://${hostname}${maybePort}${API_DEFAULTS.prefix}`;
   }

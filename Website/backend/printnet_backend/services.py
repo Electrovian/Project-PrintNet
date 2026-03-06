@@ -16,6 +16,10 @@ from .orchestration import InMemoryQueueOrchestrator
 
 @dataclass
 class BackendState:
+    default_role: str = "student"
+    allow_client_role_override: bool = False
+    operator_user_ids: tuple[str, ...] = tuple()
+    admin_user_ids: tuple[str, ...] = tuple()
     queue_name: str = "default"
     queue_worker_max_jobs_per_tick: int = 1
     queue_worker_heartbeat_ttl_seconds: int = 60
@@ -30,6 +34,10 @@ class BackendState:
     model_store_dir: str = "Website/backend/uploads"
 
     def __post_init__(self):
+        self.default_role = normalize_role(self.default_role)
+        self.allow_client_role_override = bool(self.allow_client_role_override)
+        self.operator_user_ids = _normalize_user_id_set(self.operator_user_ids)
+        self.admin_user_ids = _normalize_user_id_set(self.admin_user_ids)
         self.queue_name = str(self.queue_name or "default").strip() or "default"
         self.queue_worker_max_jobs_per_tick = _as_bounded_int(
             self.queue_worker_max_jobs_per_tick,
@@ -109,7 +117,7 @@ class BackendState:
         user = str(user_id or "").strip()
         if not user:
             raise BackendValidationError("SESSION_USER_ID_REQUIRED: user_id is required.")
-        normalized_role = normalize_role(role)
+        normalized_role = self._resolve_session_role(user_id=user, requested_role=role)
         self._session_counter += 1
         token = f"session-{self._session_counter:06d}"
         session = SessionRecord(
@@ -121,6 +129,18 @@ class BackendState:
         self._sessions[token] = session
         self.record_operation_metric(event="auth.session.create", status="ok", duration_ms=0.0)
         return session
+
+    def _resolve_session_role(self, *, user_id: str, requested_role: str) -> str:
+        user_key = str(user_id or "").strip().lower()
+        if user_key in self.admin_user_ids:
+            return "admin"
+        if user_key in self.operator_user_ids:
+            return "operator"
+        if user_key.startswith("worker-"):
+            return "operator"
+        if self.allow_client_role_override:
+            return normalize_role(requested_role or self.default_role)
+        return self.default_role
 
     def get_session(self, token: str) -> SessionRecord:
         key = str(token or "").strip()
@@ -559,3 +579,23 @@ def _sanitize_upload_file_name(value: object) -> str:
     if lower.endswith(".stl") or lower.endswith(".step") or lower.endswith(".stp"):
         return cleaned
     return f"{cleaned}.stl"
+
+
+def _normalize_user_id_set(values: object) -> tuple[str, ...]:
+    if isinstance(values, tuple):
+        rows = list(values)
+    elif isinstance(values, list):
+        rows = list(values)
+    elif isinstance(values, str):
+        rows = [part.strip() for part in values.split(",")]
+    else:
+        rows = [str(values or "").strip()]
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in rows:
+        text = str(item or "").strip().lower()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return tuple(result)

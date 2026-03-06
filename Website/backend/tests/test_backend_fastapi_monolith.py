@@ -26,6 +26,9 @@ class BackendFastApiMonolithTests(unittest.TestCase):
                 "BACKEND_APP_VERSION": "1.2.3",
                 "BACKEND_API_PREFIX": "api/custom",
                 "BACKEND_DEFAULT_ROLE": "operator",
+                "BACKEND_ALLOW_CLIENT_ROLE_OVERRIDE": "1",
+                "BACKEND_OPERATOR_USER_IDS": "operator-1,worker-01",
+                "BACKEND_ADMIN_USER_IDS": "admin-1",
                 "BACKEND_ENABLE_DOCS": "0",
                 "BACKEND_QUEUE_NAME": "lab-a",
                 "BACKEND_QUEUE_WORKER_MAX_JOBS_PER_TICK": "3",
@@ -39,6 +42,9 @@ class BackendFastApiMonolithTests(unittest.TestCase):
         self.assertEqual(settings.app_version, "1.2.3")
         self.assertEqual(settings.api_prefix, "/api/custom")
         self.assertEqual(settings.default_role, "operator")
+        self.assertTrue(settings.allow_client_role_override)
+        self.assertEqual(settings.operator_user_ids, ("operator-1", "worker-01"))
+        self.assertEqual(settings.admin_user_ids, ("admin-1",))
         self.assertFalse(settings.enable_docs)
         self.assertEqual(settings.queue_name, "lab-a")
         self.assertEqual(settings.queue_worker_max_jobs_per_tick, 3)
@@ -77,7 +83,12 @@ class BackendFastApiMonolithTests(unittest.TestCase):
         self.assertEqual(http_status_for_error(RuntimeError("x")), 500)
 
     def test_app_routes_end_to_end(self):
-        app = create_app(settings=BackendSettings(enable_docs=False))
+        app = create_app(
+            settings=BackendSettings(
+                enable_docs=False,
+                operator_user_ids=("operator-1",),
+            )
+        )
         client = create_test_client(app)
 
         live = client.get("/api/v1/health/live")
@@ -92,6 +103,14 @@ class BackendFastApiMonolithTests(unittest.TestCase):
         self.assertTrue(session.json()["ok"])
         student_token = session.json()["session"]["token"]
         self.assertTrue(str(student_token).startswith("session-"))
+        self.assertEqual(session.json()["session"]["role"], "student")
+
+        escalated = client.post(
+            "/api/v1/auth/session",
+            json={"user_id": "student-1", "role": "admin"},
+        )
+        self.assertEqual(escalated.status_code, 200)
+        self.assertEqual(escalated.json()["session"]["role"], "student")
 
         operator = client.post(
             "/api/v1/auth/session",

@@ -32,6 +32,10 @@ def create_app(
 ):
     resolved_settings = settings or BackendSettings.from_env()
     resolved_state = state or BackendState(
+        default_role=resolved_settings.default_role,
+        allow_client_role_override=resolved_settings.allow_client_role_override,
+        operator_user_ids=resolved_settings.operator_user_ids,
+        admin_user_ids=resolved_settings.admin_user_ids,
         queue_name=resolved_settings.queue_name,
         queue_worker_max_jobs_per_tick=resolved_settings.queue_worker_max_jobs_per_tick,
         queue_worker_heartbeat_ttl_seconds=resolved_settings.queue_worker_heartbeat_ttl_seconds,

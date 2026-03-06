@@ -68,8 +68,6 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <AuthGateway
-        defaultRole={role}
-        onRoleChange={state.actions.setRole}
         onAuthenticate={state.actions.signIn}
         statusLine={state.statusLine}
       />
@@ -83,7 +81,6 @@ export default function App() {
         onRouteChange={state.actions.setRoute}
         statusLine={state.statusLine}
         role={role}
-        onRoleChange={state.actions.setRole}
         tabs={tabs}
         authSession={state.authSession}
         onSignOut={state.actions.signOut}
