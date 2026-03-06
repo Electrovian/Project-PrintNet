@@ -517,11 +517,24 @@ def _normalize_required_checks(values: object) -> tuple[str, ...]:
     return tuple(cleaned)
 
 
+def _backend_root_dir() -> str:
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+
+def _project_root_dir() -> str:
+    return os.path.abspath(os.path.join(_backend_root_dir(), "..", ".."))
+
+
 def _normalize_model_store_dir(value: object) -> str:
     text = str(value or "").strip()
     if not text:
-        return os.path.abspath("Website/backend/uploads")
-    return os.path.abspath(text)
+        return os.path.abspath(os.path.join(_backend_root_dir(), "uploads"))
+    if os.path.isabs(text):
+        return os.path.abspath(text)
+    normalized = text.replace("\\", "/")
+    if normalized.startswith("Website/"):
+        return os.path.abspath(os.path.join(_project_root_dir(), normalized))
+    return os.path.abspath(os.path.join(_backend_root_dir(), text))
 
 
 def _sanitize_upload_owner(value: object) -> str:

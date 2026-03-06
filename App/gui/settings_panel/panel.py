@@ -405,7 +405,7 @@ class SettingsPanel(
 
         self._profile_combo = QtWidgets.QComboBox(row)
         self._profile_combo.setObjectName("ProfileCombo")
-        self._profile_combo.addItem("0.20mm Standard @K1 Max 0.4 nozzle")
+        self._profile_combo.currentIndexChanged.connect(self._on_profile_preset_changed)
         layout.addWidget(self._profile_combo, 1)
 
         for label in ("Save", "Search"):
@@ -422,6 +422,7 @@ class SettingsPanel(
         layout.addWidget(self._search_input, 1)
 
         root.addWidget(row)
+        self._refresh_profile_presets(self.current_printer(), apply_default=False)
 
     def _build_content(self, root: QtWidgets.QVBoxLayout):
         nav = QtWidgets.QFrame(self)

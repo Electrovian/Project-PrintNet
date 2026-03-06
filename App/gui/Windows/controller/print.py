@@ -16,7 +16,7 @@ from ...workers import Worker
 from config.defaults import DEFAULTS
 from config.performance import resolve_performance_limits
 from slicer_v2.legacy_ai_checks import run_ai_checks
-from slicer_v2.legacy_gcode_preview import parse_gcode_preview_file
+from slicer_v2.legacy_gcode_preview import parse_gcode_preview, parse_gcode_preview_file
 from slicer_v2.legacy_gcode_stats import estimate_gcode_file
 from slicer_v2.legacy_gcode_writer import SliceSettings
 
@@ -686,7 +686,14 @@ class PrintMixin:
         if preview_text is None:
             preview_text, _total_lines = self._read_gcode_preview(gcode_path)
         if preview is None:
-            preview = parse_gcode_preview_file(gcode_path, settings=settings)
+            try:
+                preview = parse_gcode_preview_file(gcode_path, settings=settings)
+            except Exception as exc:
+                stats["preview_parse_error"] = str(exc)
+                try:
+                    preview = parse_gcode_preview(preview_text.splitlines(), settings=settings)
+                except Exception:
+                    preview = parse_gcode_preview([], settings=settings)
 
         self.preview_view.set_gcode_text(preview_text)
         self.preview_view.update_stats(stats)
@@ -763,4 +770,3 @@ class PrintMixin:
             pla_remaining_m=pla_remaining,
             pla_low=pla_low,
         )
-

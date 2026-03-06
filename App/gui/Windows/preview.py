@@ -7,6 +7,54 @@ from ..preview_utils import play_interval_ms
 from config.defaults import DEFAULTS
 
 
+BASE_LINE_TYPE_MAP = [
+    ("Inner wall", "inner_wall"),
+    ("Outer wall", "outer_wall"),
+    ("Sparse infill", "sparse_infill"),
+    ("Internal solid infill", "solid_infill"),
+    ("Top surface", "top_surface"),
+    ("Bottom surface", "bottom_surface"),
+    ("Bridge", "bridge"),
+    ("Gap infill", "gap_infill"),
+    ("Thin wall", "thin_wall"),
+    ("Ironing", "ironing"),
+    ("Support", "support"),
+    ("Skirt", "skirt"),
+    ("Brim", "brim"),
+    ("Raft", "raft"),
+    ("Travel", "travel"),
+    ("Retract", "retract"),
+    ("Unretract", "unretract"),
+    ("Wipe", "wipe"),
+    ("Seams", "seams"),
+    ("Other", "other"),
+]
+
+FEATURE_LABEL_OVERRIDES = {
+    "inner_wall": "Inner wall",
+    "outer_wall": "Outer wall",
+    "sparse_infill": "Sparse infill",
+    "solid_infill": "Internal solid infill",
+    "top_surface": "Top surface",
+    "bottom_surface": "Bottom surface",
+    "bridge": "Bridge",
+    "gap_infill": "Gap infill",
+    "thin_wall": "Thin wall",
+    "support": "Support",
+    "support_interface": "Support interface",
+    "ironing": "Ironing",
+    "skirt": "Skirt",
+    "brim": "Brim",
+    "raft": "Raft",
+    "travel": "Travel",
+    "retract": "Retract",
+    "unretract": "Unretract",
+    "wipe": "Wipe",
+    "seams": "Seams",
+    "other": "Other",
+}
+
+
 class PreviewView(QtCore.QObject):
     printer_changed = QtCore.pyqtSignal(object)
     def __init__(self, main_window, viewer):
@@ -698,21 +746,44 @@ class PreviewView(QtCore.QObject):
         if isinstance(printer, dict):
             self.printer_changed.emit(printer)
 
-    def _populate_line_types(self):
-        self._line_type_map = [
-            ("Inner wall", "inner_wall"),
-            ("Outer wall", "outer_wall"),
-            ("Internal solid infill", "solid_infill"),
-            ("Top surface", "top_surface"),
-            ("Bottom surface", "bottom_surface"),
-            ("Gap infill", "gap_infill"),
-            ("Support", "support"),
-            ("Travel", "travel"),
-            ("Retract", "retract"),
-            ("Unretract", "unretract"),
-            ("Wipe", "wipe"),
-            ("Seams", "seams"),
-        ]
+    def _feature_label(self, key: str) -> str:
+        text = str(key or "").strip()
+        if not text:
+            return "Other"
+        known = FEATURE_LABEL_OVERRIDES.get(text)
+        if known:
+            return known
+        normalized = text.replace("-", "_").replace(" ", "_")
+        return normalized.replace("_", " ").strip().title() or "Other"
+
+    def _line_type_keys_for_preview(self, preview) -> list[str]:
+        keys = [key for _label, key in BASE_LINE_TYPE_MAP]
+        if preview is None or not getattr(preview, "layers", None):
+            return keys
+
+        seen = set(keys)
+        for layer in preview.layers:
+            for seg in getattr(layer, "segments", []):
+                feature = str(getattr(seg, "feature", "") or "").strip()
+                if not feature or feature in seen:
+                    continue
+                keys.append(feature)
+                seen.add(feature)
+        return keys
+
+    def _populate_line_types(self, preview=None):
+        feature_keys = self._line_type_keys_for_preview(preview)
+        allowed_keys = set(feature_keys)
+        for key in list(self._feature_display_state.keys()):
+            if key not in allowed_keys:
+                self._feature_display_state.pop(key, None)
+        self._line_type_map = [(self._feature_label(key), key) for key in feature_keys]
+        updated_items = {}
+        for key, items in self._feature_display_items.items():
+            kept = [item for item in items if item.tableWidget() is not self._line_table]
+            if kept:
+                updated_items[key] = kept
+        self._feature_display_items = updated_items
         self._line_type_updating = True
         self._line_table.setRowCount(len(self._line_type_map))
         for row, (label, key) in enumerate(self._line_type_map):
@@ -1270,6 +1341,7 @@ class PreviewView(QtCore.QObject):
         self._preview_data = preview
         self._layer_offsets = []
         self._total_steps = 0
+        self._populate_line_types(preview)
         if preview is None or not getattr(preview, "layers", None):
             self.set_layer_count(0)
             self.set_steps_count(0)

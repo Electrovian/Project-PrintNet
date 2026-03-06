@@ -3,13 +3,14 @@ from PyQt5 import QtCore
 from ...workers import Worker
 from config.defaults import DEFAULTS
 from config.runtime_printer_state import runtime_printer_state_from_defaults
+from .activity_sync import ActivitySyncMixin
 from .load import LoadMixin
 from .print import PrintMixin
 from .project import ProjectMixin
 from .ui import UiMixin
 
 
-class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObject):
+class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiMixin, QtCore.QObject):
     def __init__(self, main_window):
         super().__init__(main_window)
         self.main = main_window
@@ -53,6 +54,7 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
     def initialize(self):
         self._apply_theme()
         self._connect_signals()
+        self._init_activity_sync()
         self.viewer.set_snap(
             DEFAULTS["viewer"]["snap_enabled"],
             DEFAULTS["viewer"]["snap_step"],
@@ -78,6 +80,7 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
         self._undo_timer.setSingleShot(True)
         self._undo_timer.timeout.connect(self._finalize_undo_snapshot)
         self._pending_undo_snapshot = False
+        self.runtime_printer_state = runtime_printer_state_from_defaults(DEFAULTS.get("printer", {}))
         self._push_undo_state()
         self.viewer.set_labels_visible(self._labels_visible)
         if hasattr(self, "_labels_action"):

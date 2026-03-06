@@ -9,6 +9,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from gui.Windows.controller.print import PrintMixin, _sanitize_gcode_basename  # noqa: E402
+from slicer_v2.legacy_gcode_writer import SliceSettings  # noqa: E402
 
 
 class _DummySettingsPanel:
@@ -78,6 +79,54 @@ class _EngineOnlyController(PrintMixin):
         if self._fail:
             raise RuntimeError("v2 failure")
         return "C:/tmp/out.gcode"
+
+
+class _PreviewViewStub:
+    def __init__(self):
+        self.gcode_text = ""
+        self.stats = {}
+        self.preview_settings = None
+        self.preview_data = None
+
+    def set_gcode_text(self, text):
+        self.gcode_text = str(text or "")
+
+    def update_stats(self, stats):
+        self.stats = dict(stats or {})
+
+    def set_preview_settings(self, settings):
+        self.preview_settings = settings
+
+    def set_preview_data(self, preview):
+        self.preview_data = preview
+
+
+class _ViewerPreviewStub:
+    def __init__(self):
+        self.print_stats = {}
+        self.preview_settings = None
+        self.preview_data = None
+
+    def set_print_stats(self, stats):
+        self.print_stats = dict(stats or {})
+
+    def set_preview_settings(self, settings):
+        self.preview_settings = settings
+
+    def set_gcode_preview(self, preview):
+        self.preview_data = preview
+
+
+class _UpdatePreviewController(PrintMixin):
+    def __init__(self):
+        self.settings_panel = _DummySettingsPanel(SliceSettings())
+        self.preview_view = _PreviewViewStub()
+        self.viewer = _ViewerPreviewStub()
+        self._last_slice_meshes = None
+        self._last_gcode_stats = None
+        self._last_preview_key = None
+        self._last_preview_data = None
+        self._last_preview_text = None
 
 
 class DesktopPlateFlowTests(unittest.TestCase):
@@ -163,6 +212,27 @@ class DesktopPlateFlowTests(unittest.TestCase):
             )
         self.assertEqual(controller._last_slicer_backend, "v2")
         self.assertTrue(any(item[0] == "slice_engine_error" for item in controller.logged_actions))
+
+    def test_update_preview_recovers_when_primary_preview_parser_fails(self):
+        controller = _UpdatePreviewController()
+        with tempfile.NamedTemporaryFile(suffix=".gcode", delete=False, mode="w", encoding="utf-8") as handle:
+            handle.write(";LAYER:0\n")
+            handle.write("G1 X0 Y0 Z0.20 F1200\n")
+            handle.write("G1 X10 Y0 E0.60 F1200\n")
+            gcode_path = handle.name
+        try:
+            with mock.patch(
+                "gui.Windows.controller.print.parse_gcode_preview_file",
+                side_effect=RuntimeError("preview parse boom"),
+            ):
+                controller._update_preview_from_gcode(gcode_path, {"time_seconds": 1.0})
+            self.assertIn("G1 X10 Y0 E0.60", controller.preview_view.gcode_text)
+            self.assertIsNotNone(controller.preview_view.preview_data)
+            self.assertIsNotNone(controller.viewer.preview_data)
+            self.assertIn("preview_parse_error", controller.preview_view.stats)
+        finally:
+            if os.path.exists(gcode_path):
+                os.remove(gcode_path)
 
 
 if __name__ == "__main__":

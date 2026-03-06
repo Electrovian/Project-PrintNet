@@ -57,8 +57,8 @@ class UiMixin(UiMixinBase):
     def _use_powershell_file_dialog(self) -> bool:
         if os.name != "nt":
             return False
-        # Use a WinForms dialog through powershell on Python 3.13 Windows.
-        default_flag = "1" if sys.version_info[:2] >= (3, 13) else "0"
+        # Legacy WinForms dialog is opt-in. Native Qt dialog stays default.
+        default_flag = "0"
         flag = str(os.environ.get("EON_USE_PS_FILE_DIALOG", default_flag)).strip().lower()
         return flag in ("1", "true", "yes", "on")
 
@@ -266,20 +266,24 @@ class UiMixin(UiMixinBase):
         directory: str,
         file_filter: str,
     ) -> tuple[str, str]:
+        try:
+            path, selected_filter = QtWidgets.QFileDialog.getOpenFileName(
+                self._dialog_parent(),
+                caption,
+                directory,
+                file_filter,
+                options=self._qt_file_dialog_options(),
+            )
+            return str(path or ""), str(selected_filter or "")
+        except Exception:
+            pass
         ps_path = self._ps_open_file_name(caption, directory, file_filter)
         if ps_path is not None:
             return str(ps_path), str(file_filter or "")
         tk_path = self._tk_open_file_name(caption, directory, file_filter)
         if tk_path is not None:
             return tk_path, str(file_filter or "")
-        path, selected_filter = QtWidgets.QFileDialog.getOpenFileName(
-            self._dialog_parent(),
-            caption,
-            directory,
-            file_filter,
-            options=self._qt_file_dialog_options(),
-        )
-        return str(path or ""), str(selected_filter or "")
+        return "", str(file_filter or "")
 
     def _safe_get_open_file_names(
         self,
@@ -287,20 +291,24 @@ class UiMixin(UiMixinBase):
         directory: str,
         file_filter: str,
     ) -> tuple[list[str], str]:
+        try:
+            paths, selected_filter = QtWidgets.QFileDialog.getOpenFileNames(
+                self._dialog_parent(),
+                caption,
+                directory,
+                file_filter,
+                options=self._qt_file_dialog_options(),
+            )
+            return [str(path) for path in (paths or [])], str(selected_filter or "")
+        except Exception:
+            pass
         ps_paths = self._ps_open_file_names(caption, directory, file_filter)
         if ps_paths is not None:
             return [str(path) for path in ps_paths], str(file_filter or "")
         tk_paths = self._tk_open_file_names(caption, directory, file_filter)
         if tk_paths is not None:
             return tk_paths, str(file_filter or "")
-        paths, selected_filter = QtWidgets.QFileDialog.getOpenFileNames(
-            self._dialog_parent(),
-            caption,
-            directory,
-            file_filter,
-            options=self._qt_file_dialog_options(),
-        )
-        return [str(path) for path in (paths or [])], str(selected_filter or "")
+        return [], str(file_filter or "")
 
     def _safe_get_save_file_name(
         self,
@@ -308,20 +316,24 @@ class UiMixin(UiMixinBase):
         directory: str,
         file_filter: str,
     ) -> tuple[str, str]:
+        try:
+            path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
+                self._dialog_parent(),
+                caption,
+                directory,
+                file_filter,
+                options=self._qt_file_dialog_options(),
+            )
+            return str(path or ""), str(selected_filter or "")
+        except Exception:
+            pass
         ps_path = self._ps_save_file_name(caption, directory, file_filter)
         if ps_path is not None:
             return str(ps_path), str(file_filter or "")
         tk_path = self._tk_save_file_name(caption, directory, file_filter)
         if tk_path is not None:
             return tk_path, str(file_filter or "")
-        path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
-            self._dialog_parent(),
-            caption,
-            directory,
-            file_filter,
-            options=self._qt_file_dialog_options(),
-        )
-        return str(path or ""), str(selected_filter or "")
+        return "", str(file_filter or "")
 
     # -------------------------------------------------- Model selection/removal
     def _on_model_selected(self, model_id: int):
@@ -1112,6 +1124,8 @@ class UiMixin(UiMixinBase):
                 self.viewer.set_print_stats_visible(False)
             if hasattr(self.viewer, "set_preview_object_visible"):
                 self.viewer.set_preview_object_visible(False)
+            if hasattr(self, "_request_activity_refresh"):
+                self._request_activity_refresh(force=True)
         else:
             return
         self._active_mode = mode

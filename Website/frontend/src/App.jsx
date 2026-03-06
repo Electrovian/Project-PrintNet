@@ -5,6 +5,7 @@ import { UploadPanel } from "./components/UploadPanel.jsx";
 import { PrintOptionsPanel } from "./components/PrintOptionsPanel.jsx";
 import { QueuePanel } from "./components/QueuePanel.jsx";
 import { PrinterPanel } from "./components/PrinterPanel.jsx";
+import { AuthGateway } from "./components/AuthGateway.jsx";
 import { usePrintNetState } from "./state/usePrintNetState.js";
 import { allowedRoutes } from "./auth/rolePolicy.js";
 
@@ -55,6 +56,7 @@ export default function App() {
   const role = state.authSession?.role || "student";
   const allowed = useMemo(() => allowedRoutes(role), [role]);
   const tabs = allTabs.filter((item) => allowed.includes(item.key));
+  const isAuthenticated = Boolean(String(state.authSession?.token || "").trim());
 
   useEffect(() => {
     if (!allowed.includes(state.route)) {
@@ -62,6 +64,17 @@ export default function App() {
       state.actions.setRoute(fallback);
     }
   }, [allowed, state.route, state.actions]);
+
+  if (!isAuthenticated) {
+    return (
+      <AuthGateway
+        defaultRole={role}
+        onRoleChange={state.actions.setRole}
+        onAuthenticate={state.actions.signIn}
+        statusLine={state.statusLine}
+      />
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -72,6 +85,8 @@ export default function App() {
         role={role}
         onRoleChange={state.actions.setRole}
         tabs={tabs}
+        authSession={state.authSession}
+        onSignOut={state.actions.signOut}
       />
       {state.maintenance?.active ? (
         <div className="maintenance-banner" role="alert" aria-live="polite">

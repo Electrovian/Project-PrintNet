@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import asdict
 from typing import Any, Dict, TYPE_CHECKING, cast
 
@@ -8,11 +9,21 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from config.defaults import DEFAULTS
 from slicer_v2.legacy_gcode_writer import SliceSettings
 from ..theme import theme_css
+from .profile_catalog import (
+    ProcessPreset,
+    coerce_process_presets,
+    display_label_for_preset,
+    find_preset_id_by_name,
+    load_process_presets,
+    order_process_presets,
+)
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow
 else:
     MainWindow = QtWidgets.QWidget
+
+_SLICE_SETTING_FIELDS = frozenset(SliceSettings.__dataclass_fields__.keys())
 
 
 class OtherSectionMixin:
@@ -94,6 +105,102 @@ class OtherSectionMixin:
             self._filament_color = color
             self._update_filament_button_style()
 
+    def _ensure_profile_catalog(self):
+        if hasattr(self, "_process_presets_all"):
+            return
+        try:
+            presets = load_process_presets()
+        except Exception:
+            presets = []
+        self._process_presets_all = list(presets)
+        self._process_preset_map = {entry.preset_id: entry for entry in self._process_presets_all}
+        self._process_presets_visible = list(self._process_presets_all)
+
+    def set_profile_presets(self, presets: list[ProcessPreset | dict], apply_default: bool = False):
+        entries = coerce_process_presets(presets or [])
+        self._process_presets_all = list(entries)
+        self._process_preset_map = {entry.preset_id: entry for entry in self._process_presets_all}
+        self._process_presets_visible = list(self._process_presets_all)
+        self._refresh_profile_presets(self.current_printer(), apply_default=apply_default)
+
+    def _resolve_default_profile_id(
+        self,
+        printer: dict | None,
+        ordered_presets: list[ProcessPreset],
+        current_id: str,
+    ) -> str | None:
+        if current_id and any(entry.preset_id == current_id for entry in ordered_presets):
+            return current_id
+        default_name = ""
+        if isinstance(printer, dict):
+            default_name = str(printer.get("default_print_profile") or "").strip()
+        if default_name:
+            resolved = find_preset_id_by_name(ordered_presets, default_name)
+            if resolved:
+                return resolved
+        if ordered_presets:
+            return ordered_presets[0].preset_id
+        return None
+
+    def _refresh_profile_presets(self, printer: dict | None, apply_default: bool = False):
+        if not hasattr(self, "_profile_combo"):
+            return
+        self._ensure_profile_catalog()
+        presets = order_process_presets(self._process_presets_all, printer)
+        self._process_presets_visible = list(presets)
+        self._process_preset_map = {entry.preset_id: entry for entry in self._process_presets_all}
+
+        current_id = str(self._profile_combo.currentData() or "").strip()
+        default_id = self._resolve_default_profile_id(printer, presets, current_id)
+
+        block = self._profile_combo.blockSignals(True)
+        self._profile_combo.clear()
+
+        if not presets:
+            self._profile_combo.addItem("No process presets", "")
+            self._profile_combo.setEnabled(False)
+            self._profile_combo.blockSignals(block)
+            return
+
+        self._profile_combo.setEnabled(True)
+        duplicate_counts = Counter(entry.name.casefold() for entry in presets)
+        for entry in presets:
+            label = display_label_for_preset(entry, duplicate_counts[entry.name.casefold()])
+            self._profile_combo.addItem(label, entry.preset_id)
+
+        target_id = default_id
+        if target_id:
+            target_index = self._profile_combo.findData(target_id)
+            if target_index >= 0:
+                self._profile_combo.setCurrentIndex(target_index)
+        if self._profile_combo.currentIndex() < 0:
+            self._profile_combo.setCurrentIndex(0)
+        selected_id = str(self._profile_combo.currentData() or "").strip()
+        self._profile_combo.blockSignals(block)
+
+        if apply_default and selected_id:
+            self._apply_profile_preset(selected_id)
+
+    def _apply_profile_preset(self, preset_id: str):
+        self._ensure_profile_catalog()
+        target = str(preset_id or "").strip()
+        if not target:
+            return
+        preset = self._process_preset_map.get(target)
+        if preset is None:
+            return
+        if not preset.mapped_settings:
+            return
+        self.apply_settings(preset.mapped_settings)
+
+    def _on_profile_preset_changed(self, _index: int):
+        if not hasattr(self, "_profile_combo"):
+            return
+        preset_id = str(self._profile_combo.currentData() or "").strip()
+        if not preset_id:
+            return
+        self._apply_profile_preset(preset_id)
+
     def set_printers(self, printers):
         self._printers = list(printers or [])
         if not hasattr(self, "_printer_combo"):
@@ -151,7 +258,9 @@ class OtherSectionMixin:
     def _on_printer_changed(self, _index: int):
         printer = self.current_printer()
         if printer is None:
+            self._refresh_profile_presets(None, apply_default=False)
             return
+        self._refresh_profile_presets(printer, apply_default=True)
         main = cast(MainWindow, self.parent())
         apply_printer = getattr(main, "_apply_printer_profile", None)
         if callable(apply_printer):
@@ -463,8 +572,8 @@ class OtherSectionMixin:
         self._update_filament_button_style()
         self._tooltip.apply_theme(panel_bg, panel_border, panel_text, muted_text)
 
-    def to_settings(self) -> SliceSettings:
-        return SliceSettings(
+    def _ui_settings_payload(self) -> Dict[str, Any]:
+        return dict(
             layer_height=float(self.layer_height_spin.value()),
             first_layer_height=float(self.first_layer_height_spin.value()),
             seam_position=self._combo_value(self.seam_position_combo, "aligned"),
@@ -569,12 +678,39 @@ class OtherSectionMixin:
             filament_color=self._filament_color.name(),
         )
 
+    def _passthrough_settings_payload(self) -> Dict[str, Any]:
+        raw = getattr(self, "_slice_settings_passthrough", None)
+        if not isinstance(raw, dict):
+            return {}
+        return {key: raw[key] for key in raw.keys() if key in _SLICE_SETTING_FIELDS}
+
+    def _update_passthrough_settings(self, data: Dict[str, Any]) -> None:
+        if not isinstance(data, dict) or not data:
+            return
+        passthrough = self._passthrough_settings_payload()
+        ui_setting_keys = set(self._ui_settings_payload().keys())
+        for key, value in data.items():
+            if key not in _SLICE_SETTING_FIELDS:
+                continue
+            if key in ui_setting_keys:
+                passthrough.pop(key, None)
+            else:
+                passthrough[key] = value
+        self._slice_settings_passthrough = passthrough
+
+    def to_settings(self) -> SliceSettings:
+        payload = self._passthrough_settings_payload()
+        payload.update(self._ui_settings_payload())
+        return SliceSettings(**payload)
+
     def apply_settings(self, settings):
         data = {}
         if isinstance(settings, SliceSettings):
             data = asdict(settings)
         elif isinstance(settings, dict):
             data = settings
+        if data:
+            self._update_passthrough_settings(data)
 
         if "layer_height" in data:
             self.layer_height_spin.setValue(float(data["layer_height"]))

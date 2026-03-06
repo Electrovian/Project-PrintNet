@@ -222,28 +222,34 @@ class LoadMixin:
 
     # -------------------------------------------------------------- open
     def open_stl_dialog(self):
+        if bool(getattr(self, "_open_stl_dialog_active", False)):
+            return
+        self._open_stl_dialog_active = True
         status_bar = getattr(self, "statusBar", None)
         if callable(status_bar):
             status_bar().showMessage("Opening model file dialog...")
-        paths = []
-        if self._prefer_manual_stl_entry():
-            paths = self._prompt_stl_paths_fallback()
-        else:
-            try:
-                paths, _ = self._safe_get_open_file_names("Open STL files", "", "STL files (*.stl)")
-            except Exception as exc:
-                QtWidgets.QMessageBox.warning(
-                    self.main,
-                    "Open STL files",
-                    "File picker failed. Use manual path entry fallback.\n\n"
-                    f"Reason: {exc}",
-                )
+        try:
+            paths = []
+            if self._prefer_manual_stl_entry():
                 paths = self._prompt_stl_paths_fallback()
-        if not paths and callable(status_bar):
-            status_bar().showMessage("No STL selected")
-            return
-        for path in paths:
-            self._add_model_from_path_async(path)
+            else:
+                try:
+                    paths, _ = self._safe_get_open_file_names("Open STL files", "", "STL files (*.stl)")
+                except Exception as exc:
+                    QtWidgets.QMessageBox.warning(
+                        self.main,
+                        "Open STL files",
+                        "File picker failed. Use manual path entry fallback.\n\n"
+                        f"Reason: {exc}",
+                    )
+                    paths = self._prompt_stl_paths_fallback()
+            if not paths and callable(status_bar):
+                status_bar().showMessage("No STL selected")
+                return
+            for path in paths:
+                self._add_model_from_path_async(path)
+        finally:
+            self._open_stl_dialog_active = False
 
     # ------------------------------------------------------------- async load
     def _add_model_from_path_async(self, path: str):

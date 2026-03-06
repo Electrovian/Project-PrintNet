@@ -132,6 +132,36 @@ export function usePrintNetState() {
         setStatusLine(`Failed: ${String(err?.message || err)}`);
       }
     },
+    async signIn(payload = {}) {
+      try {
+        setStatusLine("Signing in...");
+        const requestedRole = normalizeRole(payload?.role || authSession.role || "student");
+        const requestedUserId = String(payload?.userId || "").trim() || "web-user";
+        const session = await apiClient.createSession({
+          userId: requestedUserId,
+          role: requestedRole
+        });
+        const token = String(session?.session?.token || "").trim();
+        setAuthSession({
+          token,
+          userId: String(session?.session?.user_id || requestedUserId),
+          role: String(session?.session?.role || requestedRole)
+        });
+        setMaintenance(defaultMaintenance());
+        setStatusLine("Signed in.");
+      } catch (err) {
+        setStatusLine(`Failed: ${String(err?.message || err)}`);
+        throw err;
+      }
+    },
+    signOut() {
+      setAuthSession((prev) => ({
+        token: "",
+        userId: "",
+        role: prev.role || "student"
+      }));
+      setStatusLine("Signed out.");
+    },
     setContactField(key, value) {
       setContactForm((prev) => ({ ...prev, [key]: value }));
     },

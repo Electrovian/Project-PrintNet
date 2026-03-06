@@ -1,4 +1,4 @@
-export function HeaderBar({ route, onRouteChange, statusLine, role, onRoleChange, tabs }) {
+export function HeaderBar({ route, onRouteChange, statusLine, role, onRoleChange, tabs, authSession, onSignOut }) {
   const availableTabs = Array.isArray(tabs) && tabs.length > 0
     ? tabs
     : [
@@ -25,6 +25,9 @@ export function HeaderBar({ route, onRouteChange, statusLine, role, onRoleChange
         ))}
       </nav>
       <div className="header-meta">
+        <div className="session-pill" title={String(authSession?.userId || "")}>
+          {String(authSession?.userId || "signed-in user")}
+        </div>
         <label className="role-picker">
           <span>Role</span>
           <select value={role} onChange={(event) => onRoleChange(event.target.value)}>
@@ -33,6 +36,9 @@ export function HeaderBar({ route, onRouteChange, statusLine, role, onRoleChange
             <option value="admin">Admin</option>
           </select>
         </label>
+        <button type="button" className="signout-btn" onClick={onSignOut}>
+          Sign Out
+        </button>
         <div className="status-chip" role="status">
           {statusLine}
         </div>

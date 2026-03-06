@@ -124,6 +124,83 @@ class SettingsPanelTests(QtTestCase):
         self.assertEqual(updated.filament_name, "Test PLA")
         self.assertEqual(updated.filament_color.lower(), "#00ff00")
 
+    def test_engine_only_fields_are_preserved_through_roundtrip(self):
+        from gui.settings_panel import SettingsPanel
+
+        panel = SettingsPanel()
+        panel.apply_settings(
+            SliceSettings(
+                print_speed=93.0,
+                travel_speed=165.0,
+                min_layer_height=0.12,
+                max_layer_height=0.28,
+                infill_angle=33.0,
+                nozzle_diameter=0.6,
+            )
+        )
+        panel.layer_height_spin.setValue(0.21)
+
+        updated = panel.to_settings()
+        self.assertAlmostEqual(updated.layer_height, 0.21, places=3)
+        self.assertAlmostEqual(updated.print_speed, 93.0, places=2)
+        self.assertAlmostEqual(updated.travel_speed, 165.0, places=2)
+        self.assertAlmostEqual(updated.min_layer_height, 0.12, places=3)
+        self.assertAlmostEqual(updated.max_layer_height, 0.28, places=3)
+        self.assertAlmostEqual(updated.infill_angle, 33.0, places=2)
+        self.assertAlmostEqual(updated.nozzle_diameter, 0.6, places=3)
+
+    def test_partial_apply_settings_keeps_existing_engine_only_fields(self):
+        from gui.settings_panel import SettingsPanel
+
+        panel = SettingsPanel()
+        panel.apply_settings({"print_speed": 77.0, "travel_speed": 140.0})
+        panel.apply_settings({"layer_height": 0.26})
+
+        updated = panel.to_settings()
+        self.assertAlmostEqual(updated.layer_height, 0.26, places=3)
+        self.assertAlmostEqual(updated.print_speed, 77.0, places=2)
+        self.assertAlmostEqual(updated.travel_speed, 140.0, places=2)
+
+    def test_profile_preset_dropdown_uses_data_source(self):
+        from gui.settings_panel import SettingsPanel
+
+        panel = SettingsPanel()
+        panel.set_profile_presets(
+            [
+                {
+                    "id": "preset_a",
+                    "name": "Preset A",
+                    "vendor": "VendorX",
+                    "mapped_settings": {
+                        "layer_height": 0.32,
+                        "infill_percent": 25.0,
+                    },
+                },
+                {
+                    "id": "preset_b",
+                    "name": "Preset B",
+                    "vendor": "VendorY",
+                    "mapped_settings": {
+                        "layer_height": 0.18,
+                        "infill_percent": 42.0,
+                    },
+                },
+            ],
+            apply_default=True,
+        )
+
+        self.assertEqual(panel._profile_combo.count(), 2)
+        self.assertEqual(panel._profile_combo.currentData(), "preset_a")
+        self.assertAlmostEqual(panel.layer_height_spin.value(), 0.32, places=2)
+        self.assertAlmostEqual(panel.infill_density_spin.value(), 25.0, places=2)
+
+        idx = panel._profile_combo.findData("preset_b")
+        self.assertGreaterEqual(idx, 0)
+        panel._profile_combo.setCurrentIndex(idx)
+
+        self.assertAlmostEqual(panel.layer_height_spin.value(), 0.18, places=2)
+        self.assertAlmostEqual(panel.infill_density_spin.value(), 42.0, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,12 +3,12 @@ name: platform-ci
 on:
   push:
     paths:
-      - 'platform/**'
+      - 'Website/**'
       - 'deploy/helm/**'
       - '.github/workflows/platform-ci.yml'
   pull_request:
     paths:
-      - 'platform/**'
+      - 'Website/**'
       - 'deploy/helm/**'
 
 jobs:
@@ -20,15 +20,15 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install backend deps
-        run: pip install -r platform/backend/requirements.txt
+        run: pip install -r Website/backend/requirements.txt
       - name: Import backend app
         run: |
           python - << 'PY'
           import sys
           from pathlib import Path
           repo = Path('.').resolve()
-          sys.path.insert(0, str(repo / 'platform' / 'backend'))
-          import app.main
+          sys.path.insert(0, str(repo / 'Website' / 'backend'))
+          import printnet_backend.app
           print('backend app import ok')
           PY
 
@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: '22'
       - name: Build frontend
-        working-directory: platform/frontend
+        working-directory: Website/frontend
         run: |
           npm install
           npm run build

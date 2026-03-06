@@ -2,9 +2,6 @@ name: build-mobile
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*-mobile"
 
 jobs:
   android:
