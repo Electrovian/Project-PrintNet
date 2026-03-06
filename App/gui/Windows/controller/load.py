@@ -263,6 +263,48 @@ class LoadMixin:
                 paths.append(path)
         return paths
 
+    def _use_tk_file_dialog(self) -> bool:
+        value = str(os.environ.get("EON_USE_TK_FILE_DIALOG", "")).strip().lower()
+        return value in {"1", "true", "yes", "on"}
+
+    def _prefer_manual_stl_entry(self) -> bool:
+        value = str(os.environ.get("EON_FORCE_MANUAL_STL_ENTRY", "")).strip().lower()
+        return value in {"1", "true", "yes", "on"}
+
+    def _safe_get_open_file_names(
+        self,
+        title: str,
+        directory: str,
+        file_filter: str,
+    ) -> tuple[list[str], str]:
+        options = QtWidgets.QFileDialog.Options()
+        paths, selected_filter = QtWidgets.QFileDialog.getOpenFileNames(
+            self.main,
+            str(title),
+            str(directory),
+            str(file_filter),
+            options=options,
+        )
+        return list(paths), str(selected_filter)
+
+    def _prompt_stl_paths_fallback(self) -> list[str]:
+        text, ok = QtWidgets.QInputDialog.getText(
+            self.main,
+            "Open STL files",
+            "Enter one or more STL file paths (comma-separated):",
+        )
+        if not ok:
+            return []
+        raw = str(text).strip()
+        if not raw:
+            return []
+        paths = []
+        for chunk in raw.split(","):
+            path = chunk.strip().strip('"')
+            if path:
+                paths.append(path)
+        return paths
+
     def open_stl_dialog(self):
         if bool(getattr(self, "_open_stl_dialog_active", False)):
             return

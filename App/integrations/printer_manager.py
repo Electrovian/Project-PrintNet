@@ -40,11 +40,15 @@ class PrinterManager:
 
     def set_active_printer(self, printer: Mapping[str, Any] | None):
         self.active_printer = dict(printer) if isinstance(printer, Mapping) else None
+    def set_active_printer(self, printer: Mapping[str, Any] | None):
+        self.active_printer = dict(printer) if isinstance(printer, Mapping) else None
 
     def slice_and_print(self, stl_path: str, settings: SliceSettings) -> str:
         gcode_path = slice_file(stl_path, settings=settings)
         return self.print_gcode(gcode_path, printer=self.active_printer)
 
+    def print_gcode(self, gcode_path: str, printer: Mapping[str, Any] | None = None) -> str:
+        active = dict(printer) if isinstance(printer, Mapping) else self.active_printer
     def print_gcode(self, gcode_path: str, printer: Mapping[str, Any] | None = None) -> str:
         active = dict(printer) if isinstance(printer, Mapping) else self.active_printer
         if not active:

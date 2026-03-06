@@ -749,6 +749,75 @@ class PrintMixin:
         self._log_slicer_activity("slice_engine_selected", engine=engine)
         return result
 
+    def _runtime_performance(self) -> dict[str, Any]:
+        limits = self.__dict__.get("performance_limits")
+        if isinstance(limits, dict):
+            return dict(limits)
+        return {}
+
+    def _log_slicer_activity(self, action: str, **payload):
+        main = self.__dict__.get("main")
+        logger = main.__dict__.get("activity_logger") if main is not None else None
+        if logger is None:
+            return
+        if hasattr(logger, "log_slicer_event"):
+            logger.log_slicer_event(action=action, payload=payload)
+            return
+        if hasattr(logger, "log"):
+            logger.log(action=action, payload=payload)
+
+    def _slicer_engine_preference(self) -> str:
+        # During the V2 migration this path is intentionally fixed to V2.
+        _ = os.environ.get("EON_USE_SLICER_V2", "")
+        return "v2"
+
+    def _slice_with_v2_pipeline(
+        self,
+        *,
+        meshes,
+        combined_mesh,
+        settings,
+        source_path: str,
+        output_gcode_path: str | None,
+    ):
+        _ = meshes
+        mesh = combined_mesh if combined_mesh is not None else self._get_plate_mesh()
+        if mesh is None:
+            raise RuntimeError("No mesh data available for slicing.")
+        return slice_trimesh(
+            mesh,
+            output_gcode_path=output_gcode_path,
+            settings=settings,
+            source_path=source_path,
+        )
+
+    def _slice_with_selected_engine(
+        self,
+        *,
+        meshes,
+        combined_mesh,
+        settings,
+        source_path: str,
+        output_gcode_path: str | None,
+    ):
+        engine = self._slicer_engine_preference()
+        if engine != "v2":
+            engine = "v2"
+        self._last_slicer_backend = engine
+        try:
+            result = self._slice_with_v2_pipeline(
+                meshes=meshes,
+                combined_mesh=combined_mesh,
+                settings=settings,
+                source_path=source_path,
+                output_gcode_path=output_gcode_path,
+            )
+        except Exception as exc:
+            self._log_slicer_activity("slice_engine_error", engine=engine, error=str(exc))
+            raise
+        self._log_slicer_activity("slice_engine_selected", engine=engine)
+        return result
+
     def _read_gcode_preview(self, path: str, max_lines: int = 600) -> tuple[str, int]:
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as f:

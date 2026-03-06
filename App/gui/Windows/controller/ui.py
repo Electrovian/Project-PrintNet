@@ -626,7 +626,11 @@ class UiMixin(UiMixinBase):
         viewer = self.__dict__.get("viewer")
         if viewer is None and main is not None:
             viewer = main.__dict__.get("viewer")
+        viewer = self.__dict__.get("viewer")
+        if viewer is None and main is not None:
+            viewer = main.__dict__.get("viewer")
         if viewer is not None and hasattr(viewer, "set_bed_limits"):
+            viewer.set_bed_limits((next_state.bed_x, next_state.bed_y), next_state.bed_z)
             viewer.set_bed_limits((next_state.bed_x, next_state.bed_y), next_state.bed_z)
         if viewer is not None:
             self._update_bed_warnings()
