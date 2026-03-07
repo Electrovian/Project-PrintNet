@@ -54,7 +54,7 @@ No direct expenses were required for this project. We used personal computers, f
 ## Effort Summary
 All team members met the required effort:
 
-- Mitch: 1000+ hours
+- Mitch: 2000+ hours
 - Muneer: 60 hours
 - Muhanad: 60 hours
 
