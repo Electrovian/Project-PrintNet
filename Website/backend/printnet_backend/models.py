@@ -30,6 +30,26 @@ class SessionRecord:
 
 
 @dataclass(frozen=True)
+class AccountRecord:
+    user_id: str
+    role: str
+    active: bool
+    password_salt_hex: str
+    password_hash_hex: str
+    created_at_utc: str
+    updated_at_utc: str
+
+    def to_public_dict(self) -> dict[str, Any]:
+        return {
+            "user_id": self.user_id,
+            "role": self.role,
+            "active": bool(self.active),
+            "created_at_utc": self.created_at_utc,
+            "updated_at_utc": self.updated_at_utc,
+        }
+
+
+@dataclass(frozen=True)
 class ProfileRecord:
     profile_id: str
     vendor: str
@@ -73,6 +93,25 @@ def parse_session_payload(payload: Mapping[str, Any]) -> tuple[str, str]:
     user_id = _as_non_empty(payload.get("user_id"), field="user_id")
     role = str(payload.get("role", "student") or "student").strip().lower() or "student"
     return user_id, role
+
+
+def parse_register_payload(payload: Mapping[str, Any]) -> tuple[str, str, str]:
+    user_id = _as_non_empty(payload.get("user_id"), field="user_id")
+    password = _as_non_empty(payload.get("password"), field="password")
+    role = str(payload.get("role", "student") or "student").strip().lower() or "student"
+    return user_id, password, role
+
+
+def parse_login_payload(payload: Mapping[str, Any]) -> tuple[str, str]:
+    user_id = _as_non_empty(payload.get("user_id"), field="user_id")
+    password = _as_non_empty(payload.get("password"), field="password")
+    return user_id, password
+
+
+def parse_login_verification_payload(payload: Mapping[str, Any]) -> tuple[str, str]:
+    challenge_id = _as_non_empty(payload.get("challenge_id"), field="challenge_id")
+    code = _as_non_empty(payload.get("verification_code"), field="verification_code")
+    return challenge_id, code
 
 
 def parse_printer_payload(payload: Mapping[str, Any]) -> tuple[str, str, str, str]:

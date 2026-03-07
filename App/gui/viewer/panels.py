@@ -6,14 +6,20 @@ import os
 
 import numpy as np
 import trimesh
+import pyqtgraph.opengl as gl
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from ..i18n import tr
 from ..theme import theme_qcolor, theme_value
 from ..widgets.view_cube_overlay import ViewCubeOverlay
 
 
 class PanelMixin:
+    @staticmethod
+    def _t(key: str, default: str = "", **kwargs: object) -> str:
+        return tr(key, default=default, **kwargs)
+
     def _rgba_css(self, color: QtGui.QColor, alpha: int | None = None):
         c = QtGui.QColor(color)
         if alpha is not None:
@@ -256,6 +262,8 @@ class PanelMixin:
     def _position_bottom_left_panels(self):
         margin = 12
         y = self.height() - margin
+        if hasattr(self, "_view_cube") and self._view_cube is not None and self._view_cube.isVisible():
+            y = min(y, max(margin, self._view_cube.y() - margin))
         if self._preview_object_panel is not None and self._preview_object_panel.isVisible():
             self._preview_object_panel.adjustSize()
             y = max(margin, y - self._preview_object_panel.height())
@@ -463,9 +471,65 @@ class PanelMixin:
         self._bed_size = (float(bed_size[0]), float(bed_size[1]))
         self._bed_height = float(max_height)
         self._sync_bed_grid()
+        self._sync_bed_texture_item()
         for mid in self.models:
             self._update_bed_state(mid)
         self.update()
+
+    def set_bed_visuals(self, texture_path: str | None = None, model_path: str | None = None):
+        texture_value = str(texture_path or "").strip()
+        model_value = str(model_path or "").strip()
+        if texture_value == getattr(self, "_bed_texture_path", "") and model_value == getattr(self, "_bed_model_path", ""):
+            return
+        self._bed_texture_path = texture_value
+        self._bed_model_path = model_value
+        self._sync_bed_texture_item()
+
+    def _clear_bed_texture_item(self):
+        item = getattr(self, "_bed_texture_item", None)
+        if item is None:
+            return
+        try:
+            self.removeItem(item)
+        except Exception:
+            pass
+        self._bed_texture_item = None
+
+    def _sync_bed_texture_item(self):
+        self._clear_bed_texture_item()
+        texture_path = str(getattr(self, "_bed_texture_path", "") or "").strip()
+        if not texture_path:
+            return
+
+        image = QtGui.QImage(texture_path)
+        if image.isNull():
+            return
+        image = image.convertToFormat(QtGui.QImage.Format_RGBA8888)
+        width = int(image.width())
+        height = int(image.height())
+        if width <= 0 or height <= 0:
+            return
+
+        ptr = image.bits()
+        ptr.setsize(image.byteCount())
+        rgba = np.frombuffer(ptr, dtype=np.uint8).reshape((height, width, 4)).copy()
+        rgba = np.transpose(rgba, (1, 0, 2))
+        alpha = rgba[:, :, 3].astype(np.uint16)
+        alpha = np.clip((alpha * 96) // 255, 20, 120).astype(np.uint8)
+        rgba[:, :, 3] = alpha
+        rgba = np.ascontiguousarray(rgba)
+
+        try:
+            image_item = gl.GLImageItem(rgba, smooth=True, glOptions="translucent")
+        except Exception:
+            return
+
+        scale_x = float(self._bed_size[0]) / max(1.0, float(rgba.shape[0]))
+        scale_y = float(self._bed_size[1]) / max(1.0, float(rgba.shape[1]))
+        image_item.scale(scale_x, scale_y, 1.0)
+        image_item.translate(-float(self._bed_size[0]) * 0.5, -float(self._bed_size[1]) * 0.5, -0.05)
+        self._bed_texture_item = image_item
+        self.addItem(image_item)
 
     def _sync_bed_grid(self):
         if getattr(self, "_grid_item", None) is None:
@@ -509,6 +573,7 @@ class PanelMixin:
         if item is None:
             return
         base_color = theme_value("mesh_color", (0.0, 0.9, 0.4, 0.9))
+        edge_color = theme_value("mesh_edge_color", (0.62, 0.64, 0.68, 0.72))
         warn_color = theme_value("mesh_warning", (1.0, 0.25, 0.2, 0.95))
         color = warn_color if model.get("out_of_bounds") else base_color
         alpha_scale = getattr(self, "_model_preview_alpha", 1.0)
@@ -523,6 +588,16 @@ class PanelMixin:
                 values[3] = max(0.0, min(1.0, float(values[3]) * alpha_scale))
             color = tuple(values)
         self._safe_gl_update(item.setColor, color)
+        if isinstance(edge_color, (tuple, list)):
+            values = list(edge_color)
+            if len(values) == 3:
+                values.append(1.0 if max(values) <= 1.0 else 255.0)
+            edge_color = tuple(values[:4])
+        try:
+            item.opts["edgeColor"] = edge_color
+            item.update()
+        except Exception:
+            return
 
     def _model_volume(self, model: dict):
         base = model.get("base_volume")
@@ -592,6 +667,8 @@ class PanelMixin:
         self._view_cube = ViewCubeOverlay(cast(QtWidgets.QWidget, self))
         self._view_cube.viewRequested.connect(self._set_view_from_cube)
         self._view_cube.homeRequested.connect(self.reset_view)
+        self._build_fit_camera_button()
+        self._build_plate_action_strip()
         self._position_view_cube()
         self._sync_view_cube()
 
@@ -600,6 +677,401 @@ class PanelMixin:
             self._view_cube.setVisible(bool(visible))
             if visible:
                 self._position_view_cube()
+        if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
+            overlay_visible = bool(getattr(self, "_plate_overlay_visible", True))
+            self._fit_camera_btn.setVisible(bool(visible) and overlay_visible)
+
+    def set_plate_overlay_visible(self, visible: bool):
+        value = bool(visible)
+        self._plate_overlay_visible = value
+        if hasattr(self, "_plate_actions") and self._plate_actions is not None:
+            self._plate_actions.setVisible(value)
+        if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
+            self._fit_camera_btn.setVisible(value and bool(getattr(self, "_view_cube", None) is not None and self._view_cube.isVisible()))
+        if value:
+            self._position_plate_action_strip()
+            self._position_fit_camera_button()
+
+    def _build_fit_camera_button(self):
+        parent = cast(QtWidgets.QWidget, self)
+        self._fit_camera_btn = QtWidgets.QToolButton(parent)
+        self._fit_camera_btn.setObjectName("FitCameraButton")
+        self._fit_camera_btn.setAutoRaise(True)
+        self._fit_camera_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        self._fit_camera_btn.setToolTip(
+            self._t(
+                "viewer.plate.fit_camera.tooltip",
+                "Fit camera to scene or selected object.",
+            )
+        )
+        self._fit_camera_btn.setIcon(self._build_overlay_icon("fit"))
+        self._fit_camera_btn.setIconSize(QtCore.QSize(18, 18))
+        self._fit_camera_btn.setFixedSize(30, 30)
+        self._fit_camera_btn.clicked.connect(self.fit_camera_to_scene_or_selection)
+
+    def _build_plate_action_strip(self):
+        parent = cast(QtWidgets.QWidget, self)
+        panel = QtWidgets.QFrame(parent)
+        panel.setObjectName("PlateActions")
+        layout = QtWidgets.QVBoxLayout(panel)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(4)
+        self._plate_actions = panel
+
+        remove_btn = self._overlay_tool_button(
+            "remove",
+            self._t(
+                "viewer.plate.remove.tooltip",
+                "Remove current plate (if not last one)",
+            ),
+        )
+        auto_orient_btn = self._overlay_tool_button(
+            "auto_orient",
+            self._t(
+                "viewer.plate.auto_orient.tooltip",
+                "Auto orient objects on current plate",
+            ),
+        )
+        arrange_btn = self._overlay_tool_button(
+            "arrange",
+            self._t(
+                "viewer.plate.arrange.tooltip",
+                "Arrange objects on current plate",
+            ),
+        )
+        lock_btn = self._overlay_tool_button(
+            "lock",
+            self._t(
+                "viewer.plate.lock.tooltip",
+                "Lock current plate",
+            ),
+            checkable=True,
+        )
+        edit_btn = self._overlay_tool_button(
+            "edit",
+            self._t(
+                "viewer.plate.edit_name.tooltip",
+                "Edit current plate name",
+            ),
+        )
+
+        layout.addWidget(remove_btn)
+        layout.addWidget(auto_orient_btn)
+        layout.addWidget(arrange_btn)
+        layout.addWidget(lock_btn)
+        layout.addWidget(edit_btn)
+
+        remove_btn.clicked.connect(self._on_plate_remove_clicked)
+        auto_orient_btn.clicked.connect(self._on_plate_auto_orient_clicked)
+        arrange_btn.clicked.connect(self._on_plate_arrange_clicked)
+        lock_btn.toggled.connect(self._on_plate_lock_toggled)
+        edit_btn.clicked.connect(self._on_plate_edit_name_clicked)
+
+        self._plate_remove_btn = remove_btn
+        self._plate_auto_orient_btn = auto_orient_btn
+        self._plate_arrange_btn = arrange_btn
+        self._plate_lock_btn = lock_btn
+        self._plate_edit_btn = edit_btn
+        if hasattr(self, "is_plate_locked"):
+            self._plate_lock_btn.setChecked(bool(self.is_plate_locked()))
+        self._apply_plate_overlay_theme()
+
+    def _overlay_tool_button(self, icon_kind: str, tooltip: str, checkable: bool = False):
+        btn = QtWidgets.QToolButton(self._plate_actions if hasattr(self, "_plate_actions") and self._plate_actions is not None else cast(QtWidgets.QWidget, self))
+        btn.setObjectName("PlateActionButton")
+        btn.setAutoRaise(True)
+        btn.setCheckable(bool(checkable))
+        btn.setCursor(QtCore.Qt.PointingHandCursor)
+        btn.setToolTip(str(tooltip or ""))
+        btn.setIcon(self._build_overlay_icon(icon_kind))
+        btn.setIconSize(QtCore.QSize(16, 16))
+        btn.setFixedSize(28, 28)
+        return btn
+
+    def _build_overlay_icon(self, kind: str) -> QtGui.QIcon:
+        size = 18
+        pm = QtGui.QPixmap(size, size)
+        pm.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(pm)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
+
+        stroke = QtGui.QPen(theme_qcolor("popup_muted_text"), 1.8)
+        stroke.setCapStyle(QtCore.Qt.RoundCap)
+        stroke.setJoinStyle(QtCore.Qt.RoundJoin)
+        painter.setPen(stroke)
+        painter.setBrush(QtCore.Qt.NoBrush)
+
+        if kind == "remove":
+            painter.drawLine(4, 4, size - 4, size - 4)
+            painter.drawLine(size - 4, 4, 4, size - 4)
+        elif kind == "auto_orient":
+            rect = QtCore.QRectF(3.5, 3.5, size - 8, size - 8)
+            painter.drawArc(rect, 30 * 16, 300 * 16)
+            arrow = QtGui.QPolygonF(
+                [
+                    QtCore.QPointF(size - 5.0, 7.0),
+                    QtCore.QPointF(size - 2.0, 7.5),
+                    QtCore.QPointF(size - 4.5, 10.0),
+                ]
+            )
+            painter.setBrush(stroke.color())
+            painter.drawPolygon(arrow)
+        elif kind == "arrange":
+            painter.drawRoundedRect(QtCore.QRectF(3.5, 3.5, size - 7, size - 7), 1.5, 1.5)
+            painter.drawLine(
+                QtCore.QLineF(
+                    QtCore.QPointF(3.5, 8.0),
+                    QtCore.QPointF(size - 3.5, 8.0),
+                )
+            )
+            painter.drawLine(
+                QtCore.QLineF(
+                    QtCore.QPointF(3.5, 12.0),
+                    QtCore.QPointF(size - 3.5, 12.0),
+                )
+            )
+        elif kind == "lock":
+            painter.drawRoundedRect(QtCore.QRectF(4.0, 8.0, size - 8, size - 6), 1.5, 1.5)
+            painter.drawArc(QtCore.QRectF(5.0, 2.0, size - 10, 9.0), 0, 180 * 16)
+        elif kind == "edit":
+            painter.drawLine(
+                QtCore.QLineF(
+                    QtCore.QPointF(4.0, size - 4.0),
+                    QtCore.QPointF(size - 5.0, 5.0),
+                )
+            )
+            painter.drawLine(
+                QtCore.QLineF(
+                    QtCore.QPointF(5.5, size - 5.5),
+                    QtCore.QPointF(size - 3.5, size - 3.5),
+                )
+            )
+            painter.drawLine(
+                QtCore.QLineF(
+                    QtCore.QPointF(3.5, size - 3.5),
+                    QtCore.QPointF(7.0, size - 2.5),
+                )
+            )
+        elif kind == "fit":
+            painter.drawRoundedRect(QtCore.QRectF(2.5, 2.5, size - 5, size - 5), 4.0, 4.0)
+            painter.drawLine(
+                QtCore.QLineF(
+                    QtCore.QPointF(5.0, size * 0.5),
+                    QtCore.QPointF(size - 5.0, size * 0.5),
+                )
+            )
+            painter.drawLine(
+                QtCore.QLineF(
+                    QtCore.QPointF(size * 0.5, 5.0),
+                    QtCore.QPointF(size * 0.5, size - 5.0),
+                )
+            )
+        else:
+            painter.drawEllipse(QtCore.QRectF(3.5, 3.5, size - 7, size - 7))
+
+        painter.end()
+        return QtGui.QIcon(pm)
+
+    def _apply_plate_overlay_theme(self):
+        if not hasattr(self, "_plate_actions") or self._plate_actions is None:
+            return
+        border = theme_qcolor("popup_border")
+        bg = theme_qcolor("popup_bg")
+        hover = theme_qcolor("menu_hover_bg")
+        active = theme_qcolor("topbar_accent")
+
+        self._plate_actions.setStyleSheet(
+            "QFrame#PlateActions {"
+            f"background-color: {self._rgba_css(bg, 84)};"
+            f"border: 1px solid {self._rgba_css(border, 150)};"
+            "border-radius: 6px;"
+            "}"
+            "QToolButton#PlateActionButton {"
+            "border: 1px solid transparent;"
+            "border-radius: 4px;"
+            "padding: 2px;"
+            "}"
+            "QToolButton#PlateActionButton:hover {"
+            f"background-color: {self._rgba_css(hover, 190)};"
+            f"border-color: {self._rgba_css(border, 200)};"
+            "}"
+            "QToolButton#PlateActionButton:checked {"
+            f"background-color: {self._rgba_css(active, 220)};"
+            f"border-color: {self._rgba_css(active, 255)};"
+            "}"
+        )
+        if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
+            self._fit_camera_btn.setStyleSheet(
+                "QToolButton#FitCameraButton {"
+                "border: 1px solid transparent;"
+                "border-radius: 7px;"
+                "padding: 2px;"
+                "}"
+                "QToolButton#FitCameraButton:hover {"
+                f"background-color: {self._rgba_css(hover, 190)};"
+                f"border-color: {self._rgba_css(active, 220)};"
+                "}"
+            )
+
+        icon_map = {
+            "_plate_remove_btn": "remove",
+            "_plate_auto_orient_btn": "auto_orient",
+            "_plate_arrange_btn": "arrange",
+            "_plate_lock_btn": "lock",
+            "_plate_edit_btn": "edit",
+        }
+        for attr_name, kind in icon_map.items():
+            btn = getattr(self, attr_name, None)
+            if btn is None:
+                continue
+            btn.setIcon(self._build_overlay_icon(kind))
+        if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
+            self._fit_camera_btn.setIcon(self._build_overlay_icon("fit"))
+
+    def _position_fit_camera_button(self):
+        if not hasattr(self, "_fit_camera_btn") or self._fit_camera_btn is None:
+            return
+        if not hasattr(self, "_view_cube") or self._view_cube is None:
+            return
+        margin = 10
+        x = self._view_cube.geometry().right() + margin
+        y = self._view_cube.geometry().bottom() - self._fit_camera_btn.height()
+        self._fit_camera_btn.move(max(0, x), max(0, y))
+        self._fit_camera_btn.raise_()
+
+    def _plate_overlay_anchor(self) -> Tuple[float, float, float, float] | None:
+        if not hasattr(self, "_project_world_to_screen") or not hasattr(self, "_bed_bounds"):
+            return None
+        try:
+            min_x, max_x, min_y, max_y = self._bed_bounds()
+        except Exception:
+            return None
+
+        corners = np.array(
+            [
+                [min_x, min_y, 0.0],
+                [max_x, min_y, 0.0],
+                [max_x, max_y, 0.0],
+                [min_x, max_y, 0.0],
+            ],
+            dtype=float,
+        )
+        projected: List[Tuple[float, float]] = []
+        for corner in corners:
+            point = self._project_world_to_screen(corner)
+            if point is None:
+                return None
+            x, y, _z = point
+            if not np.isfinite(x) or not np.isfinite(y):
+                return None
+            projected.append((float(x), float(y)))
+
+        edges = ((0, 1), (1, 2), (2, 3), (3, 0))
+        best_edge = None
+        best_score = -float("inf")
+        for a, b in edges:
+            x1, y1 = projected[a]
+            x2, y2 = projected[b]
+            mid_x = (x1 + x2) * 0.5
+            if mid_x > best_score:
+                best_score = mid_x
+                best_edge = (x1, y1, x2, y2)
+
+        if best_edge is None:
+            return None
+
+        x1, y1, x2, y2 = best_edge
+        anchor_x = (x1 + x2) * 0.5
+        anchor_y = (y1 + y2) * 0.5
+
+        edge_x = x2 - x1
+        edge_y = y2 - y1
+        normal_x = edge_y
+        normal_y = -edge_x
+        normal_len = float(np.hypot(normal_x, normal_y))
+        if normal_len <= 1e-6:
+            normal_x, normal_y = 1.0, 0.0
+        else:
+            normal_x /= normal_len
+            normal_y /= normal_len
+
+        # Keep strip on the outward right side of the plate in screen space.
+        if normal_x < 0.0:
+            normal_x = -normal_x
+            normal_y = -normal_y
+
+        return float(anchor_x), float(anchor_y), float(normal_x), float(normal_y)
+
+    def _position_plate_action_strip(self):
+        if not hasattr(self, "_plate_actions") or self._plate_actions is None:
+            return
+        self._plate_actions.adjustSize()
+        anchor = self._plate_overlay_anchor()
+        if anchor is None:
+            margin = 18
+            x = max(0, self.width() - self._plate_actions.width() - margin)
+            y = max(0, (self.height() - self._plate_actions.height()) // 2)
+        else:
+            anchor_x, anchor_y, normal_x, normal_y = anchor
+            gap = 8.0
+            x = int(round(anchor_x + normal_x * gap))
+            y = int(round(anchor_y - (self._plate_actions.height() * 0.5) + normal_y * gap))
+            max_x = max(0, self.width() - self._plate_actions.width())
+            max_y = max(0, self.height() - self._plate_actions.height())
+            x = max(0, min(max_x, x))
+            y = max(0, min(max_y, y))
+        self._plate_actions.move(x, y)
+        self._plate_actions.raise_()
+
+    def _on_plate_remove_clicked(self):
+        if hasattr(self, "plateRemoveRequested"):
+            self.plateRemoveRequested.emit()
+
+    def _on_plate_auto_orient_clicked(self):
+        if hasattr(self, "plateAutoOrientRequested"):
+            self.plateAutoOrientRequested.emit()
+
+    def _on_plate_arrange_clicked(self):
+        if hasattr(self, "plateArrangeRequested"):
+            self.plateArrangeRequested.emit()
+
+    def _on_plate_lock_toggled(self, checked: bool):
+        if hasattr(self, "set_plate_locked"):
+            self.set_plate_locked(bool(checked))
+        if hasattr(self, "plateLockChanged"):
+            self.plateLockChanged.emit(bool(checked))
+
+    def _on_plate_edit_name_clicked(self):
+        current_name = "01"
+        if hasattr(self, "get_current_plate_name"):
+            current_name = str(self.get_current_plate_name() or "01")
+
+        dlg = QtWidgets.QDialog(cast(QtWidgets.QWidget, self))
+        dlg.setWindowTitle(self._t("viewer.plate.rename.title", "Edit Plate Name"))
+        dlg.setModal(True)
+        layout = QtWidgets.QVBoxLayout(dlg)
+        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setSpacing(12)
+
+        row = QtWidgets.QHBoxLayout()
+        label = QtWidgets.QLabel(self._t("viewer.plate.rename.label", "Plate name"), dlg)
+        edit = QtWidgets.QLineEdit(dlg)
+        edit.setText(current_name)
+        edit.setClearButtonEnabled(True)
+        row.addWidget(label)
+        row.addWidget(edit, 1)
+        layout.addLayout(row)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, parent=dlg)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
+            return
+        value = str(edit.text() or "").strip()
+        if hasattr(self, "set_current_plate_name"):
+            self.set_current_plate_name(value)
 
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Any:

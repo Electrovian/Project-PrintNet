@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const HUBS = [
   { x: 20, y: 38, spreadX: 10, spreadY: 8, weight: 36 }, // North America
@@ -93,13 +93,16 @@ function buildGraph() {
 }
 
 function normalizeUserId({ email, org, username }) {
-  const trimmedEmail = String(email || "").trim();
+  const trimmedEmail = String(email || "").trim().toLowerCase();
   if (trimmedEmail) {
-    return trimmedEmail.toLowerCase();
+    return trimmedEmail.replace(/\s+/g, "");
   }
-  const trimmedUser = String(username || "").trim();
+  const trimmedUser = String(username || "").trim().toLowerCase();
   if (trimmedUser) {
-    return trimmedUser.toLowerCase();
+    const cleanedUser = trimmedUser.replace(/\s+/g, ".").replace(/[^a-z0-9._@+\-]/g, "");
+    if (cleanedUser) {
+      return cleanedUser;
+    }
   }
   const trimmedOrg = String(org || "").trim().replace(/\s+/g, "-").toLowerCase();
   return trimmedOrg ? `user@${trimmedOrg}.local` : "web-user";
@@ -183,34 +186,141 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
     email: "",
     org: "",
     password: "",
-    confirmPassword: ""
+    confirmPassword: "",
+    verificationCode: ""
   });
+  const [pendingVerification, setPendingVerification] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const syncModeFromPath = () => {
+      const pathname = String(window.location?.pathname || "/").toLowerCase();
+      if (pathname === "/register") {
+        setMode("signup");
+        return;
+      }
+      if (pathname === "/verify") {
+        setMode("verify");
+        return;
+      }
+      if (pathname === "/sso") {
+        setMode("sso");
+        return;
+      }
+      setMode("signin");
+    };
+    syncModeFromPath();
+    window.addEventListener("popstate", syncModeFromPath);
+    return () => {
+      window.removeEventListener("popstate", syncModeFromPath);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    let targetPath = "/signin";
+    if (mode === "signup") {
+      targetPath = "/register";
+    } else if (mode === "verify") {
+      targetPath = "/verify";
+    } else if (mode === "sso") {
+      targetPath = "/sso";
+    }
+    const currentPath = String(window.location?.pathname || "/");
+    if (currentPath !== targetPath) {
+      window.history.replaceState({}, "", targetPath);
+    }
+  }, [mode]);
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function switchMode(nextMode) {
+    setMode(nextMode);
+    if (nextMode !== "verify") {
+      setPendingVerification(null);
+      setField("verificationCode", "");
+    }
+  }
+
   const isSignUp = mode === "signup";
-  const submitLabel = mode === "signup" ? "Create Account" : "Sign In";
+  const isVerify = mode === "verify";
+  const submitLabel = isSignUp ? "Create Account" : isVerify ? "Verify Code" : "Sign In";
+
+  useEffect(() => {
+    setMessage("");
+  }, [mode]);
 
   async function submitAuth(event) {
     event.preventDefault();
     if (busy) {
       return;
     }
-    if (isSignUp && String(form.password || "") !== String(form.confirmPassword || "")) {
-      setMessage("Passwords do not match.");
-      return;
-    }
     setBusy(true);
     setMessage("");
     try {
+      if (isVerify) {
+        const challengeId = String(pendingVerification?.challengeId || "").trim();
+        const verificationCode = String(form.verificationCode || "").trim();
+        if (!challengeId) {
+          throw new Error("Verification session expired. Sign in again.");
+        }
+        if (!verificationCode) {
+          throw new Error("Verification code is required.");
+        }
+        await onAuthenticate({
+          mode: "signin",
+          step: "verify",
+          userId: String(pendingVerification?.userId || "").trim(),
+          challengeId,
+          verificationCode
+        });
+        setPendingVerification(null);
+        return;
+      }
+      if (isSignUp && String(form.password || "") !== String(form.confirmPassword || "")) {
+        setMessage("Passwords do not match.");
+        return;
+      }
       const userId = normalizeUserId(form);
-      await onAuthenticate({
-        userId
+      const result = await onAuthenticate({
+        mode: isSignUp ? "signup" : "signin",
+        step: isSignUp ? "signup" : "password",
+        userId,
+        password: String(form.password || "")
       });
+      if (!isSignUp && result?.requiresVerification) {
+        const challengeId = String(result?.challengeId || "").trim();
+        if (!challengeId) {
+          throw new Error("Verification challenge is missing.");
+        }
+        setPendingVerification({
+          challengeId,
+          userId,
+          delivery: result?.delivery || null,
+          debugCode: String(result?.debugCode || "")
+        });
+        switchMode("verify");
+        const destination = String(result?.delivery?.destination || "").trim();
+        const debugCode = String(result?.debugCode || "").trim();
+        const pieces = [];
+        pieces.push(
+          destination
+            ? `Verification code sent to ${destination}.`
+            : "Verification code sent."
+        );
+        if (debugCode) {
+          pieces.push(`Dev code: ${debugCode}`);
+        }
+        setMessage(pieces.join(" "));
+      }
     } catch (err) {
       setMessage(String(err?.message || err || "Unable to authenticate."));
     } finally {
@@ -219,22 +329,8 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
   }
 
   async function signInWith(provider) {
-    if (busy) {
-      return;
-    }
-    setBusy(true);
-    setMessage("");
-    try {
-      const suffix = provider.toLowerCase();
-      const userId = normalizeUserId(form);
-      await onAuthenticate({
-        userId: `${userId.split("@")[0]}@${suffix}.sso`
-      });
-    } catch (err) {
-      setMessage(String(err?.message || err || "Unable to authenticate."));
-    } finally {
-      setBusy(false);
-    }
+    void provider;
+    setMessage("SSO is disabled until a provider is configured. Use Sign In or Sign Up.");
   }
 
   return (
@@ -249,23 +345,23 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
 
         <div className="auth-tabs" role="tablist" aria-label="Authentication Modes">
           <button
-            className={mode === "signin" ? "auth-tab is-active" : "auth-tab"}
+            className={mode === "signin" || mode === "verify" ? "auth-tab is-active" : "auth-tab"}
             type="button"
-            onClick={() => setMode("signin")}
+            onClick={() => switchMode("signin")}
           >
             Sign In
           </button>
           <button
             className={mode === "signup" ? "auth-tab is-active" : "auth-tab"}
             type="button"
-            onClick={() => setMode("signup")}
+            onClick={() => switchMode("signup")}
           >
             Sign Up
           </button>
           <button
             className={mode === "sso" ? "auth-tab is-active" : "auth-tab"}
             type="button"
-            onClick={() => setMode("sso")}
+            onClick={() => switchMode("sso")}
           >
             SSO
           </button>
@@ -285,17 +381,66 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
           </div>
         ) : (
           <form className="auth-form" onSubmit={submitAuth}>
-            <label className="auth-label">
-              <span>{isSignUp ? "Display Name" : "Username or Email"}</span>
-              <input
-                type="text"
-                value={isSignUp ? form.username : form.email}
-                onChange={(event) => setField(isSignUp ? "username" : "email", event.target.value)}
-                placeholder={isSignUp ? "Alex Rivera" : "you@school.edu"}
-                autoComplete={isSignUp ? "name" : "username"}
-                required
-              />
-            </label>
+            {isVerify ? (
+              <>
+                <label className="auth-label">
+                  <span>Verification Destination</span>
+                  <input
+                    type="text"
+                    value={String(pendingVerification?.delivery?.destination || "")}
+                    readOnly
+                  />
+                </label>
+                <label className="auth-label">
+                  <span>Verification Code</span>
+                  <input
+                    type="text"
+                    value={form.verificationCode}
+                    onChange={(event) => setField("verificationCode", event.target.value)}
+                    autoComplete="one-time-code"
+                    placeholder="6-digit code"
+                    required
+                  />
+                </label>
+              </>
+            ) : isSignUp ? (
+              <label className="auth-label">
+                <span>Display Name (Optional)</span>
+                <input
+                  type="text"
+                  value={form.username}
+                  onChange={(event) => setField("username", event.target.value)}
+                  placeholder="Alex Rivera"
+                  autoComplete="name"
+                />
+              </label>
+            ) : (
+              <label className="auth-label">
+                <span>Username or Email</span>
+                <input
+                  type="text"
+                  value={form.email}
+                  onChange={(event) => setField("email", event.target.value)}
+                  placeholder="you@school.edu"
+                  autoComplete="username"
+                  required
+                />
+              </label>
+            )}
+
+            {isSignUp ? (
+              <label className="auth-label">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setField("email", event.target.value)}
+                  placeholder="you@school.edu"
+                  autoComplete="email"
+                  required
+                />
+              </label>
+            ) : null}
 
             {isSignUp ? (
               <label className="auth-label">
@@ -340,7 +485,7 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
         )}
 
         <div className="auth-footnote">
-          <span>{message || statusLine || "Secure session ready."}</span>
+          <span>{message || (busy ? statusLine : "Secure session ready.")}</span>
           <a href="#forgot-password" onClick={(event) => event.preventDefault()}>
             Forgot password?
           </a>

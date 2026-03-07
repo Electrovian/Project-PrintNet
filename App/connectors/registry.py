@@ -4,6 +4,8 @@ from dataclasses import asdict
 from typing import Any, Mapping
 
 from .base import ConnectorCapabilities, PrinterConnector
+from .bambu_lan import BambuLanConnector
+from .creality import CrealityConnector
 from .errors import InvalidPrinterConfigError, UnsupportedConnectorError
 from .legacy_octoprint import LegacyOctoPrintConnector
 from .local_file import LocalFileConnector
@@ -62,6 +64,13 @@ class ConnectorRegistry:
         moonraker_url = str(printer.get("moonraker_url", "") or printer.get("klipper_url", "")).strip()
         if moonraker_url:
             return "moonraker"
+        bambu_url = str(printer.get("bambu_url", "") or printer.get("bambu_host", "")).strip()
+        if bambu_url:
+            return "bambu_lan"
+        creality_url = str(printer.get("creality_url", "") or printer.get("creality_host", "")).strip()
+        creality_protocol = str(printer.get("creality_protocol", "")).strip()
+        if creality_url or creality_protocol:
+            return "creality"
         octo_url = str(printer.get("octoprint_url", "")).strip()
         if octo_url or "octoprint_api_key" in printer:
             return "octoprint"
@@ -81,4 +90,6 @@ def build_default_connector_registry() -> ConnectorRegistry:
     registry.register(MoonrakerConnector())
     registry.register(OctoPrintConnector())
     registry.register(LegacyOctoPrintConnector())
+    registry.register(BambuLanConnector())
+    registry.register(CrealityConnector())
     return registry

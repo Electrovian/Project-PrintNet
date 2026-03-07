@@ -13,10 +13,9 @@ class WebBackendActivityError(RuntimeError):
 @dataclass
 class WebBackendActivityClient:
     base_url: str
-    actor_user: str = "desktop-operator"
-    actor_role: str = "operator"
+    service_token: str = ""
     timeout_seconds: float = 4.0
-    _session_token: str = field(default="", init=False, repr=False)
+    _session: requests.Session = field(default_factory=requests.Session, init=False, repr=False)
 
     def __post_init__(self) -> None:
         base = str(self.base_url or "").strip().rstrip("/")
@@ -24,11 +23,10 @@ class WebBackendActivityClient:
             raise WebBackendActivityError("ACTIVITY_BACKEND_URL_REQUIRED: base_url is required.")
         self.base_url = base
 
-        user = str(self.actor_user or "").strip()
-        self.actor_user = user or "desktop-operator"
-
-        role = str(self.actor_role or "").strip().lower()
-        self.actor_role = role or "operator"
+        token = str(self.service_token or "").strip()
+        if not token:
+            raise WebBackendActivityError("ACTIVITY_SERVICE_TOKEN_REQUIRED: service_token is required.")
+        self.service_token = token
 
         try:
             timeout = float(self.timeout_seconds)
@@ -37,49 +35,32 @@ class WebBackendActivityClient:
         self.timeout_seconds = min(30.0, max(1.0, timeout))
 
     def fetch_queue_snapshot(self) -> dict[str, Any]:
-        token = self._ensure_session_token()
-        try:
-            payload = self._request(
-                "GET",
-                "/queue/snapshot",
-                params={"auth_token": token},
-            )
-        except WebBackendActivityError as exc:
-            message = str(exc)
-            if "AUTH_TOKEN_INVALID" in message or "AUTH_TOKEN_REQUIRED" in message:
-                token = self._ensure_session_token(force_refresh=True)
-                payload = self._request(
-                    "GET",
-                    "/queue/snapshot",
-                    params={"auth_token": token},
-                )
-            else:
-                raise
-
+        payload = self._request("GET", "/queue/snapshot")
         snapshot = payload.get("snapshot")
         if not isinstance(snapshot, Mapping):
             raise WebBackendActivityError("ACTIVITY_QUEUE_SNAPSHOT_INVALID: missing snapshot payload.")
         return dict(snapshot)
 
-    def _ensure_session_token(self, force_refresh: bool = False) -> str:
-        if self._session_token and not force_refresh:
-            return self._session_token
+    def fetch_compliance_region(self) -> dict[str, Any]:
+        payload = self._request("GET", "/compliance/region")
+        compliance = payload.get("compliance")
+        if not isinstance(compliance, Mapping):
+            raise WebBackendActivityError("ACTIVITY_COMPLIANCE_INVALID: missing compliance payload.")
+        return dict(compliance)
+
+    def fetch_activity_feed(self, *, cursor: int = 0, limit: int = 200) -> dict[str, Any]:
         payload = self._request(
-            "POST",
-            "/auth/session",
-            json_payload={
-                "user_id": self.actor_user,
-                "role": self.actor_role,
+            "GET",
+            "/activity/feed",
+            params={
+                "cursor": str(max(0, int(cursor))),
+                "limit": str(max(1, min(1000, int(limit)))),
             },
         )
-        session = payload.get("session")
-        if not isinstance(session, Mapping):
-            raise WebBackendActivityError("ACTIVITY_SESSION_INVALID: missing session payload.")
-        token = str(session.get("token", "")).strip()
-        if not token:
-            raise WebBackendActivityError("ACTIVITY_SESSION_TOKEN_INVALID: missing session token.")
-        self._session_token = token
-        return token
+        feed = payload.get("feed")
+        if not isinstance(feed, Mapping):
+            raise WebBackendActivityError("ACTIVITY_FEED_INVALID: missing feed payload.")
+        return dict(feed)
 
     def _request(
         self,
@@ -90,12 +71,14 @@ class WebBackendActivityClient:
         json_payload: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         url = self._build_url(path)
+        headers = {"x-activity-service-token": self.service_token}
         try:
-            response = requests.request(
+            response = self._session.request(
                 method=method,
                 url=url,
                 params=dict(params or {}),
                 json=dict(json_payload or {}),
+                headers=headers,
                 timeout=self.timeout_seconds,
             )
         except requests.RequestException as exc:

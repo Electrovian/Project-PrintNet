@@ -101,6 +101,12 @@ class ActivityLogger:
         )
         self._last_mouse_move_ts = 0.0
         self._last_mouse_move_pos = None
+        self._stdout_enabled = self._read_bool_env("EON_ACTIVITY_LOG_STDOUT", False)
+        self._stdout_pretty = self._read_bool_env("EON_ACTIVITY_LOG_STDOUT_PRETTY", False)
+        self._stdout_events = self._read_event_filter_env(
+            "EON_ACTIVITY_LOG_STDOUT_EVENTS",
+            default="action,mouse_press,mouse_release,mouse_double_click,mouse_wheel,key_press,key_release",
+        )
 
     def install(self, app):
         if app is None or self._event_filter is not None:
@@ -233,8 +239,24 @@ class ActivityLogger:
 
     def _write(self, record):
         self._logger.info(json.dumps(record, ensure_ascii=True))
+        self._emit_stdout(record)
         self.last_record = record
         self.last_record_ts = record.get("ts")
+
+    def _emit_stdout(self, record):
+        if not self._stdout_enabled:
+            return
+        event_name = str(record.get("event", "")).strip().lower()
+        if self._stdout_events is not None and event_name not in self._stdout_events:
+            return
+        try:
+            if self._stdout_pretty:
+                payload = json.dumps(record, ensure_ascii=True, sort_keys=True)
+            else:
+                payload = json.dumps(record, ensure_ascii=True)
+            print(payload, flush=True)
+        except Exception:
+            return
 
     def _widget_context(self, obj):
         if not isinstance(obj, QtCore.QObject):
@@ -288,6 +310,19 @@ class ActivityLogger:
             value_ms = int(default_ms)
         value_ms = max(16, min(1000, value_ms))
         return float(value_ms) / 1000.0
+
+    def _read_event_filter_env(self, key, default):
+        raw = str(os.environ.get(key, default)).strip().lower()
+        if not raw:
+            raw = str(default).strip().lower()
+        if raw in ("all", "*"):
+            return None
+        values = set()
+        for item in raw.split(","):
+            text = item.strip().lower()
+            if text:
+                values.add(text)
+        return values if values else None
 
     def _should_log_mouse_move(self, event):
         if not self._log_mouse_move:

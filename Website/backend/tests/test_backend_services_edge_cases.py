@@ -130,7 +130,7 @@ class BackendServicesEdgeCasesTests(unittest.TestCase):
 
     def test_status_and_observability_snapshots(self):
         state = BackendState(queue_name="lab-q")
-        state.create_session(user_id="operator-1", role="operator")
+        state.create_session(user_id="operator-1", role="operator", trusted_role=True)
         state.append_security_audit(
             actor="operator-1",
             action="test",

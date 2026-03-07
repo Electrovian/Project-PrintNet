@@ -1,4 +1,7 @@
 from .base import ConnectorCapabilities, PrinterConnector
+from .bambu_lan import BambuLanConnector
+from .bluetooth_pairing import BluetoothPairingManager
+from .creality import CrealityConnector
 from .errors import (
     ConnectorError,
     ConnectorOperationError,
@@ -17,6 +20,9 @@ from .registry import ConnectorRegistry, build_default_connector_registry
 __all__ = [
     "ConnectorCapabilities",
     "PrinterConnector",
+    "BambuLanConnector",
+    "BluetoothPairingManager",
+    "CrealityConnector",
     "ConnectorError",
     "ConnectorOperationError",
     "InvalidPrinterConfigError",

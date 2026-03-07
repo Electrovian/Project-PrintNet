@@ -7,7 +7,7 @@ project_name = "EON-OpenSlicer"
 bundle = "edu.uc.eon"
 version = "0.1.0"
 url = "https://github.com/Electrovian/Project-EON-OpenSlicer"
-license = "Other"
+license = "Apache-2.0"
 author = "EON-OpenSlicer Team"
 author_email = "openslicer@example.edu"
 

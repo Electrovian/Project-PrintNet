@@ -34,6 +34,11 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
     modelRotated = QtCore.pyqtSignal(int, float, float, float)
     selectionChanged = QtCore.pyqtSignal(list)
     simplifyRequested = QtCore.pyqtSignal(int)
+    plateRemoveRequested = QtCore.pyqtSignal()
+    plateAutoOrientRequested = QtCore.pyqtSignal()
+    plateArrangeRequested = QtCore.pyqtSignal()
+    plateLockChanged = QtCore.pyqtSignal(bool)
+    plateNameChanged = QtCore.pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -60,6 +65,10 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._labels_enabled = False
         self._selection_info = None
         self._interaction_enabled = True
+        self._interaction_requested = True
+        self._plate_locked = False
+        self._current_plate_name = "01"
+        self._plate_overlay_visible = True
         self._print_stats_panel = None
         self._print_stats_data = None
         self._print_stats_visible = True
@@ -115,6 +124,9 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         printer_defaults = DEFAULTS.get("printer", {})
         self._bed_size = tuple(printer_defaults.get("bed_size", (200, 200)))
         self._bed_height = float(printer_defaults.get("max_height", 200))
+        self._bed_texture_path = ""
+        self._bed_model_path = ""
+        self._bed_texture_item = None
         self._sync_bed_grid()
 
         self._build_gizmo()
@@ -153,6 +165,8 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._preview_cached_mode = None
         self._preview_color_cache = None
         self._preview_color_cache_static = None
+        self._preview_color_cache_dynamic = None
+        self._preview_empty_mesh = None
         self._preview_static_key = None
         self._preview_static_segments = None
         self._preview_static_widths = None
@@ -168,6 +182,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._models_visible = True
         self._model_preview_alpha = 1.0
         self._wireframe_default = False
+        self._solid_mesh_edges = True
         self._overhang_visible = False
         self._overhang_angle = 45.0
         self._platform_visible = True
@@ -245,13 +260,76 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._update_gizmo()
 
     def set_interaction_enabled(self, enabled: bool):
-        self._interaction_enabled = bool(enabled)
+        self._interaction_requested = bool(enabled)
+        self._interaction_enabled = bool(enabled) and not bool(self._plate_locked)
         if not self._interaction_enabled:
             self._dragging = False
             self._gizmo_drag_axis = None
             self._gizmo_rotate_axis = None
             self._hide_rotate_hud()
         self._update_gizmo()
+
+    def is_plate_locked(self) -> bool:
+        return bool(self._plate_locked)
+
+    def set_plate_locked(self, locked: bool):
+        self._plate_locked = bool(locked)
+        if hasattr(self, "_plate_lock_btn") and self._plate_lock_btn is not None:
+            prev = self._plate_lock_btn.blockSignals(True)
+            self._plate_lock_btn.setChecked(self._plate_locked)
+            self._plate_lock_btn.blockSignals(prev)
+        self.set_interaction_enabled(bool(self._interaction_requested))
+
+    def get_current_plate_name(self) -> str:
+        text = str(self._current_plate_name or "").strip()
+        return text or "01"
+
+    def set_current_plate_name(self, value: str):
+        text = str(value or "").strip()
+        if not text:
+            text = "01"
+        text = text[:64]
+        if text == self._current_plate_name:
+            return
+        self._current_plate_name = text
+        self.plateNameChanged.emit(text)
+
+    def fit_camera_to_scene_or_selection(self):
+        target_ids = self.get_selected_model_ids()
+        if not target_ids:
+            target_ids = self.get_model_ids()
+        if not target_ids:
+            self.reset_view()
+            return
+
+        bounds_list = []
+        for mid in target_ids:
+            model = self.models.get(mid)
+            bounds = model.get("bounds") if model is not None else None
+            if bounds is None:
+                bounds = self.get_model_bounds(mid)
+            if bounds is not None:
+                bounds_list.append(bounds)
+
+        if not bounds_list:
+            self.reset_view()
+            return
+
+        mins = np.array([b[0] for b in bounds_list], dtype=float)
+        maxs = np.array([b[1] for b in bounds_list], dtype=float)
+        mn = np.min(mins, axis=0)
+        mx = np.max(maxs, axis=0)
+        center = (mn + mx) / 2.0
+        span_vec = np.maximum(mx - mn, np.array([1.0, 1.0, 1.0], dtype=float))
+        span = float(np.linalg.norm(span_vec))
+        bed_span = max(float(self._bed_size[0]), float(self._bed_size[1]), 1.0)
+        distance = float(max(120.0, min(span * 2.4, bed_span * 4.0)))
+
+        self.opts["center"] = pg.Vector(float(center[0]), float(center[1]), float(center[2])) # pyright: ignore[reportArgumentType]
+        self.opts["distance"] = distance # pyright: ignore[reportArgumentType]
+        self._coerce_distance()
+        self._sync_view_cube()
+        self.update()
 
     def apply_theme(self):
         self.setBackgroundColor(theme_value("view_bg", (20, 22, 26)))
@@ -287,6 +365,8 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
 
         if hasattr(self, "_view_cube") and self._view_cube is not None:
             self._view_cube.apply_theme()
+        if hasattr(self, "_apply_plate_overlay_theme"):
+            self._apply_plate_overlay_theme()
         self._update_rotate_hud_style()
         self._update_selection_info_style()
         self._update_print_stats_style()
@@ -1226,11 +1306,16 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
     def _position_view_cube(self):
         if not hasattr(self, "_view_cube") or self._view_cube is None:
             return
-        margin = 12
+        margin = 16
         size = self._view_cube.sizeHint()
-        x = max(0, self.width() - size.width() - margin)
-        y = margin
+        x = margin
+        y = max(0, self.height() - size.height() - margin)
         self._view_cube.setGeometry(x, y, size.width(), size.height())
+        self._view_cube.raise_()
+        if hasattr(self, "_position_fit_camera_button"):
+            self._position_fit_camera_button()
+        if hasattr(self, "_position_plate_action_strip"):
+            self._position_plate_action_strip()
 
     def _sync_view_cube(self):
         if not hasattr(self, "_view_cube") or self._view_cube is None:
@@ -1238,6 +1323,10 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         az = self._coerce_float(self.opts.get("azimuth"), float(self._default_view["azimuth"]))
         el = self._coerce_float(self.opts.get("elevation"), float(self._default_view["elevation"]))
         self._view_cube.set_camera(az, el)
+        if hasattr(self, "_position_fit_camera_button"):
+            self._position_fit_camera_button()
+        if hasattr(self, "_position_plate_action_strip"):
+            self._position_plate_action_strip()
 
     def _set_view_from_cube(self, face: str):
         invert_x = getattr(self._view_cube, "invert_x", False)
@@ -1316,7 +1405,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
 
     def resizeEvent(self, e: QtGui.QResizeEvent):
         super().resizeEvent(e)
-        self._position_bottom_left_panels()
         self._position_view_cube()
+        self._position_bottom_left_panels()
 
     

@@ -1,4 +1,6 @@
+from .activity import build_activity_router
 from .auth import build_auth_router
+from .compliance import build_compliance_router
 from .health import build_health_router
 from .jobs import build_jobs_router
 from .ops import build_ops_router
@@ -8,6 +10,8 @@ from .queue import build_queue_router
 
 __all__ = [
     "build_auth_router",
+    "build_activity_router",
+    "build_compliance_router",
     "build_health_router",
     "build_jobs_router",
     "build_ops_router",

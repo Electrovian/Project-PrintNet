@@ -27,9 +27,16 @@ class ObservabilitySecurityReleaseReadinessTests(unittest.TestCase):
         )
         app = create_app(settings=settings)
         self.client = create_test_client(app)
-        self.student_token = self._create_session("student-1", "student")
+        self.student_token = self._register_and_login("student-1", "password-123")
         self.operator_token = self._create_session("operator-1", "operator")
         self.admin_token = self._create_session("admin-1", "admin")
+
+    def _register_and_login(self, user_id: str, password: str) -> str:
+        register = self.client.post("/api/v1/auth/register", json={"user_id": user_id, "password": password})
+        self.assertEqual(register.status_code, 200)
+        login = self.client.post("/api/v1/auth/login", json={"user_id": user_id, "password": password})
+        self.assertEqual(login.status_code, 200)
+        return str(login.json()["session"]["token"])
 
     def _create_session(self, user_id: str, role: str) -> str:
         response = self.client.post("/api/v1/auth/session", json={"user_id": user_id, "role": role})

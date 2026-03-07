@@ -1,8 +1,11 @@
 import sys
+import os
 from pathlib import Path
 from PyQt5 import QtWidgets, QtCore
 from gui.main_window import MainWindow
+from gui.bootstrap_wizard import BootstrapSetupDialog
 from gui.Windows.splash import SplashScreen
+from config.bootstrap import load_bootstrap_config, mark_setup_completed, save_bootstrap_config, setup_completed
 from config.printer_config import load_printer_config
 from gui.activity_logger import ActivityLogger
 from gui.crash_reporter import CrashReporter
@@ -45,9 +48,41 @@ def _run_preset_startup_validation(app: QtWidgets.QApplication, splash: SplashSc
     app.processEvents()
 
 
+def _ensure_bootstrap_configuration(app: QtWidgets.QApplication) -> dict:
+    config = load_bootstrap_config()
+    if not setup_completed(config):
+        dialog = BootstrapSetupDialog(initial=config)
+        result = dialog.exec_()
+        if result != QtWidgets.QDialog.Accepted:
+            raise RuntimeError("SETUP_ABORTED")
+        merged = dict(config)
+        merged.update(dialog.result_config())
+        config = mark_setup_completed(merged)
+        save_bootstrap_config(config)
+    language = str(config.get("ui_language", "en")).strip() or "en"
+    region = str(config.get("region_code", "")).strip()
+    app.setProperty("bootstrap_config", dict(config))
+    app.setProperty("bootstrap_language", language)
+    app.setProperty("bootstrap_region", region)
+    return dict(config)
+
+
 def main() -> int:
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("EON-OpenSlicer")
+    try:
+        bootstrap_config = _ensure_bootstrap_configuration(app)
+    except RuntimeError as exc:
+        if str(exc) == "SETUP_ABORTED":
+            return 1
+        raise
+    ui_language = str(bootstrap_config.get("ui_language", "en")).strip() or "en"
+    region_code = str(bootstrap_config.get("region_code", "")).strip().upper()
+    if ui_language:
+        # Main window reads this at construction time.
+        os.environ["EON_UI_LANG"] = ui_language
+    if region_code:
+        os.environ["EON_REGION_CODE"] = region_code
 
     activity_logger = ActivityLogger()
     activity_logger.install(app)

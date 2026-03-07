@@ -52,17 +52,9 @@ export function resolveApiBaseUrl(explicitBaseUrl = "", locationLike = null) {
       .replace(/:$/, "")
       .trim();
     const hostname = String(locationLike.hostname || API_DEFAULTS.host).trim();
-    const currentPort = String(locationLike.port || "").trim();
-    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
-    if (!isLocalHost) {
-      const maybePort = currentPort ? `:${currentPort}` : "";
-      return `${protocol}://${hostname}${maybePort}${API_DEFAULTS.prefix}`;
-    }
-    const port = currentPort && currentPort !== String(API_DEFAULTS.port)
-      ? String(API_DEFAULTS.port)
-      : (currentPort || String(API_DEFAULTS.port));
-    const maybePort = port ? `:${port}` : "";
-    return `${protocol}://${hostname}${maybePort}${API_DEFAULTS.prefix}`;
+    const targetPort = Number(API_DEFAULTS.port);
+    const normalizedPort = Number.isFinite(targetPort) && targetPort > 0 ? `:${targetPort}` : "";
+    return `${protocol}://${hostname}${normalizedPort}${API_DEFAULTS.prefix}`;
   }
   return `${API_DEFAULTS.protocol}://${API_DEFAULTS.host}:${API_DEFAULTS.port}${API_DEFAULTS.prefix}`;
 }

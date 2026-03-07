@@ -197,6 +197,8 @@ def build_z_heights(mesh: MeshModel, settings: SliceSettings) -> List[float]:
 
     base_height = max(settings.min_layer_height,
                       min(settings.layer_height, settings.max_layer_height))
+    first_height = max(settings.min_layer_height,
+                       min(settings.first_layer_height, settings.max_layer_height))
     ranges = _normalize_height_ranges(settings.layer_height_ranges)
 
     ratios = None
@@ -220,21 +222,25 @@ def build_z_heights(mesh: MeshModel, settings: SliceSettings) -> List[float]:
     z = z_min
     heights: List[float] = []
     while z < z_max - 1e-6:
-        height = base_height
-        for start, end, h in ranges:
-            if start <= z < end:
-                height = h
-                break
-        height = max(settings.min_layer_height,
-                     min(float(height), settings.max_layer_height))
+        is_first_layer = len(heights) == 0
+        if is_first_layer:
+            height = first_height
+        else:
+            height = base_height
+            for start, end, h in ranges:
+                if start <= z < end:
+                    height = h
+                    break
+            height = max(settings.min_layer_height,
+                         min(float(height), settings.max_layer_height))
 
-        if ratios is not None and settings.adaptive_overhang_enabled:
-            idx = int((z - z_min) / base_height)
-            if 0 <= idx < len(ratios):
-                if ratios[idx] >= settings.adaptive_overhang_threshold:
-                    height = min(height, settings.adaptive_overhang_height)
-                    height = max(settings.min_layer_height,
-                                 min(float(height), settings.max_layer_height))
+            if ratios is not None and settings.adaptive_overhang_enabled:
+                idx = int((z - z_min) / base_height)
+                if 0 <= idx < len(ratios):
+                    if ratios[idx] >= settings.adaptive_overhang_threshold:
+                        height = min(height, settings.adaptive_overhang_height)
+                        height = max(settings.min_layer_height,
+                                     min(float(height), settings.max_layer_height))
 
         if z + height > z_max:
             if settings.precise_z_height:

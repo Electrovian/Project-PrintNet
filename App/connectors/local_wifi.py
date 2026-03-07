@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import ipaddress
+import json
 from typing import Any, Callable, Mapping, Sequence
 
 import requests
@@ -11,8 +12,8 @@ from .errors import LocalWifiOnboardingError
 
 ProbeHook = Callable[["LocalWifiProbeTarget", float], Mapping[str, Any]]
 
-DEFAULT_SCAN_PORTS: tuple[int, ...] = (80, 8080, 7125)
-DEFAULT_SCAN_PATHS: tuple[str, ...] = ("/api/version", "/server/info")
+DEFAULT_SCAN_PORTS: tuple[int, ...] = (80, 8080, 7125, 9999)
+DEFAULT_SCAN_PATHS: tuple[str, ...] = ("/api/version", "/server/info", "/api/v1/status", "/api/printer")
 DEFAULT_TIMEOUT_S = 1.25
 DEFAULT_MAX_TARGETS = 128
 DEFAULT_CIDR_HOST_LIMIT = 64
@@ -292,10 +293,28 @@ class LocalWifiOnboarding:
             if isinstance(result, Mapping):
                 version = str(result.get("moonraker_version", "")).strip()
                 if version:
+                    if self._payload_contains(payload, "creality", "ender", "k1", "k2"):
+                        return "creality"
                     return "moonraker"
             version = str(payload.get("moonraker_version", "")).strip()
             if version:
+                if self._payload_contains(payload, "creality", "ender", "k1", "k2"):
+                    return "creality"
                 return "moonraker"
+            return ""
+
+        if normalized_path == "/api/v1/status":
+            if self._payload_contains(payload, "bambu", "x1", "a1", "p1s", "p1p"):
+                return "bambu_lan"
+            if self._payload_contains(payload, "creality", "ender", "k1", "k2"):
+                return "creality"
+            return ""
+
+        if normalized_path == "/api/printer":
+            if self._payload_contains(payload, "creality", "ender", "k1", "k2"):
+                return "creality"
+            if self._payload_contains(payload, "octoprint"):
+                return "octoprint"
             return ""
 
         if normalized_path != "/api/version":
@@ -306,13 +325,31 @@ class LocalWifiOnboarding:
             return "prusalink"
         if "octoprint" in server_name:
             return "octoprint"
+        if "bambu" in server_name:
+            return "bambu_lan"
+        if "creality" in server_name:
+            return "creality"
         return ""
+
+    @staticmethod
+    def _payload_contains(payload: Mapping[str, Any], *keywords: str) -> bool:
+        try:
+            text = json.dumps(payload, sort_keys=True).lower()
+        except Exception:
+            text = str(payload).lower()
+        for keyword in keywords:
+            token = str(keyword or "").strip().lower()
+            if token and token in text:
+                return True
+        return False
 
     def _candidate_from_probe(self, target: LocalWifiProbeTarget, connector_type: str) -> dict[str, Any]:
         display = {
             "octoprint": "OctoPrint",
             "moonraker": "Moonraker",
             "prusalink": "PrusaLink",
+            "bambu_lan": "Bambu",
+            "creality": "Creality",
         }.get(connector_type, connector_type.title())
         base_url = f"http://{target.host}:{target.port}"
         candidate = {
@@ -333,6 +370,14 @@ class LocalWifiOnboarding:
         elif connector_type == "moonraker":
             candidate["moonraker_url"] = base_url
             candidate["moonraker_token"] = ""
+        elif connector_type == "bambu_lan":
+            candidate["bambu_url"] = base_url
+            candidate["bambu_access_code"] = ""
+            candidate["bambu_serial"] = ""
+        elif connector_type == "creality":
+            candidate["creality_url"] = base_url
+            candidate["creality_protocol"] = "moonraker" if int(target.port) == 7125 else "octoprint"
+            candidate["creality_token"] = ""
         return candidate
 
     def _printer_identity(self, printer: Mapping[str, Any]) -> str:
@@ -346,6 +391,13 @@ class LocalWifiOnboarding:
         if connector_type == "moonraker":
             url = str(printer.get("moonraker_url", "")).strip().rstrip("/").lower()
             return f"moonraker|{url}"
+        if connector_type == "bambu_lan":
+            url = str(printer.get("bambu_url", "") or printer.get("endpoint", "")).strip().rstrip("/").lower()
+            return f"bambu_lan|{url}"
+        if connector_type == "creality":
+            url = str(printer.get("creality_url", "") or printer.get("endpoint", "")).strip().rstrip("/").lower()
+            protocol = str(printer.get("creality_protocol", "")).strip().lower()
+            return f"creality|{protocol}|{url}"
 
         host = str(printer.get("host", "")).strip().lower()
         port = int(printer.get("port", 0) or 0)

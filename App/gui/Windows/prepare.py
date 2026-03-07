@@ -1,3 +1,5 @@
+import os
+
 from PyQt5 import QtWidgets, QtCore
 
 from ..viewer import Viewer3D
@@ -12,6 +14,10 @@ class PrepareView(QtCore.QObject):
         super().__init__(main_window)
         self.main = main_window
         self.viewer = Viewer3D(main_window)
+        self._floating_actions_enabled = (
+            str(os.environ.get("EON_FLOATING_PREPARE_ACTIONS", "0")).strip().lower()
+            in ("1", "true", "yes", "on")
+        )
 
         self._build_docks()
         self._build_toolbar()
@@ -98,6 +104,9 @@ class PrepareView(QtCore.QObject):
         action_layout.addWidget(self._print_btn)
 
     def position_panels(self):
+        if not self._floating_actions_enabled:
+            self._action_panel.hide()
+            return
         margin = 16
         self._action_panel.adjustSize()
         x = max(0, self.viewer.width() - self._action_panel.width() - margin)
@@ -107,9 +116,12 @@ class PrepareView(QtCore.QObject):
     def show(self):
         self._settings_dock.show()
         self.transform_toolbar.show()
-        self._action_panel.show()
-        self._action_panel.raise_()
-        self.position_panels()
+        if self._floating_actions_enabled:
+            self._action_panel.show()
+            self._action_panel.raise_()
+            self.position_panels()
+        else:
+            self._action_panel.hide()
 
     def hide(self):
         self._settings_dock.hide()

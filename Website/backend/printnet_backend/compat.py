@@ -102,7 +102,13 @@ except Exception:  # pragma: no cover - fallback path
 
             return decorator
 
-        def _dispatch(self, method: str, url_path: str, payload: Mapping[str, Any] | None = None):
+        def _dispatch(
+            self,
+            method: str,
+            url_path: str,
+            payload: Mapping[str, Any] | None = None,
+            headers: Mapping[str, str] | None = None,
+        ):
             parsed = urlparse(url_path)
             path = _normalize_path(parsed.path)
             query_pairs = parse_qs(parsed.query, keep_blank_values=True)
@@ -115,7 +121,7 @@ except Exception:  # pragma: no cover - fallback path
                 if route.path != path:
                     continue
                 try:
-                    kwargs = _build_call_kwargs(route.endpoint, query, payload)
+                    kwargs = _build_call_kwargs(route.endpoint, query, payload, headers=headers)
                     result = route.endpoint(**kwargs)
                     if isinstance(result, JSONResponse):
                         return _SimpleResponse(result.status_code, result.content)
@@ -140,24 +146,43 @@ except Exception:  # pragma: no cover - fallback path
         def json(self):
             return self._payload
 
+    class _SimpleRequest:
+        def __init__(self, headers: Mapping[str, str] | None = None):
+            self.headers = dict(headers or {})
+
     class _SimpleTestClient:
         def __init__(self, app: FastAPI):
             self._app = app
 
-        def get(self, path: str):
-            return self._app._dispatch("GET", path, payload=None)
+        def get(self, path: str, headers: Mapping[str, str] | None = None):
+            return self._app._dispatch("GET", path, payload=None, headers=headers)
 
-        def post(self, path: str, json: Mapping[str, Any] | None = None):
-            return self._app._dispatch("POST", path, payload=json)
+        def post(
+            self,
+            path: str,
+            json: Mapping[str, Any] | None = None,
+            headers: Mapping[str, str] | None = None,
+        ):
+            return self._app._dispatch("POST", path, payload=json, headers=headers)
 
-        def put(self, path: str, json: Mapping[str, Any] | None = None):
-            return self._app._dispatch("PUT", path, payload=json)
+        def put(
+            self,
+            path: str,
+            json: Mapping[str, Any] | None = None,
+            headers: Mapping[str, str] | None = None,
+        ):
+            return self._app._dispatch("PUT", path, payload=json, headers=headers)
 
-        def patch(self, path: str, json: Mapping[str, Any] | None = None):
-            return self._app._dispatch("PATCH", path, payload=json)
+        def patch(
+            self,
+            path: str,
+            json: Mapping[str, Any] | None = None,
+            headers: Mapping[str, str] | None = None,
+        ):
+            return self._app._dispatch("PATCH", path, payload=json, headers=headers)
 
-        def delete(self, path: str):
-            return self._app._dispatch("DELETE", path, payload=None)
+        def delete(self, path: str, headers: Mapping[str, str] | None = None):
+            return self._app._dispatch("DELETE", path, payload=None, headers=headers)
 
 
 def create_test_client(app):
@@ -181,10 +206,14 @@ def _build_call_kwargs(
     endpoint: Callable[..., Any],
     query: Mapping[str, str],
     payload: Mapping[str, Any] | None,
+    headers: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     sig = inspect.signature(endpoint)
     kwargs: dict[str, Any] = {}
     for name, parameter in sig.parameters.items():
+        if name == "request":
+            kwargs[name] = _SimpleRequest(headers=headers)
+            continue
         if name == "payload":
             kwargs[name] = dict(payload or {})
             continue

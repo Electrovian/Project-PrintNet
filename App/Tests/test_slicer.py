@@ -108,6 +108,7 @@ class LayerPerimeterTests(unittest.TestCase):
         mesh.apply_translation((0.0, 0.0, 0.5))
         model = MeshModel(path="<memory>", mesh=mesh)
         settings = SliceSettings(layer_height=0.2,
+                                 first_layer_height=0.1,
                                  min_layer_height=0.1,
                                  max_layer_height=0.3,
                                  adaptive_overhang_enabled=False,
@@ -124,6 +125,7 @@ class LayerPerimeterTests(unittest.TestCase):
         mesh.apply_translation((0.0, 0.0, 0.5))
         model = MeshModel(path="<memory>", mesh=mesh)
         settings = SliceSettings(layer_height=0.2,
+                                 first_layer_height=0.1,
                                  min_layer_height=0.1,
                                  max_layer_height=0.3,
                                  adaptive_overhang_enabled=True,
@@ -133,6 +135,22 @@ class LayerPerimeterTests(unittest.TestCase):
         deltas = [heights[0]] + [heights[i] - heights[i - 1] for i in range(1, len(heights))]
         for delta in deltas:
             self.assertAlmostEqual(delta, 0.1, places=4)
+
+    def test_build_z_heights_honors_first_layer_height(self):
+        mesh = self._box_unit.copy()
+        mesh.apply_translation((0.0, 0.0, 0.5))
+        model = MeshModel(path="<memory>", mesh=mesh)
+        settings = SliceSettings(layer_height=0.2,
+                                 first_layer_height=0.25,
+                                 min_layer_height=0.1,
+                                 max_layer_height=0.3,
+                                 adaptive_overhang_enabled=False)
+        heights = build_z_heights(model, settings)
+        self.assertGreaterEqual(len(heights), 2)
+        first_delta = heights[0]
+        second_delta = heights[1] - heights[0]
+        self.assertAlmostEqual(first_delta, 0.25, places=4)
+        self.assertAlmostEqual(second_delta, 0.2, places=4)
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,9 +19,13 @@ from gui.Windows.controller.ui import UiMixin  # noqa: E402
 class _DummyViewer:
     def __init__(self):
         self.last_bed_limits = None
+        self.last_bed_visuals = None
 
     def set_bed_limits(self, bed_size, max_height):
         self.last_bed_limits = (tuple(bed_size), float(max_height))
+
+    def set_bed_visuals(self, texture_path="", model_path=""):
+        self.last_bed_visuals = (str(texture_path or ""), str(model_path or ""))
 
 
 class _DummyPrinterManager:
@@ -110,6 +114,16 @@ class RuntimePrinterStateTests(unittest.TestCase):
         self.assertEqual(bed, (400.0, 300.0))
         self.assertEqual(z_max, 500.0)
         self.assertEqual(name, "StatePrinter")
+
+    def test_apply_printer_profile_can_resolve_preset_bed_limits(self):
+        ui = _DummyUi()
+        ui._apply_printer_profile({"name": "Anycubic Kobra 3 0.4 nozzle"}, source="settings")
+
+        self.assertEqual(ui.runtime_printer_state.bed_size, (255.0, 255.0))
+        self.assertEqual(ui.runtime_printer_state.bed_z, 260.0)
+        self.assertEqual(ui.viewer.last_bed_limits, ((255.0, 255.0), 260.0))
+        texture_path, _model_path = ui.viewer.last_bed_visuals
+        self.assertTrue(texture_path.lower().endswith("anycubic kobra 3_buildplate_texture.svg"))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,20 @@
+; EON-OpenSlicer slicer_v2 semantic emitter
+; firmware=marlin
+G21 ; mm units
+G90 ; absolute XYZ mode
+M82 ; absolute extrusion
+G92 E0
+;LAYER:0
+G0 Z0.175 F9000
+G0 X110.000 Y113.942 F9000
+G1 E-0.80000 F60 ; retract
+G1 X68.951 Y-11.398 E14031.10711 F60
+;LAYER:1
+G0 Z0.500 F9000
+G0 X110.000 Y113.942 F9000
+G1 E14030.30711 F60 ; retract
+G1 X68.951 Y-11.398 E40092.91272 F60
+M104 S0
+M140 S0
+G92 E0
+M84

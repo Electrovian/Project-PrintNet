@@ -48,6 +48,31 @@ export function normalizeSessionPayload(payload) {
   return { userId, role };
 }
 
+export function normalizeAuthCredentials(payload) {
+  const body = payload && typeof payload === "object" ? payload : {};
+  const userId = asNonEmpty(body.userId, "userId", "AUTH_USER_ID_REQUIRED").toLowerCase();
+  const password = asNonEmpty(body.password, "password", "AUTH_PASSWORD_REQUIRED");
+  if (password.length < 8) {
+    throw new FrontendContractError("AUTH_PASSWORD_TOO_SHORT", "password must be at least 8 characters.");
+  }
+  return { userId, password };
+}
+
+export function normalizeLoginCodeRequestPayload(payload) {
+  return normalizeAuthCredentials(payload);
+}
+
+export function normalizeLoginCodeVerifyPayload(payload) {
+  const body = payload && typeof payload === "object" ? payload : {};
+  const challengeId = asNonEmpty(body.challengeId, "challengeId", "AUTH_CHALLENGE_ID_REQUIRED");
+  const verificationCode = asNonEmpty(
+    body.verificationCode,
+    "verificationCode",
+    "AUTH_VERIFICATION_CODE_REQUIRED"
+  );
+  return { challengeId, verificationCode };
+}
+
 export function normalizePrinterRegistrationPayload(payload) {
   const body = payload && typeof payload === "object" ? payload : {};
   const printerId = asNonEmpty(body.printerId, "printerId", "PRINTER_ID_REQUIRED");

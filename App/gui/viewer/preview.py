@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import bisect
-import math
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
@@ -38,6 +37,7 @@ class PreviewMixin:
         self._preview_dynamic_travel = None
         self._preview_dynamic_meshes = None
         self._preview_color_cache_static = OrderedDict()
+        self._preview_color_cache_dynamic = OrderedDict()
         if preview is None or not getattr(preview, "layers", None):
             self._preview_layer_index = None
             self._preview_step_index = None
@@ -234,6 +234,7 @@ class PreviewMixin:
         self._preview_dynamic_travel = None
         self._preview_dynamic_meshes = None
         self._preview_color_cache_static = OrderedDict()
+        self._preview_color_cache_dynamic = OrderedDict()
         self._preview_layer_index = None
         self._preview_step_index = None
         self._preview_step_layer = None
@@ -359,12 +360,9 @@ class PreviewMixin:
                 len(self._preview_extrude_items_static) != len(self._preview_extrude_bins) or \
                 len(self._preview_extrude_items_dynamic) != len(self._preview_extrude_bins):
             self._clear_preview_extrude_items()
-            for _min_w, _max_w, line_width in self._preview_extrude_bins:
+            for _min_w, _max_w, _line_width in self._preview_extrude_bins:
                 for target in (self._preview_extrude_items_static, self._preview_extrude_items_dynamic):
-                    md = gl.MeshData(
-                        vertexes=np.zeros((0, 3), dtype=float),
-                        faces=np.zeros((0, 3), dtype=np.int32),
-                    )
+                    md = self._empty_meshdata()
                     item = gl.GLMeshItem(meshdata=md, smooth=False, drawFaces=True,
                                          drawEdges=False, shader="shaded")
                     item.setGLOptions("opaque")
@@ -507,6 +505,16 @@ class PreviewMixin:
             return np.zeros((0, 4), dtype=float)
         return np.tile(np.array(rgba, dtype=float), (count, 1))
 
+    def _empty_meshdata(self) -> gl.MeshData:
+        mesh = getattr(self, "_preview_empty_mesh", None)
+        if mesh is None:
+            mesh = gl.MeshData(
+                vertexes=np.zeros((0, 3), dtype=float),
+                faces=np.zeros((0, 3), dtype=np.int32),
+            )
+            self._preview_empty_mesh = mesh
+        return mesh
+
     def _preview_geometry_state_key(self, layer_index: int, step_slice: int | None):
         return (id(self._preview_data), layer_index, step_slice, self._preview_filter_key(),
                 round(float(self._preview_base_width), 6), round(float(self._preview_layer_height), 6))
@@ -627,15 +635,24 @@ class PreviewMixin:
         mode = self._preview_color_mode
         cached = cache.get(mode)
         if cached is not None and len(cached) == len(segments_by_bin):
-            for item, meshdata, face_colors, segments in zip(items, meshes, cached, segments_by_bin):
-                if meshdata is None or item is None:
+            cache_valid = True
+            for face_colors, segments in zip(cached, segments_by_bin):
+                expected_rows = len(segments) * 12
+                if expected_rows <= 0:
                     continue
-                if segments and face_colors is not None and len(face_colors):
-                    meshdata.setFaceColors(face_colors)
-                item.setMeshData(meshdata=meshdata)
-                item.setVisible(self._preview_visible and bool(segments))
-            cache.move_to_end(mode)
-            return
+                if face_colors is None or int(len(face_colors)) != expected_rows:
+                    cache_valid = False
+                    break
+            if cache_valid:
+                for item, meshdata, face_colors, segments in zip(items, meshes, cached, segments_by_bin):
+                    if meshdata is None or item is None:
+                        continue
+                    if segments and face_colors is not None and len(face_colors):
+                        meshdata.setFaceColors(face_colors)
+                    item.setMeshData(meshdata=meshdata)
+                    item.setVisible(self._preview_visible and bool(segments))
+                cache.move_to_end(mode)
+                return
 
         face_cache = []
         for item, meshdata, segments in zip(items, meshes, segments_by_bin):
@@ -661,16 +678,12 @@ class PreviewMixin:
                 if item is not None:
                     item.setData(pos=np.zeros((0, 3), dtype=float))
             for item in self._all_preview_extrude_items():
-                item.setMeshData(
-                    meshdata=gl.MeshData(
-                        vertexes=np.zeros((0, 3), dtype=float),
-                        faces=np.zeros((0, 3), dtype=np.int32),
-                    )
-                )
+                item.setMeshData(meshdata=self._empty_meshdata())
             self._update_nozzle_position()
             return
 
-        self._preview_extrude_bins = self._preview_width_bins()
+        if not self._preview_extrude_bins:
+            self._preview_extrude_bins = self._preview_width_bins()
         self._ensure_preview_items()
         step_slice = None
         if self._preview_step_index is None:
@@ -695,8 +708,7 @@ class PreviewMixin:
                 meshes = []
                 for segments, widths in zip(segments_by_bin, widths_by_bin):
                     segment_pairs = [(seg.start, seg.end) for seg in segments]
-                    colors = [self._preview_color_for_segment(seg) for seg in segments]
-                    meshes.append(self._preview_mesh_for_segments(segment_pairs, widths, colors))
+                    meshes.append(self._preview_mesh_for_segments(segment_pairs, widths))
                 self._preview_geometry_meshes = meshes
                 self._preview_geometry_key = geometry_key
                 self._preview_cached_mode = self._preview_color_mode
@@ -708,10 +720,7 @@ class PreviewMixin:
                 )
                 self._apply_preview_mesh_colors(
                     self._preview_extrude_items_dynamic,
-                    [gl.MeshData(
-                        vertexes=np.zeros((0, 3), dtype=float),
-                        faces=np.zeros((0, 3), dtype=np.int32),
-                    ) for _ in self._preview_extrude_items_dynamic],
+                    [self._empty_meshdata() for _ in self._preview_extrude_items_dynamic],
                     [[] for _ in self._preview_extrude_items_dynamic],
                     cache=None,
                 )
@@ -762,8 +771,7 @@ class PreviewMixin:
             meshes = []
             for segments, widths in zip(segments_by_bin, widths_by_bin):
                 segment_pairs = [(seg.start, seg.end) for seg in segments]
-                colors = [self._preview_color_for_segment(seg) for seg in segments]
-                meshes.append(self._preview_mesh_for_segments(segment_pairs, widths, colors))
+                meshes.append(self._preview_mesh_for_segments(segment_pairs, widths))
             self._preview_static_meshes = meshes
             self._preview_static_key = static_key
             self._apply_preview_mesh_colors(
@@ -781,18 +789,19 @@ class PreviewMixin:
             self._preview_dynamic_segments = segments_by_bin
             self._preview_dynamic_widths = widths_by_bin
             self._preview_dynamic_travel = travel_points
+            if isinstance(getattr(self, "_preview_color_cache_dynamic", None), OrderedDict):
+                self._preview_color_cache_dynamic.clear()
             meshes = []
             for segments, widths in zip(segments_by_bin, widths_by_bin):
                 segment_pairs = [(seg.start, seg.end) for seg in segments]
-                colors = [self._preview_color_for_segment(seg) for seg in segments]
-                meshes.append(self._preview_mesh_for_segments(segment_pairs, widths, colors))
+                meshes.append(self._preview_mesh_for_segments(segment_pairs, widths))
             self._preview_dynamic_meshes = meshes
             self._preview_dynamic_key = dynamic_key
             self._apply_preview_mesh_colors(
                 self._preview_extrude_items_dynamic,
                 meshes,
                 segments_by_bin,
-                cache=None,
+                cache=self._preview_color_cache_dynamic,
             )
         elif self._preview_cached_mode != self._preview_color_mode:
             if self._preview_dynamic_meshes is not None and self._preview_dynamic_segments is not None:
@@ -800,7 +809,7 @@ class PreviewMixin:
                     self._preview_extrude_items_dynamic,
                     self._preview_dynamic_meshes,
                     self._preview_dynamic_segments,
-                    cache=None,
+                    cache=self._preview_color_cache_dynamic,
                 )
 
         if self._preview_cached_mode != self._preview_color_mode:
@@ -837,75 +846,95 @@ class PreviewMixin:
         self,
         segments: Sequence[Tuple[Tuple[float, float, float], Tuple[float, float, float]]],
         widths: Sequence[float],
-        colors: Sequence[Tuple[float, float, float, float]],
     ) -> gl.MeshData:
         if not segments:
-            return gl.MeshData(
-                vertexes=np.zeros((0, 3), dtype=float),
-                faces=np.zeros((0, 3), dtype=np.int32),
-            )
+            return self._empty_meshdata()
 
-        vertices: List[List[float]] = []
-        faces: List[List[int]] = []
-        face_colors: List[Tuple[float, float, float, float]] = []
+        starts = np.array([seg[0] for seg in segments], dtype=float)
+        ends = np.array([seg[1] for seg in segments], dtype=float)
+        if starts.ndim != 2 or ends.ndim != 2 or starts.shape[1] != 3 or ends.shape[1] != 3:
+            return self._empty_meshdata()
 
-        for (start, end), width_value, color in zip(segments, widths, colors):
-            p0 = np.array(start, dtype=float)
-            p1 = np.array(end, dtype=float)
-            dxy = p1[:2] - p0[:2]
-            length = float(math.hypot(dxy[0], dxy[1]))
-            if length < 1e-8:
-                continue
-            width = float(width_value if width_value > 0.0 else self._preview_base_width)
-            height = float(self._preview_layer_height if self._preview_layer_height > 0.0 else 0.2)
-            half_w = max(width * 0.5, self._preview_base_width * 0.25)
-            half_h = max(height * 0.5, height * 0.25)
-            perp = np.array([-dxy[1], dxy[0]], dtype=float) / length * half_w
+        dxy = ends[:, :2] - starts[:, :2]
+        lengths = np.hypot(dxy[:, 0], dxy[:, 1]).astype(float)
+        valid = lengths >= 1e-8
+        if not np.any(valid):
+            return self._empty_meshdata()
 
-            z0_low = float(p0[2] - half_h)
-            z0_high = float(p0[2] + half_h)
-            z1_low = float(p1[2] - half_h)
-            z1_high = float(p1[2] + half_h)
+        starts = starts[valid]
+        ends = ends[valid]
+        dxy = dxy[valid]
+        lengths = lengths[valid]
 
-            v0 = [float(p0[0] + perp[0]), float(p0[1] + perp[1]), z0_low]
-            v1 = [float(p0[0] - perp[0]), float(p0[1] - perp[1]), z0_low]
-            v2 = [float(p1[0] - perp[0]), float(p1[1] - perp[1]), z1_low]
-            v3 = [float(p1[0] + perp[0]), float(p1[1] + perp[1]), z1_low]
-            v4 = [float(p0[0] + perp[0]), float(p0[1] + perp[1]), z0_high]
-            v5 = [float(p0[0] - perp[0]), float(p0[1] - perp[1]), z0_high]
-            v6 = [float(p1[0] - perp[0]), float(p1[1] - perp[1]), z1_high]
-            v7 = [float(p1[0] + perp[0]), float(p1[1] + perp[1]), z1_high]
+        count = int(starts.shape[0])
+        if count <= 0:
+            return self._empty_meshdata()
 
-            base = len(vertices)
-            vertices.extend([v0, v1, v2, v3, v4, v5, v6, v7])
-            faces.extend([
-                [base + 0, base + 1, base + 2],
-                [base + 0, base + 2, base + 3],
-                [base + 4, base + 6, base + 5],
-                [base + 4, base + 7, base + 6],
-                [base + 0, base + 3, base + 7],
-                [base + 0, base + 7, base + 4],
-                [base + 1, base + 2, base + 6],
-                [base + 1, base + 6, base + 5],
-                [base + 0, base + 4, base + 5],
-                [base + 0, base + 5, base + 1],
-                [base + 3, base + 2, base + 6],
-                [base + 3, base + 6, base + 7],
-            ])
-            face_colors.extend([color] * 12)
+        widths_arr = np.asarray(widths, dtype=float)
+        if widths_arr.ndim != 1 or widths_arr.shape[0] != len(segments):
+            widths_arr = np.full(len(segments), float(self._preview_base_width), dtype=float)
+        widths_arr = widths_arr[valid]
+        widths_arr = np.where(widths_arr > 0.0, widths_arr, float(self._preview_base_width))
 
-        if not faces:
-            return gl.MeshData(
-                vertexes=np.zeros((0, 3), dtype=float),
-                faces=np.zeros((0, 3), dtype=np.int32),
-            )
+        base_width = float(self._preview_base_width if self._preview_base_width > 0.0 else 0.4)
+        layer_height = float(self._preview_layer_height if self._preview_layer_height > 0.0 else 0.2)
+        half_w = np.maximum(widths_arr * 0.5, base_width * 0.25)
+        half_h = max(layer_height * 0.5, layer_height * 0.25)
 
-        mesh = gl.MeshData(
-            vertexes=np.array(vertices, dtype=float),
-            faces=np.array(faces, dtype=np.int32),
+        units = dxy / lengths[:, None]
+        # Extend segment caps to hide seams between adjacent short segments.
+        extension = np.minimum(np.maximum(half_w * 0.6, base_width * 0.08), lengths * 0.45)
+        start_xy = starts[:, :2] - units * extension[:, None]
+        end_xy = ends[:, :2] + units * extension[:, None]
+        perp = np.stack((-units[:, 1], units[:, 0]), axis=1) * half_w[:, None]
+
+        z0_low = starts[:, 2] - half_h
+        z0_high = starts[:, 2] + half_h
+        z1_low = ends[:, 2] - half_h
+        z1_high = ends[:, 2] + half_h
+
+        vertices = np.empty((count, 8, 3), dtype=float)
+        vertices[:, 0, :2] = start_xy + perp
+        vertices[:, 1, :2] = start_xy - perp
+        vertices[:, 2, :2] = end_xy - perp
+        vertices[:, 3, :2] = end_xy + perp
+        vertices[:, 4, :2] = start_xy + perp
+        vertices[:, 5, :2] = start_xy - perp
+        vertices[:, 6, :2] = end_xy - perp
+        vertices[:, 7, :2] = end_xy + perp
+        vertices[:, 0, 2] = z0_low
+        vertices[:, 1, 2] = z0_low
+        vertices[:, 2, 2] = z1_low
+        vertices[:, 3, 2] = z1_low
+        vertices[:, 4, 2] = z0_high
+        vertices[:, 5, 2] = z0_high
+        vertices[:, 6, 2] = z1_high
+        vertices[:, 7, 2] = z1_high
+
+        face_pattern = np.array(
+            [
+                [0, 1, 2],
+                [0, 2, 3],
+                [4, 6, 5],
+                [4, 7, 6],
+                [0, 3, 7],
+                [0, 7, 4],
+                [1, 2, 6],
+                [1, 6, 5],
+                [0, 4, 5],
+                [0, 5, 1],
+                [3, 2, 6],
+                [3, 6, 7],
+            ],
+            dtype=np.int32,
         )
-        mesh.setFaceColors(np.array(face_colors, dtype=float))
-        return mesh
+        offsets = (np.arange(count, dtype=np.int32) * 8).reshape((-1, 1, 1))
+        faces = (face_pattern.reshape((1, 12, 3)) + offsets).reshape((-1, 3))
+
+        return gl.MeshData(
+            vertexes=vertices.reshape((-1, 3)),
+            faces=faces,
+        )
 
     def _ensure_nozzle_item(self):
         if self._nozzle is not None:

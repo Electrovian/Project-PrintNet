@@ -21,6 +21,8 @@ class ConnectorRegistryTests(unittest.TestCase):
         self.assertIn("moonraker", types)
         self.assertIn("octoprint", types)
         self.assertIn("octoprint_legacy", types)
+        self.assertIn("bambu_lan", types)
+        self.assertIn("creality", types)
 
     def test_registry_resolve_uses_explicit_connector_type(self):
         registry = build_default_connector_registry()
@@ -41,6 +43,16 @@ class ConnectorRegistryTests(unittest.TestCase):
         registry = build_default_connector_registry()
         connector = registry.resolve({"name": "P4", "prusalink_url": "http://localhost:8080"})
         self.assertEqual(connector.connector_type, "prusalink")
+
+    def test_registry_resolve_infers_bambu_lan(self):
+        registry = build_default_connector_registry()
+        connector = registry.resolve({"name": "P5", "bambu_url": "http://10.0.0.55:9999"})
+        self.assertEqual(connector.connector_type, "bambu_lan")
+
+    def test_registry_resolve_infers_creality(self):
+        registry = build_default_connector_registry()
+        connector = registry.resolve({"name": "P6", "creality_url": "http://10.0.0.77:7125"})
+        self.assertEqual(connector.connector_type, "creality")
 
     def test_registry_get_raises_for_unknown_connector(self):
         registry = build_default_connector_registry()

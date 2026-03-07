@@ -33,18 +33,33 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --windowed --name EON-OpenSlicer --paths App --add-data "App/assets;assets" App/main.py
           Compress-Archive -Path dist/EON-OpenSlicer.exe -DestinationPath EON-OpenSlicer-windows.zip
 
+      - name: Build installer (Windows Inno Setup)
+        if: runner.os == 'Windows'
+        run: |
+          choco install innosetup --no-progress -y
+          $version = "${{ github.ref_name }}"
+          if ([string]::IsNullOrWhiteSpace($version)) { $version = "0.1.0" }
+          if ($version.StartsWith("v")) { $version = $version.Substring(1) }
+          powershell -ExecutionPolicy Bypass -File installer/windows/build_installer.ps1 -AppExePath "dist/EON-OpenSlicer.exe" -AppVersion $version
+
       - name: Build (Linux)
         if: runner.os == 'Linux'
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed --name EON-OpenSlicer --paths App --add-data "App/assets:assets" App/main.py
           chmod +x dist/EON-OpenSlicer
           zip -j EON-OpenSlicer-linux.zip dist/EON-OpenSlicer
+          VERSION="${GITHUB_REF_NAME:-0.1.0}"
+          VERSION="${VERSION#v}"
+          bash installer/linux/build_deb.sh "dist/EON-OpenSlicer" "$VERSION" "amd64"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: EON-OpenSlicer-${{ runner.os }}
-          path: EON-OpenSlicer-*.zip
+          path: |
+            EON-OpenSlicer-*.zip
+            dist/EON-OpenSlicer-Setup-*.exe
+            dist/eon-openslicer_*.deb
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -62,4 +77,7 @@ jobs:
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: dist-artifacts/EON-OpenSlicer-*.zip
+          files: |
+            dist-artifacts/EON-OpenSlicer-*.zip
+            dist-artifacts/EON-OpenSlicer-Setup-*.exe
+            dist-artifacts/eon-openslicer_*.deb

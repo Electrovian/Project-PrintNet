@@ -1,5 +1,8 @@
 import { resolveApiBaseUrl } from "../config.js";
 import {
+  normalizeAuthCredentials,
+  normalizeLoginCodeRequestPayload,
+  normalizeLoginCodeVerifyPayload,
   normalizeModelUploadPayload,
   normalizePrintRequestPayload,
   normalizePrinterRegistrationPayload,
@@ -15,6 +18,8 @@ export class BackendApiError extends Error {
   }
 }
 
+const REGION_COMPLIANCE_CODES = new Set(["REGION_BLOCKED", "REGION_GEO_UNDETERMINED"]);
+
 function asPath(path) {
   const value = String(path || "").trim();
   if (!value) {
@@ -29,6 +34,15 @@ function requireAuthToken(authToken) {
     throw new BackendApiError("AUTH_TOKEN_REQUIRED", "authToken is required for protected endpoint.", 401);
   }
   return token;
+}
+
+export function isRegionComplianceError(error) {
+  const code = String(error?.code || "").trim().toUpperCase();
+  if (REGION_COMPLIANCE_CODES.has(code)) {
+    return true;
+  }
+  const status = Number(error?.status || 0);
+  return status === 451;
 }
 
 async function parseResponse(response) {
@@ -54,12 +68,15 @@ export function buildBackendClient({ baseUrl = "", fetchImpl = null, locationLik
     throw new BackendApiError("FETCH_UNAVAILABLE", "No fetch implementation was provided.", 500);
   }
 
-  async function request(path, { method = "GET", body = null } = {}) {
+  async function request(path, { method = "GET", body = null, headers = null } = {}) {
     const url = `${resolvedBaseUrl}${asPath(path)}`;
     const init = {
       method: String(method || "GET").toUpperCase(),
       headers: { "Content-Type": "application/json" }
     };
+    if (headers && typeof headers === "object") {
+      Object.assign(init.headers, headers);
+    }
     if (body && typeof body === "object") {
       init.body = JSON.stringify(body);
     }
@@ -75,9 +92,34 @@ export function buildBackendClient({ baseUrl = "", fetchImpl = null, locationLik
     async healthReady() {
       return request("/health/ready");
     },
+    async getComplianceRegion() {
+      return request("/compliance/region");
+    },
     async createSession(payload) {
       const body = normalizeSessionPayload(payload);
       return request("/auth/session", { method: "POST", body: { user_id: body.userId, role: body.role } });
+    },
+    async registerAccount(payload) {
+      const body = normalizeAuthCredentials(payload);
+      return request("/auth/register", { method: "POST", body: { user_id: body.userId, password: body.password } });
+    },
+    async loginWithPassword(payload) {
+      const body = normalizeAuthCredentials(payload);
+      return request("/auth/login", { method: "POST", body: { user_id: body.userId, password: body.password } });
+    },
+    async requestLoginCode(payload) {
+      const body = normalizeLoginCodeRequestPayload(payload);
+      return request("/auth/login/request-code", {
+        method: "POST",
+        body: { user_id: body.userId, password: body.password }
+      });
+    },
+    async verifyLoginCode(payload) {
+      const body = normalizeLoginCodeVerifyPayload(payload);
+      return request("/auth/login/verify-code", {
+        method: "POST",
+        body: { challenge_id: body.challengeId, verification_code: body.verificationCode }
+      });
     },
     async whoAmI(authToken) {
       const token = requireAuthToken(authToken);
@@ -151,6 +193,16 @@ export function buildBackendClient({ baseUrl = "", fetchImpl = null, locationLik
     async getQueueSnapshot(authToken = "") {
       const token = requireAuthToken(authToken);
       return request(`/queue/snapshot?auth_token=${encodeURIComponent(token)}`);
+    },
+    async getActivityFeed(payload = {}) {
+      const token = requireAuthToken(payload?.authToken);
+      const cursorValue = Number.parseInt(String(payload?.cursor ?? "0"), 10);
+      const limitValue = Number.parseInt(String(payload?.limit ?? "200"), 10);
+      const cursor = Number.isFinite(cursorValue) ? Math.max(0, cursorValue) : 0;
+      const limit = Number.isFinite(limitValue) ? Math.max(1, Math.min(1000, limitValue)) : 200;
+      return request(
+        `/activity/feed?auth_token=${encodeURIComponent(token)}&cursor=${encodeURIComponent(cursor)}&limit=${encodeURIComponent(limit)}`
+      );
     },
     async sendWorkerHeartbeat(payload = {}) {
       const token = requireAuthToken(payload?.authToken);

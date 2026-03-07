@@ -159,6 +159,8 @@ class OtherSectionMixin:
         if not presets:
             self._profile_combo.addItem("No process presets", "")
             self._profile_combo.setEnabled(False)
+            if hasattr(self, "_fit_combo_popup_width"):
+                self._fit_combo_popup_width(self._profile_combo, min_width=280)
             self._profile_combo.blockSignals(block)
             return
 
@@ -176,6 +178,8 @@ class OtherSectionMixin:
         if self._profile_combo.currentIndex() < 0:
             self._profile_combo.setCurrentIndex(0)
         selected_id = str(self._profile_combo.currentData() or "").strip()
+        if hasattr(self, "_fit_combo_popup_width"):
+            self._fit_combo_popup_width(self._profile_combo, min_width=280)
         self._profile_combo.blockSignals(block)
 
         if apply_default and selected_id:
@@ -209,6 +213,8 @@ class OtherSectionMixin:
         if not self._printers:
             self._printer_combo.addItem("No printers configured")
             self._printer_combo.setEnabled(False)
+            if hasattr(self, "_fit_combo_popup_width"):
+                self._fit_combo_popup_width(self._printer_combo, min_width=260)
             return
         self._printer_combo.setEnabled(True)
         default_name = ""
@@ -226,6 +232,8 @@ class OtherSectionMixin:
                 default_index = idx
         if default_index is not None:
             self._printer_combo.setCurrentIndex(default_index)
+        if hasattr(self, "_fit_combo_popup_width"):
+            self._fit_combo_popup_width(self._printer_combo, min_width=260)
         self._on_printer_changed(self._printer_combo.currentIndex())
 
     def current_printer(self):

@@ -22,6 +22,14 @@ def _probe_map_by_port(target, _timeout_s: float) -> Mapping[str, Any]:
     return {"ok": False}
 
 
+def _probe_with_bambu_and_creality(target, _timeout_s: float) -> Mapping[str, Any]:
+    if target.path == "/api/v1/status" and int(target.port) == 9999:
+        return {"ok": True, "connector_type": "bambu_lan"}
+    if target.path == "/server/info" and int(target.port) == 7125:
+        return {"ok": True, "connector_type": "creality"}
+    return {"ok": False}
+
+
 class LocalWifiOnboardingTests(unittest.TestCase):
     def test_discover_requires_hosts(self):
         onboarding = LocalWifiOnboarding(probe_hook=_probe_map_by_port)
@@ -50,7 +58,7 @@ class LocalWifiOnboardingTests(unittest.TestCase):
         )
         self.assertTrue(result["ok"])
         self.assertEqual(result["cidr_host_count"], 3)
-        self.assertEqual(result["scanned_target_count"], 6)
+        self.assertEqual(result["scanned_target_count"], 12)
 
     def test_merge_printers_deduplicates_connector_url_entries(self):
         onboarding = LocalWifiOnboarding(probe_hook=_probe_map_by_port)
@@ -109,6 +117,13 @@ class LocalWifiOnboardingTests(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(report["state"], "invalid_config")
         self.assertIn("WIFI_HOSTS_REQUIRED", report["message"])
+
+    def test_discover_detects_bambu_and_creality_signatures(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_with_bambu_and_creality)
+        result = onboarding.discover(hosts=["10.0.0.55"], ports=[7125, 9999], max_targets=32)
+        self.assertTrue(result["ok"])
+        connector_types = sorted(item.get("connector_type", "") for item in result["printers"])
+        self.assertEqual(connector_types, ["bambu_lan", "creality"])
 
 
 if __name__ == "__main__":

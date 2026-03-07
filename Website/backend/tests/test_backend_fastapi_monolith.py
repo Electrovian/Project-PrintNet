@@ -7,7 +7,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from printnet_backend.app import create_app  # noqa: E402
-from printnet_backend.compat import create_test_client  # noqa: E402
+from printnet_backend.compat import HAS_FASTAPI, create_test_client  # noqa: E402
 from printnet_backend.errors import (  # noqa: E402
     BackendConflictError,
     BackendNotFoundError,
@@ -25,32 +25,72 @@ class BackendFastApiMonolithTests(unittest.TestCase):
                 "BACKEND_APP_NAME": "PrintNet API",
                 "BACKEND_APP_VERSION": "1.2.3",
                 "BACKEND_API_PREFIX": "api/custom",
+                "BACKEND_ENV": "development",
                 "BACKEND_DEFAULT_ROLE": "operator",
                 "BACKEND_ALLOW_CLIENT_ROLE_OVERRIDE": "1",
                 "BACKEND_OPERATOR_USER_IDS": "operator-1,worker-01",
                 "BACKEND_ADMIN_USER_IDS": "admin-1",
                 "BACKEND_ENABLE_DOCS": "0",
+                "BACKEND_REGION_BLOCK_ENABLED": "1",
+                "BACKEND_REGION_BLOCK_ON_UNKNOWN": "allow",
+                "BACKEND_REGION_BLOCK_TRUST_HEADERS": "x-custom-geo,x-state",
+                "BACKEND_BLOCKED_US_STATE_CODES": "CA,NY",
+                "BACKEND_ACTIVITY_SERVICE_TOKEN": "activity-secret",
+                "BACKEND_ACTIVITY_MAX_JOBS": "1500",
+                "BACKEND_ACTIVITY_MAX_EVENTS": "8000",
                 "BACKEND_QUEUE_NAME": "lab-a",
                 "BACKEND_QUEUE_WORKER_MAX_JOBS_PER_TICK": "3",
                 "BACKEND_QUEUE_WORKER_HEARTBEAT_TTL_SECONDS": "120",
                 "BACKEND_OBSERVABILITY_MAX_AUDIT_RECORDS": "220",
                 "BACKEND_OBSERVABILITY_MAX_METRIC_KEYS": "300",
+                "BACKEND_SUPER_ADMIN_EMAIL": "admin@example.com",
+                "BACKEND_SUPER_ADMIN_PASSWORD": "password-123",
+                "BACKEND_AUTH_VERIFICATION_CODE_TTL_SECONDS": "900",
+                "BACKEND_AUTH_VERIFICATION_MAX_ATTEMPTS": "4",
+                "BACKEND_AUTH_EXPOSE_DEBUG_CODE": "1",
+                "BACKEND_AUTH_EMAIL_FROM": "security@example.com",
+                "BACKEND_SMTP_HOST": "smtp.example.com",
+                "BACKEND_SMTP_PORT": "2525",
+                "BACKEND_SMTP_USERNAME": "smtp-user",
+                "BACKEND_SMTP_PASSWORD": "smtp-pass",
+                "BACKEND_SMTP_STARTTLS": "0",
+                "BACKEND_SMTP_USE_SSL": "1",
                 "BACKEND_RELEASE_REQUIRED_CHECKS": "backend_health,authz_enforced,queue_worker_operational",
             }
         )
         self.assertEqual(settings.app_name, "PrintNet API")
         self.assertEqual(settings.app_version, "1.2.3")
         self.assertEqual(settings.api_prefix, "/api/custom")
+        self.assertEqual(settings.backend_env, "development")
         self.assertEqual(settings.default_role, "operator")
         self.assertTrue(settings.allow_client_role_override)
         self.assertEqual(settings.operator_user_ids, ("operator-1", "worker-01"))
         self.assertEqual(settings.admin_user_ids, ("admin-1",))
         self.assertFalse(settings.enable_docs)
+        self.assertTrue(settings.region_block_enabled)
+        self.assertEqual(settings.region_block_on_unknown, "allow")
+        self.assertEqual(settings.region_block_trust_headers, ("x-custom-geo", "x-state"))
+        self.assertEqual(settings.blocked_us_state_codes, ("CA", "NY"))
+        self.assertEqual(settings.activity_service_token, "activity-secret")
+        self.assertEqual(settings.activity_max_jobs, 1500)
+        self.assertEqual(settings.activity_max_events, 8000)
         self.assertEqual(settings.queue_name, "lab-a")
         self.assertEqual(settings.queue_worker_max_jobs_per_tick, 3)
         self.assertEqual(settings.queue_worker_heartbeat_ttl_seconds, 120)
         self.assertEqual(settings.observability_max_audit_records, 220)
         self.assertEqual(settings.observability_max_metric_keys, 300)
+        self.assertEqual(settings.super_admin_email, "admin@example.com")
+        self.assertEqual(settings.super_admin_password, "password-123")
+        self.assertEqual(settings.auth_verification_code_ttl_seconds, 900)
+        self.assertEqual(settings.auth_verification_max_attempts, 4)
+        self.assertTrue(settings.auth_expose_debug_code)
+        self.assertEqual(settings.auth_email_from, "security@example.com")
+        self.assertEqual(settings.smtp_host, "smtp.example.com")
+        self.assertEqual(settings.smtp_port, 2525)
+        self.assertEqual(settings.smtp_username, "smtp-user")
+        self.assertEqual(settings.smtp_password, "smtp-pass")
+        self.assertFalse(settings.smtp_starttls)
+        self.assertTrue(settings.smtp_use_ssl)
         self.assertEqual(
             settings.release_required_checks,
             ("backend_health", "authz_enforced", "queue_worker_operational"),
@@ -95,22 +135,29 @@ class BackendFastApiMonolithTests(unittest.TestCase):
         self.assertEqual(live.status_code, 200)
         self.assertTrue(live.json()["ok"])
 
-        session = client.post(
-            "/api/v1/auth/session",
-            json={"user_id": "student-1", "role": "student"},
+        register = client.post(
+            "/api/v1/auth/register",
+            json={"user_id": "student-1", "password": "password-123"},
         )
-        self.assertEqual(session.status_code, 200)
-        self.assertTrue(session.json()["ok"])
-        student_token = session.json()["session"]["token"]
+        self.assertEqual(register.status_code, 200)
+        self.assertEqual(register.json()["account"]["role"], "student")
+
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"user_id": "student-1", "password": "password-123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertTrue(login.json()["ok"])
+        student_token = login.json()["session"]["token"]
         self.assertTrue(str(student_token).startswith("session-"))
-        self.assertEqual(session.json()["session"]["role"], "student")
+        self.assertEqual(login.json()["session"]["role"], "student")
 
         escalated = client.post(
             "/api/v1/auth/session",
             json={"user_id": "student-1", "role": "admin"},
         )
-        self.assertEqual(escalated.status_code, 200)
-        self.assertEqual(escalated.json()["session"]["role"], "student")
+        self.assertEqual(escalated.status_code, 401)
+        self.assertEqual(escalated.json()["error"]["code"], "BACKEND_AUTHENTICATION_ERROR")
 
         operator = client.post(
             "/api/v1/auth/session",
@@ -173,6 +220,107 @@ class BackendFastApiMonolithTests(unittest.TestCase):
         payload = resp.json()
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "BACKEND_VALIDATION_ERROR")
+
+    @unittest.skipUnless(HAS_FASTAPI, "requires FastAPI middleware support")
+    def test_region_block_rejects_california(self):
+        app = create_app(
+            settings=BackendSettings(
+                enable_docs=False,
+                region_block_enabled=True,
+                region_block_on_unknown="allow",
+                blocked_us_state_codes=("CA",),
+            )
+        )
+        client = create_test_client(app)
+        resp = client.get("/api/v1/health/live", headers={"x-us-state": "CA"})
+        self.assertEqual(resp.status_code, 451)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["code"], "REGION_BLOCKED")
+
+    @unittest.skipUnless(HAS_FASTAPI, "requires FastAPI middleware support")
+    def test_region_block_allows_non_blocked_state(self):
+        app = create_app(
+            settings=BackendSettings(
+                enable_docs=False,
+                region_block_enabled=True,
+                region_block_on_unknown="allow",
+                blocked_us_state_codes=("CA",),
+            )
+        )
+        client = create_test_client(app)
+        resp = client.get("/api/v1/health/live", headers={"x-us-state": "NY"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["ok"])
+
+    @unittest.skipUnless(HAS_FASTAPI, "requires FastAPI middleware support")
+    def test_region_block_can_be_disabled(self):
+        app = create_app(
+            settings=BackendSettings(
+                enable_docs=False,
+                region_block_enabled=False,
+                region_block_on_unknown="deny",
+                blocked_us_state_codes=("CA",),
+            )
+        )
+        client = create_test_client(app)
+        resp = client.get("/api/v1/health/live", headers={"x-us-state": "CA"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["ok"])
+
+    @unittest.skipUnless(HAS_FASTAPI, "requires FastAPI middleware support")
+    def test_region_block_unknown_geo_denied_in_production_mode(self):
+        app = create_app(
+            settings=BackendSettings(
+                enable_docs=False,
+                backend_env="production",
+                region_block_enabled=True,
+                region_block_on_unknown="deny",
+                blocked_us_state_codes=("CA",),
+            )
+        )
+        client = create_test_client(app)
+        resp = client.get("/api/v1/health/live")
+        self.assertEqual(resp.status_code, 451)
+        payload = resp.json()
+        self.assertEqual(payload["error"]["code"], "REGION_GEO_UNDETERMINED")
+
+    @unittest.skipUnless(HAS_FASTAPI, "requires FastAPI middleware support")
+    def test_region_block_unknown_geo_allowed_in_development_mode(self):
+        app = create_app(
+            settings=BackendSettings(
+                enable_docs=False,
+                backend_env="development",
+                region_block_enabled=True,
+                region_block_on_unknown="allow",
+                blocked_us_state_codes=("CA",),
+            )
+        )
+        client = create_test_client(app)
+        resp = client.get("/api/v1/health/live")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.headers.get("x-compliance-warning"), "REGION_GEO_UNDETERMINED")
+
+    @unittest.skipUnless(HAS_FASTAPI, "requires FastAPI middleware support")
+    def test_compliance_region_endpoint_reports_decision_for_blocked_state(self):
+        app = create_app(
+            settings=BackendSettings(
+                enable_docs=False,
+                backend_env="production",
+                region_block_enabled=True,
+                region_block_on_unknown="deny",
+                blocked_us_state_codes=("CA",),
+            )
+        )
+        client = create_test_client(app)
+        resp = client.get("/api/v1/compliance/region", headers={"x-us-state": "CA"})
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload["ok"])
+        compliance = payload["compliance"]
+        self.assertEqual(compliance["decision"], "deny")
+        self.assertEqual(compliance["reason_code"], "REGION_BLOCKED")
+        self.assertEqual(compliance["http_status"], 451)
 
 
 if __name__ == "__main__":

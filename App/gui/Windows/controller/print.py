@@ -19,6 +19,10 @@ from slicer_v2.legacy_ai_checks import run_ai_checks
 from slicer_v2.legacy_gcode_preview import parse_gcode_preview, parse_gcode_preview_file
 from slicer_v2.legacy_gcode_stats import estimate_gcode_file
 from slicer_v2.legacy_gcode_writer import SliceSettings
+try:
+    from slicer_v2.legacy_slicer.emit import slice_trimesh_auto as slice_v2_trimesh_auto
+except Exception:
+    slice_v2_trimesh_auto = None
 
 try:
     from slicer_v2.context import create_context as create_v2_context
@@ -184,6 +188,14 @@ class PrintMixin:
         model_ids = self.viewer.get_model_ids()
         if not model_ids:
             return "plate"
+        plate_name = ""
+        if hasattr(self.viewer, "get_current_plate_name"):
+            plate_name = str(self.viewer.get_current_plate_name() or "").strip()
+        if plate_name:
+            base = plate_name
+            if len(model_ids) > 1:
+                base = f"{base}_plate"
+            return _sanitize_gcode_basename(base, default="plate")
         source_path = self._get_plate_source_path()
         if source_path and source_path != "plate":
             base = os.path.splitext(os.path.basename(source_path))[0]
@@ -315,7 +327,61 @@ class PrintMixin:
         output_gcode_path: str | None,
         perf: dict[str, object],
     ) -> str:
+        output_path = self._resolve_output_gcode_path(source_path, output_gcode_path)
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+        mesh_for_v2 = combined_mesh.copy()
+        mesh_shift = np.array([0.0, 0.0, 0.0], dtype=float)
+        try:
+            bounds = np.asarray(mesh_for_v2.bounds, dtype=float)
+            mins = bounds[0]
+            if mins.shape[0] >= 3 and mins[2] < 0.0:
+                mesh_shift[2] = -float(mins[2])
+            if np.any(mesh_shift):
+                mesh_for_v2.apply_translation(mesh_shift)
+        except Exception:
+            mesh_shift = np.array([0.0, 0.0, 0.0], dtype=float)
+
+        # Prefer the detailed legacy-v2 toolpath emitter for desktop runtime slicing.
+        force_semantic_only = str(os.environ.get("EON_SLICER_V2_SEMANTIC_ONLY", "0")).strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        detailed_error: Exception | None = None
+        if slice_v2_trimesh_auto is not None and not force_semantic_only:
+            mesh_items: list[trimesh.Trimesh] = []
+            for mesh in meshes:
+                if mesh is None:
+                    continue
+                mesh_copy = mesh.copy()
+                if np.any(mesh_shift):
+                    try:
+                        mesh_copy.apply_translation(mesh_shift)
+                    except Exception:
+                        pass
+                mesh_items.append(mesh_copy)
+            if not mesh_items:
+                mesh_items = [mesh_for_v2]
+            try:
+                return str(
+                    slice_v2_trimesh_auto(
+                        meshes=mesh_items,
+                        output_gcode_path=output_path,
+                        settings=settings,
+                        source_path=source_path,
+                        combined_mesh=mesh_for_v2,
+                    )
+                )
+            except Exception as exc:
+                detailed_error = exc
+
         if create_v2_context is None or run_v2_pipeline is None:
+            if detailed_error is not None:
+                raise RuntimeError(
+                    f"slicer_v2 detailed path failed and semantic pipeline is unavailable: {detailed_error}"
+                ) from detailed_error
             raise RuntimeError("slicer_v2 pipeline is unavailable.")
 
         temp_path = ""
@@ -324,17 +390,6 @@ class PrintMixin:
             fd, temp_path = tempfile.mkstemp(prefix="eon_slicer_v2_", suffix=".stl")
             os.close(fd)
             fd = -1
-            mesh_for_v2 = combined_mesh.copy()
-            try:
-                bounds = np.asarray(mesh_for_v2.bounds, dtype=float)
-                mins = bounds[0]
-                shift = np.array([0.0, 0.0, 0.0], dtype=float)
-                if mins.shape[0] >= 3 and mins[2] < 0.0:
-                    shift[2] = -float(mins[2])
-                if np.any(shift):
-                    mesh_for_v2.apply_translation(shift)
-            except Exception:
-                pass
             mesh_for_v2.export(temp_path, file_type="stl")
 
             runtime_settings = {
@@ -356,11 +411,15 @@ class PrintMixin:
             if not isinstance(lines_value, list) or not lines_value:
                 raise RuntimeError("slicer_v2 produced no G-code lines.")
             lines = [str(line) for line in lines_value]
-            output_path = self._resolve_output_gcode_path(source_path, output_gcode_path)
-            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
             with open(output_path, "w", encoding="utf-8", newline="\n") as handle:
                 handle.write("\n".join(lines).rstrip() + "\n")
             return output_path
+        except Exception as exc:
+            if detailed_error is not None:
+                raise RuntimeError(
+                    f"slicer_v2 detailed path failed: {detailed_error}; semantic pipeline failed: {exc}"
+                ) from exc
+            raise
         finally:
             if fd >= 0:
                 try:
@@ -455,7 +514,9 @@ class PrintMixin:
             )
             if hasattr(self, "_mode_tabs"):
                 for btn in self._mode_tabs:
-                    if btn.text().strip().lower() == "preview":
+                    mode_key = str(btn.property("mode_key") or "").strip().lower()
+                    label_key = btn.text().strip().lower()
+                    if mode_key == "preview" or label_key == "preview":
                         btn.setChecked(True)
                         break
             if activate_preview:

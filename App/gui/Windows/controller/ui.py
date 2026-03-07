@@ -14,13 +14,11 @@ from typing import Any, TYPE_CHECKING
 import numpy as np
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from ...i18n import tr
 from ...theme import export_theme, get_theme_name, register_theme, set_theme
+from ...workers import Worker
 from config.defaults import DEFAULTS
-from config.runtime_printer_state import (
-    RuntimePrinterState,
-    runtime_printer_state_from_defaults,
-    runtime_printer_state_from_profile,
-)
+from config.printer_profile_lookup import resolve_printer_plate_config
 from config.runtime_printer_state import (
     RuntimePrinterState,
     runtime_printer_state_from_defaults,
@@ -619,8 +617,17 @@ class UiMixin(UiMixinBase):
             fallback_state=existing_state,
             source=source or "runtime",
         )
-        bed_x, bed_y = self.runtime_printer_state.bed_size
-        bed_z = float(self.runtime_printer_state.bed_z)
+        resolved_plate = resolve_printer_plate_config(printer)
+        bed_x = float(resolved_plate.get("bed_x") or self.runtime_printer_state.bed_x)
+        bed_y = float(resolved_plate.get("bed_y") or self.runtime_printer_state.bed_y)
+        bed_z = float(resolved_plate.get("bed_z") or self.runtime_printer_state.bed_z)
+        self.runtime_printer_state = RuntimePrinterState(
+            name=self.runtime_printer_state.name,
+            bed_x=bed_x,
+            bed_y=bed_y,
+            bed_z=bed_z,
+            source=source or "runtime",
+        )
 
         main = self.__dict__.get("main")
         viewer = self.__dict__.get("viewer")
@@ -628,6 +635,11 @@ class UiMixin(UiMixinBase):
             viewer = main.__dict__.get("viewer")
         if viewer is not None and hasattr(viewer, "set_bed_limits"):
             viewer.set_bed_limits((bed_x, bed_y), bed_z)
+        if viewer is not None and hasattr(viewer, "set_bed_visuals"):
+            viewer.set_bed_visuals(
+                texture_path=str(resolved_plate.get("bed_texture_path", "") or ""),
+                model_path=str(resolved_plate.get("bed_model_path", "") or ""),
+            )
         if viewer is not None:
             self._update_bed_warnings()
         self._sync_printer_selection(printer, source=source)
@@ -1017,6 +1029,34 @@ class UiMixin(UiMixinBase):
     def _on_arrange_reset(self):
         self._sync_popups()
 
+    def _on_plate_remove_requested(self):
+        QtWidgets.QMessageBox.information(
+            self.main,
+            tr("viewer.plate.remove.title", "Plate"),
+            tr(
+                "viewer.plate.remove.single_plate_only",
+                "Single-plate mode is active. The current plate cannot be removed.",
+            ),
+        )
+
+    def _on_plate_lock_changed(self, locked: bool):
+        if bool(locked):
+            self.statusBar().showMessage(
+                tr("viewer.plate.locked_status", "Current plate is locked.")
+            )
+        else:
+            self.statusBar().showMessage(
+                tr("viewer.plate.unlocked_status", "Current plate is unlocked.")
+            )
+
+    def _on_plate_name_changed(self, plate_name: str):
+        text = str(plate_name or "").strip() or "01"
+        self.statusBar().showMessage(
+            tr("viewer.plate.renamed_status", "Plate renamed to {name}.", name=text)
+        )
+        if hasattr(self, "_invalidate_slice_cache"):
+            self._invalidate_slice_cache(clear_preview=False)
+
     def _set_labels_visible(self, visible: bool):
         self._labels_visible = bool(visible)
         self.viewer.set_labels_visible(self._labels_visible)
@@ -1026,14 +1066,20 @@ class UiMixin(UiMixinBase):
     def _on_mode_tab_changed(self, button):
         if button is None:
             return
-        label = button.text().strip().lower()
-        if label:
-            self._activate_mode(label)
+        mode_key = str(button.property("mode_key") or "").strip().lower()
+        if not mode_key:
+            mode_key = button.text().strip().lower()
+        if mode_key:
+            self._activate_mode(mode_key)
 
     def _activate_mode(self, mode: str):
         mode = (mode or "").strip().lower()
         if not mode:
             return
+        mode = {
+            "project": "files",
+            "calibration": "control",
+        }.get(mode, mode)
         if mode != "preview":
             prev = getattr(self, "_preview_wireframe_prev", None)
             if prev is not None and hasattr(self.viewer, "set_wireframe_enabled"):
@@ -1045,6 +1091,8 @@ class UiMixin(UiMixinBase):
             self._central_stack.setCurrentWidget(self.viewer)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(True)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(True)
             if hasattr(self.viewer, "set_labels_visible"):
                 self.viewer.set_labels_visible(self._labels_visible)
             if hasattr(self.viewer, "set_preview_visible"):
@@ -1076,6 +1124,8 @@ class UiMixin(UiMixinBase):
                 self.viewer.set_wireframe_enabled(False)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(False)
             if hasattr(self.viewer, "set_labels_visible"):
                 self.viewer.set_labels_visible(False)
             if hasattr(self.viewer, "set_preview_visible"):
@@ -1097,6 +1147,8 @@ class UiMixin(UiMixinBase):
             self._central_stack.setCurrentWidget(self.device_view)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(False)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
@@ -1111,6 +1163,8 @@ class UiMixin(UiMixinBase):
             self._central_stack.setCurrentWidget(self.control_view)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(False)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
@@ -1125,6 +1179,8 @@ class UiMixin(UiMixinBase):
             self._central_stack.setCurrentWidget(self.files_view)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(False)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
@@ -1140,6 +1196,8 @@ class UiMixin(UiMixinBase):
             self._central_stack.setCurrentWidget(self.activity_view)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(False)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
@@ -1175,10 +1233,357 @@ class UiMixin(UiMixinBase):
     def _open_device_view(self):
         if hasattr(self, "_mode_tabs"):
             for btn in self._mode_tabs:
-                if btn.text().strip().lower() == "device":
+                mode_key = str(btn.property("mode_key") or "").strip().lower()
+                label_key = btn.text().strip().lower()
+                if mode_key == "device" or label_key == "device":
                     btn.setChecked(True)
                     break
         self._activate_mode("device")
+
+    def _refresh_printer_views(self):
+        manager = getattr(self, "printer_manager", None)
+        if manager is None:
+            return
+        printers = [dict(item) for item in getattr(manager, "printers", []) if isinstance(item, dict)]
+        connected = [row for row in printers if not bool(row.get("catalog_only", False))]
+        if hasattr(self, "main"):
+            self.main.connected_printers = connected
+        if hasattr(self, "device_view"):
+            self.device_view.set_printers(connected)
+        if hasattr(self, "control_view"):
+            self.control_view.set_printers(connected)
+
+    def _run_background_task(
+        self,
+        *,
+        title: str,
+        label: str,
+        fn,
+        args: tuple = (),
+        kwargs: dict | None = None,
+        on_finished=None,
+        on_error=None,
+    ):
+        dialog = self._busy_dialog(title, label)
+        dialog.show()
+
+        worker = Worker(fn, *(args or ()), **(kwargs or {}))
+
+        def _finish(result):
+            dialog.close()
+            if callable(on_finished):
+                on_finished(result)
+
+        def _error(message: str):
+            dialog.close()
+            if callable(on_error):
+                on_error(message)
+                return
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.error.title", "Add Printer"),
+                str(message or tr("onboarding.error.unknown", "Unable to save printer.")),
+            )
+
+        worker.signals.finished.connect(_finish)
+        worker.signals.error.connect(_error)
+        self._start_worker(worker)
+
+    def _submit_onboarding_add_printer(self, manager, printer: dict):
+        self._run_background_task(
+            title=tr("onboarding.title", "Add Printer"),
+            label=tr("onboarding.saving", "Saving printer..."),
+            fn=manager.onboarding_add_printer,
+            args=(dict(printer or {}),),
+            on_finished=lambda result: self._finalize_onboarding_result(
+                result,
+                success_message=tr("onboarding.saved", "Printer saved."),
+            ),
+            on_error=lambda message: QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.error.title", "Add Printer"),
+                str(message or tr("onboarding.error.unknown", "Unable to save printer.")),
+            ),
+        )
+
+    def _on_device_add_printer_requested(self):
+        manager = getattr(self, "printer_manager", None)
+        if manager is None:
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.error.title", "Add Printer"),
+                tr("onboarding.error.manager_missing", "Printer manager is unavailable."),
+            )
+            return
+
+        methods = [
+            ("wifi", tr("onboarding.method.wifi", "Wi-Fi scan")),
+            ("bluetooth", tr("onboarding.method.bluetooth", "Bluetooth pairing")),
+            ("manual", tr("onboarding.method.manual", "Manual endpoint")),
+        ]
+        labels = [label for _key, label in methods]
+        selection, ok = QtWidgets.QInputDialog.getItem(
+            self.main,
+            tr("onboarding.title", "Add Printer"),
+            tr("onboarding.prompt.method", "Choose onboarding method:"),
+            labels,
+            0,
+            False,
+        )
+        if not ok:
+            return
+        selected_key = methods[labels.index(selection)][0]
+        if selected_key == "wifi":
+            self._run_wifi_onboarding(manager)
+            return
+        if selected_key == "bluetooth":
+            self._run_bluetooth_onboarding(manager)
+            return
+        self._run_manual_onboarding(manager)
+
+    def _run_wifi_onboarding(self, manager):
+        default_cidr = str(os.environ.get("EON_WIFI_SCAN_CIDR", "192.168.1.0/24")).strip() or "192.168.1.0/24"
+        cidr, ok = QtWidgets.QInputDialog.getText(
+            self.main,
+            tr("onboarding.wifi.title", "Wi-Fi Scan"),
+            tr("onboarding.wifi.prompt_cidr", "Enter network CIDR:"),
+            text=default_cidr,
+        )
+        if not ok:
+            return
+        cidr_value = str(cidr).strip()
+
+        def _on_discovery_finished(report):
+            payload = report if isinstance(report, dict) else {}
+            if not bool(payload.get("ok", False)):
+                QtWidgets.QMessageBox.warning(
+                    self.main,
+                    tr("onboarding.error.title", "Add Printer"),
+                    str(payload.get("message", tr("onboarding.error.unknown", "Wi-Fi scan failed."))),
+                )
+                return
+            discovered = [dict(item) for item in payload.get("printers", []) if isinstance(item, dict)]
+            if not discovered:
+                QtWidgets.QMessageBox.information(
+                    self.main,
+                    tr("onboarding.wifi.title", "Wi-Fi Scan"),
+                    tr("onboarding.wifi.none_found", "No compatible printers were detected."),
+                )
+                return
+            labels = [str(item.get("name", "Printer")) for item in discovered]
+            choice, selected = QtWidgets.QInputDialog.getItem(
+                self.main,
+                tr("onboarding.wifi.title", "Wi-Fi Scan"),
+                tr("onboarding.wifi.select_printer", "Select discovered printer:"),
+                labels,
+                0,
+                False,
+            )
+            if not selected:
+                return
+            printer = discovered[labels.index(choice)]
+            self._submit_onboarding_add_printer(manager, printer)
+
+        self._run_background_task(
+            title=tr("onboarding.wifi.title", "Wi-Fi Scan"),
+            label=tr("onboarding.wifi.scanning", "Scanning local network..."),
+            fn=manager.discover_local_wifi_printers_from_cidr,
+            args=(cidr_value,),
+            kwargs={"host_limit": 64, "max_targets": 256},
+            on_finished=_on_discovery_finished,
+            on_error=lambda message: QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.error.title", "Add Printer"),
+                str(message or tr("onboarding.error.unknown", "Wi-Fi scan failed.")),
+            ),
+        )
+
+    def _run_bluetooth_onboarding(self, manager):
+        def _on_discovery_finished(report):
+            payload = report if isinstance(report, dict) else {}
+            if not bool(payload.get("ok", False)):
+                message = str(payload.get("message", tr("onboarding.bluetooth.unavailable", "Bluetooth unavailable.")))
+                QtWidgets.QMessageBox.warning(self.main, tr("onboarding.bluetooth.title", "Bluetooth Pairing"), message)
+                return
+            devices = [dict(item) for item in payload.get("devices", []) if isinstance(item, dict)]
+            if not devices:
+                QtWidgets.QMessageBox.information(
+                    self.main,
+                    tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                    tr("onboarding.bluetooth.none_found", "No Bluetooth devices were discovered."),
+                )
+                return
+            labels = [f"{item.get('name', 'Device')} ({item.get('id', '')})" for item in devices]
+            choice, selected = QtWidgets.QInputDialog.getItem(
+                self.main,
+                tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                tr("onboarding.bluetooth.select_device", "Select Bluetooth device:"),
+                labels,
+                0,
+                False,
+            )
+            if not selected:
+                return
+            device = devices[labels.index(choice)]
+            self._run_background_task(
+                title=tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                label=tr("onboarding.bluetooth.pairing", "Pairing device..."),
+                fn=manager.pair_bluetooth_printer,
+                kwargs={"device_id": str(device.get("id", "")).strip()},
+                on_finished=lambda pair_result: (
+                    QtWidgets.QMessageBox.information(
+                        self.main,
+                        tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                        tr("onboarding.bluetooth.paired", "Device paired successfully."),
+                    )
+                    if bool((pair_result or {}).get("ok", False))
+                    else QtWidgets.QMessageBox.warning(
+                        self.main,
+                        tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                        str((pair_result or {}).get("message", tr("onboarding.bluetooth.pair_failed", "Unable to pair device."))),
+                    )
+                ),
+                on_error=lambda message: QtWidgets.QMessageBox.warning(
+                    self.main,
+                    tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                    str(message or tr("onboarding.bluetooth.pair_failed", "Unable to pair device.")),
+                ),
+            )
+
+        self._run_background_task(
+            title=tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+            label=tr("onboarding.bluetooth.scanning", "Scanning Bluetooth devices..."),
+            fn=manager.discover_bluetooth_printers,
+            kwargs={"timeout_s": 6.0},
+            on_finished=_on_discovery_finished,
+            on_error=lambda message: QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                str(message or tr("onboarding.bluetooth.unavailable", "Bluetooth unavailable.")),
+            ),
+        )
+
+    def _run_manual_onboarding(self, manager):
+        name, ok = QtWidgets.QInputDialog.getText(
+            self.main,
+            tr("onboarding.manual.title", "Manual Printer"),
+            tr("onboarding.manual.prompt_name", "Printer name:"),
+            text=tr("onboarding.manual.default_name", "Manual Printer"),
+        )
+        if not ok:
+            return
+        connector_types = ["octoprint", "moonraker", "prusalink", "bambu_lan", "creality", "local_file"]
+        connector, ok = QtWidgets.QInputDialog.getItem(
+            self.main,
+            tr("onboarding.manual.title", "Manual Printer"),
+            tr("onboarding.manual.prompt_connector", "Connector type:"),
+            connector_types,
+            0,
+            False,
+        )
+        if not ok:
+            return
+        endpoint, ok = QtWidgets.QInputDialog.getText(
+            self.main,
+            tr("onboarding.manual.title", "Manual Printer"),
+            tr("onboarding.manual.prompt_endpoint", "Endpoint URL:"),
+            text="http://",
+        )
+        if not ok:
+            return
+        token, _ = QtWidgets.QInputDialog.getText(
+            self.main,
+            tr("onboarding.manual.title", "Manual Printer"),
+            tr("onboarding.manual.prompt_token", "API token (optional):"),
+            QtWidgets.QLineEdit.Normal,
+            "",
+        )
+        printer = {
+            "name": str(name).strip() or tr("onboarding.manual.default_name", "Manual Printer"),
+            "connector_type": str(connector).strip().lower(),
+            "endpoint": str(endpoint).strip(),
+            "api_key": str(token).strip(),
+        }
+
+        def _on_test_done(test_result):
+            payload = test_result if isinstance(test_result, dict) else {}
+            if not bool(payload.get("ok", False)):
+                QtWidgets.QMessageBox.warning(
+                    self.main,
+                    tr("onboarding.manual.title", "Manual Printer"),
+                    str(payload.get("message", tr("onboarding.manual.health_failed", "Health test failed."))),
+                )
+                return
+            self._submit_onboarding_add_printer(manager, printer)
+
+        self._run_background_task(
+            title=tr("onboarding.manual.title", "Manual Printer"),
+            label=tr("onboarding.manual.testing", "Testing endpoint..."),
+            fn=manager.test_manual_endpoint,
+            kwargs={
+                "connector_type": connector,
+                "endpoint": str(endpoint).strip(),
+                "name": str(name).strip(),
+                "credentials": {"api_key": str(token).strip()},
+            },
+            on_finished=_on_test_done,
+            on_error=lambda message: QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.manual.title", "Manual Printer"),
+                str(message or tr("onboarding.manual.health_failed", "Health test failed.")),
+            ),
+        )
+
+    def _finalize_onboarding_result(self, result, *, success_message: str):
+        if not isinstance(result, dict):
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.error.title", "Add Printer"),
+                tr("onboarding.error.unknown", "Unable to save printer."),
+            )
+            return
+        if not bool(result.get("ok", False)):
+            diagnostic = result.get("diagnostic", {})
+            if isinstance(diagnostic, dict) and diagnostic.get("message"):
+                message = str(diagnostic.get("message"))
+            else:
+                message = str(result.get("message", tr("onboarding.error.unknown", "Unable to save printer.")))
+            QtWidgets.QMessageBox.warning(self.main, tr("onboarding.error.title", "Add Printer"), message)
+            return
+        self._refresh_printer_views()
+        QtWidgets.QMessageBox.information(
+            self.main,
+            tr("onboarding.title", "Add Printer"),
+            success_message,
+        )
+
+    def _on_device_diagnostics_requested(self, printer: dict | None):
+        manager = getattr(self, "printer_manager", None)
+        if manager is None or not isinstance(printer, dict):
+            return
+        report = manager.run_connection_diagnostics(printer)
+        ok = bool(report.get("ok", False))
+        message = str(report.get("message", "")).strip()
+        if not message and ok:
+            message = tr("diagnostics.ok", "Connection diagnostics passed.")
+        if not message:
+            message = tr("diagnostics.failed", "Connection diagnostics failed.")
+        hints = []
+        upper = message.upper()
+        if "API_KEY_REQUIRED" in upper or "TOKEN_REQUIRED" in upper:
+            hints.append(tr("diagnostics.hint.credentials", "Check API token credentials and keychain entries."))
+        if "REQUEST_FAILED" in upper or "UNREACHABLE" in upper or "HTTP_" in upper:
+            hints.append(tr("diagnostics.hint.network", "Verify network reachability, firewall, and endpoint URL."))
+        if "CONNECTOR_UNSUPPORTED" in upper:
+            hints.append(tr("diagnostics.hint.connector", "Select a supported connector/protocol."))
+        detail_lines = [message]
+        for hint in hints:
+            detail_lines.append(f"- {hint}")
+        detail = "\n".join(detail_lines)
+        if ok:
+            QtWidgets.QMessageBox.information(self.main, tr("diagnostics.title", "Connection Diagnostics"), detail)
+        else:
+            QtWidgets.QMessageBox.warning(self.main, tr("diagnostics.title", "Connection Diagnostics"), detail)
 
     def _switch_mode_tab(self):
         if not hasattr(self, "_mode_tabs"):
