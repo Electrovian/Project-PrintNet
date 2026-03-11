@@ -23,6 +23,9 @@ class KeychainStore:
             backend = keyring.get_keyring()
         except Exception:
             return False
+        module_name = str(getattr(getattr(backend, "__class__", None), "__module__", "") or "")
+        if not bool(backend) or module_name == "keyring.backends.fail":
+            return False
         priority = getattr(backend, "priority", 0)
         try:
             return float(priority) > 0.0

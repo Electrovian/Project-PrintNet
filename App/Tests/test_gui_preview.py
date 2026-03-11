@@ -98,6 +98,32 @@ class PreviewViewTests(QtTestCase):
         assert viewer.preview_feature_filter is not None
         self.assertIn("custom_feature", viewer.preview_feature_filter)
 
+    def test_display_cell_click_toggles_feature_checkbox(self):
+        view, _main, _viewer = self._build()
+        display_item = view._line_table.item(0, 4)
+        self.assertIsNotNone(display_item)
+        assert display_item is not None
+        display_item.setCheckState(QtCore.Qt.Checked)
+
+        view._on_display_item_pressed(display_item)
+        view._on_line_table_cell_clicked(0, 4)
+
+        self.assertEqual(display_item.checkState(), QtCore.Qt.Unchecked)
+
+    def test_display_indicator_click_does_not_double_toggle(self):
+        view, _main, _viewer = self._build()
+        display_item = view._line_table.item(0, 4)
+        self.assertIsNotNone(display_item)
+        assert display_item is not None
+        display_item.setCheckState(QtCore.Qt.Checked)
+
+        view._on_display_item_pressed(display_item)
+        # Simulate Qt toggling when clicking directly on the checkbox indicator.
+        display_item.setCheckState(QtCore.Qt.Unchecked)
+        view._on_line_table_cell_clicked(0, 4)
+
+        self.assertEqual(display_item.checkState(), QtCore.Qt.Unchecked)
+
 
 if TYPE_CHECKING:
     from PyQt5 import QtWidgets as _QtWidgets

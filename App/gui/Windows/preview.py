@@ -55,6 +55,40 @@ FEATURE_LABEL_OVERRIDES = {
 }
 
 
+class _CenteredCheckDelegate(QtWidgets.QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        opt = QtWidgets.QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        has_indicator = bool(opt.features & QtWidgets.QStyleOptionViewItem.HasCheckIndicator)
+        if not has_indicator:
+            super().paint(painter, option, index)
+            return
+
+        # Draw the base cell without the default left-aligned check indicator or focus box.
+        style = opt.widget.style() if opt.widget is not None else QtWidgets.QApplication.style()
+        check_state = opt.checkState
+        opt.features &= ~QtWidgets.QStyleOptionViewItem.HasCheckIndicator
+        opt.state &= ~QtWidgets.QStyle.State_HasFocus
+        style.drawControl(QtWidgets.QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+
+        indicator_opt = QtWidgets.QStyleOptionButton()
+        indicator_opt.state = QtWidgets.QStyle.State_Enabled
+        if option.state & QtWidgets.QStyle.State_MouseOver:
+            indicator_opt.state |= QtWidgets.QStyle.State_MouseOver
+        if check_state == QtCore.Qt.Checked:
+            indicator_opt.state |= QtWidgets.QStyle.State_On
+        elif check_state == QtCore.Qt.PartiallyChecked:
+            indicator_opt.state |= QtWidgets.QStyle.State_NoChange
+        else:
+            indicator_opt.state |= QtWidgets.QStyle.State_Off
+
+        indicator_rect = style.subElementRect(QtWidgets.QStyle.SE_CheckBoxIndicator, indicator_opt, opt.widget)
+        x = option.rect.x() + (option.rect.width() - indicator_rect.width()) // 2
+        y = option.rect.y() + (option.rect.height() - indicator_rect.height()) // 2
+        indicator_opt.rect = QtCore.QRect(x, y, indicator_rect.width(), indicator_rect.height())
+        style.drawPrimitive(QtWidgets.QStyle.PE_IndicatorItemViewItemCheck, indicator_opt, painter, opt.widget)
+
+
 class PreviewView(QtCore.QObject):
     printer_changed = QtCore.pyqtSignal(object)
     def __init__(self, main_window, viewer):
@@ -79,6 +113,7 @@ class PreviewView(QtCore.QObject):
         self._options_tables = {}
         self._feature_display_state = {}
         self._feature_display_items = {}
+        self._pressed_check_states = {}
         self._feature_state_updating = False
         self._panel_collapsed = False
         self._build_panels()
@@ -314,6 +349,7 @@ class PreviewView(QtCore.QObject):
         self._line_table.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents)
         self._line_table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
         self._line_table.horizontalHeader().setSectionResizeMode(4, QtWidgets.QHeaderView.ResizeToContents)
+        self._line_table.setItemDelegateForColumn(4, _CenteredCheckDelegate(self._line_table))
         self._line_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self._line_table.setWordWrap(False)
         self._line_table.verticalHeader().setDefaultSectionSize(22)
@@ -527,6 +563,7 @@ class PreviewView(QtCore.QObject):
         table.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
         table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        table.setItemDelegateForColumn(1, _CenteredCheckDelegate(table))
         table.verticalHeader().setDefaultSectionSize(22)
         for row, (label, key) in enumerate(features):
             name_item = QtWidgets.QTableWidgetItem(label)
@@ -541,6 +578,8 @@ class PreviewView(QtCore.QObject):
             table.setItem(row, 1, display_item)
             self._register_feature_display_item(key, display_item)
         table.itemChanged.connect(self._on_feature_display_item_changed)
+        table.itemPressed.connect(self._on_display_item_pressed)
+        table.cellClicked.connect(self._on_options_table_cell_clicked)
         self._autosize_table(table)
         return table
 
@@ -628,6 +667,38 @@ class PreviewView(QtCore.QObject):
             return
         checked = item.checkState() == QtCore.Qt.Checked
         self._set_feature_display_state(str(key), checked)
+
+    def _on_display_item_pressed(self, item):
+        if item is None:
+            return
+        if not item.flags() & QtCore.Qt.ItemIsUserCheckable:
+            return
+        self._pressed_check_states[id(item)] = item.checkState()
+
+    def _toggle_display_item_from_cell(self, item):
+        if item is None:
+            return
+        if not item.flags() & QtCore.Qt.ItemIsUserCheckable:
+            return
+        pressed_state = self._pressed_check_states.pop(id(item), None)
+        # Clicking directly on the checkbox indicator already toggles state in Qt.
+        if pressed_state is not None and item.checkState() != pressed_state:
+            return
+        next_state = QtCore.Qt.Unchecked if item.checkState() == QtCore.Qt.Checked else QtCore.Qt.Checked
+        item.setCheckState(next_state)
+
+    def _on_line_table_cell_clicked(self, row: int, column: int):
+        if column != 4:
+            return
+        self._toggle_display_item_from_cell(self._line_table.item(row, column))
+
+    def _on_options_table_cell_clicked(self, row: int, column: int):
+        if column != 1:
+            return
+        table = self.sender()
+        if not isinstance(table, QtWidgets.QTableWidget):
+            return
+        self._toggle_display_item_from_cell(table.item(row, column))
 
     def _populate_printers(self):
         self._printer_combo.clear()
@@ -817,6 +888,8 @@ class PreviewView(QtCore.QObject):
         self._play_btn.toggled.connect(self._on_play_toggled)
         self._play_speed_spin.valueChanged.connect(self._on_play_speed_changed)
         self._line_table.itemChanged.connect(self._on_feature_display_item_changed)
+        self._line_table.itemPressed.connect(self._on_display_item_pressed)
+        self._line_table.cellClicked.connect(self._on_line_table_cell_clicked)
         self._platform_check.toggled.connect(self._on_platform_toggled)
         self._nozzle_check.toggled.connect(self._on_nozzle_toggled)
         self._collapse_btn.clicked.connect(self._toggle_collapsed)
