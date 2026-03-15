@@ -23,6 +23,8 @@ DEFAULT_SETTINGS: dict[str, object] = {
     "arachne_carryover_cross_island_enabled": False,
     "arachne_carryover_strength": -1.0,
     "infill_percent": 15.0,
+    "infill_wall_overlap_percent": 15.0,
+    "top_bottom_infill_wall_overlap_percent": 15.0,
     "infill_pattern": "rectilinear",
     "infill_angle_start": 45.0,
     "infill_angle_step": 90.0,
@@ -37,11 +39,35 @@ DEFAULT_SETTINGS: dict[str, object] = {
     "infill_antivibration_min_depth_for_line_removing": 5,
     "support_enabled": False,
     "support_type": "normal",
+    "support_style": "pillars",
     "support_density_percent": 15.0,
     "support_spacing_mm": 2.5,
+    "support_base_spacing_mm": 2.5,
+    "support_interface_spacing_mm": 2.5,
+    "support_bottom_interface_spacing_mm": 2.5,
     "support_xy_gap_mm": 0.25,
     "support_z_gap_mm": 0.2,
+    "support_bottom_z_gap_mm": 0.2,
+    "support_build_plate_only": False,
+    "support_threshold_angle_deg": 45.0,
+    "support_threshold_overlap_percent": 0.0,
+    "support_critical_regions_only": False,
+    "support_remove_small_overhang": False,
     "support_interface_layers": 2,
+    "support_interface_top_layers": 2,
+    "support_interface_bottom_layers": 0,
+    "tree_support_branch_angle_deg": 45.0,
+    "tree_support_wall_count": 1,
+    "tree_support_branch_diameter_mm": 0.6,
+    "tree_support_tip_diameter_mm": 0.3,
+    "tree_support_branch_distance_mm": 2.0,
+    "tree_support_branch_distance_organic_mm": 2.5,
+    "tree_support_top_rate_percent": 30.0,
+    "tree_support_branch_diameter_angle_deg": 5.0,
+    "tree_support_branch_angle_organic_deg": 35.0,
+    "tree_support_branch_diameter_organic_mm": 0.7,
+    "tree_support_auto_brim": False,
+    "tree_support_brim_width_mm": 0.0,
     "tree_support_branch_merge_distance_ratio": 1.2,
     "tree_support_branch_growth_ratio": 1.08,
     "tree_support_min_branch_radius_mm": 0.3,
@@ -140,6 +166,9 @@ KEY_ALIASES: dict[str, str] = {
     "infill_density": "infill_percent",
     "fill_density": "infill_percent",
     "sparse_infill_density": "infill_percent",
+    "infill_overlap": "infill_wall_overlap_percent",
+    "infill_wall_overlap": "infill_wall_overlap_percent",
+    "top_bottom_infill_wall_overlap": "top_bottom_infill_wall_overlap_percent",
     "sparse_infill_pattern": "infill_pattern",
     "infill_angle": "infill_angle_start",
     "infill_rotation": "infill_angle_start",
@@ -162,20 +191,59 @@ KEY_ALIASES: dict[str, str] = {
     "enable_support": "support_enabled",
     "support_enable": "support_enabled",
     "support": "support_enabled",
-    "support_style": "support_type",
+    "support_style": "support_style",
+    "support_structure": "support_style",
     "support_density": "support_density_percent",
     "support_density_pct": "support_density_percent",
     "support_line_spacing": "support_spacing_mm",
     "support_spacing": "support_spacing_mm",
+    "support_material_spacing": "support_spacing_mm",
+    "support_base_pattern_spacing": "support_base_spacing_mm",
+    "support_interface_spacing": "support_interface_spacing_mm",
+    "support_bottom_interface_spacing": "support_bottom_interface_spacing_mm",
+    "support_material_xy_spacing": "support_xy_gap_mm",
+    "support_material_contact_distance": "support_z_gap_mm",
+    "support_material_bottom_contact_distance": "support_bottom_z_gap_mm",
+    "support_threshold_overlap": "support_threshold_overlap_percent",
+    "support_threshold_angle": "support_threshold_angle_deg",
+    "support_critical_regions_only": "support_critical_regions_only",
+    "support_remove_small_overhang": "support_remove_small_overhang",
     "support_xy_distance": "support_xy_gap_mm",
     "support_xy_gap": "support_xy_gap_mm",
+    "support_object_xy_distance": "support_xy_gap_mm",
     "support_z_distance": "support_z_gap_mm",
     "support_z_gap": "support_z_gap_mm",
     "support_contact_z_distance": "support_z_gap_mm",
+    "support_top_z_distance": "support_z_gap_mm",
+    "support_bottom_z_distance": "support_bottom_z_gap_mm",
+    "support_on_build_plate_only": "support_build_plate_only",
     "support_interface_layer_count": "support_interface_layers",
+    "support_material_interface_layers": "support_interface_top_layers",
+    "support_material_bottom_interface_layers": "support_interface_bottom_layers",
+    "interface_layers": "support_interface_layers",
     "tree_branch_merge_distance": "tree_support_branch_merge_distance_ratio",
     "tree_branch_growth": "tree_support_branch_growth_ratio",
     "tree_min_branch_radius": "tree_support_min_branch_radius_mm",
+    "tree_branch_angle": "tree_support_branch_angle_deg",
+    "support_tree_angle": "tree_support_branch_angle_deg",
+    "tree_support_branch_angle": "tree_support_branch_angle_deg",
+    "tree_support_branch_angle_organic": "tree_support_branch_angle_organic_deg",
+    "support_tree_angle_organic": "tree_support_branch_angle_organic_deg",
+    "tree_support_wall_count": "tree_support_wall_count",
+    "support_tree_branch_distance": "tree_support_branch_distance_mm",
+    "tree_support_branch_distance": "tree_support_branch_distance_mm",
+    "tree_support_branch_distance_organic": "tree_support_branch_distance_organic_mm",
+    "support_tree_branch_distance_organic": "tree_support_branch_distance_organic_mm",
+    "support_tree_top_rate": "tree_support_top_rate_percent",
+    "tree_support_top_rate": "tree_support_top_rate_percent",
+    "support_tree_branch_diameter_angle": "tree_support_branch_diameter_angle_deg",
+    "tree_support_branch_diameter_angle": "tree_support_branch_diameter_angle_deg",
+    "tree_support_branch_diameter": "tree_support_branch_diameter_mm",
+    "tree_support_branch_diameter_organic": "tree_support_branch_diameter_organic_mm",
+    "support_tree_branch_diameter_organic": "tree_support_branch_diameter_organic_mm",
+    "tree_support_tip_diameter": "tree_support_tip_diameter_mm",
+    "tree_support_auto_brim": "tree_support_auto_brim",
+    "tree_support_brim_width": "tree_support_brim_width_mm",
     "tree_parent_weight_route": "tree_support_parent_weight_route",
     "tree_parent_weight_load": "tree_support_parent_weight_load",
     "tree_parent_root_bonus": "tree_support_parent_root_bonus",
@@ -312,6 +380,14 @@ SUPPORT_TYPE_ALIASES = {
     "organic": "tree",
 }
 
+SUPPORT_STYLE_ALIASES = {
+    "default": "pillars",
+    "normal": "pillars",
+    "pillars": "pillars",
+    "tree": "tree",
+    "organic": "organic",
+}
+
 SEAM_POSITION_ALIASES = {
     "nearest": "nearest",
     "aligned": "aligned",
@@ -374,6 +450,31 @@ class _NormalizationState:
         self.warnings.append(f"{key}:{code}:{value}")
 
 
+_PERCENT_REFERENCE_DISTANCE_KEYS = frozenset(
+    {
+        "support_spacing_mm",
+        "support_base_spacing_mm",
+        "support_interface_spacing_mm",
+        "support_bottom_interface_spacing_mm",
+        "support_xy_gap_mm",
+        "support_z_gap_mm",
+        "support_bottom_z_gap_mm",
+        "tree_support_branch_diameter_mm",
+        "tree_support_branch_diameter_organic_mm",
+        "tree_support_tip_diameter_mm",
+        "tree_support_branch_distance_mm",
+        "tree_support_branch_distance_organic_mm",
+        "tree_support_brim_width_mm",
+    }
+)
+
+
+def _is_percent_literal(value: object) -> bool:
+    if not isinstance(value, (str, bytes, bytearray)):
+        return False
+    return str(value).strip().endswith("%")
+
+
 def _coerce_float(value: object, fallback: float) -> float:
     if isinstance(value, bool):
         return fallback
@@ -433,6 +534,33 @@ def _normalize_length_or_percent(
     parsed = _parse_float(value, key=key, state=state)
     if parsed is None:
         return default
+    return _clamp_float(parsed, minimum=minimum, maximum=maximum, state=state)
+
+
+def _normalize_float_or_percent_distance(
+    value: object,
+    *,
+    key: str,
+    state: _NormalizationState,
+    default: object,
+    minimum: float,
+    maximum: float,
+    reference_mm: float,
+) -> float:
+    if isinstance(value, (str, bytes, bytearray)):
+        text = str(value).strip()
+        if text.endswith("%"):
+            number_text = text[:-1].strip()
+            parsed_pct = _parse_float(number_text, key=key, state=state)
+            if parsed_pct is None:
+                return float(default)
+            parsed = max(0.0, float(reference_mm)) * (parsed_pct * 0.01)
+            state.coerced_value_count += 1
+            return _clamp_float(parsed, minimum=minimum, maximum=maximum, state=state)
+
+    parsed = _parse_float(value, key=key, state=state)
+    if parsed is None:
+        return float(default)
     return _clamp_float(parsed, minimum=minimum, maximum=maximum, state=state)
 
 
@@ -596,7 +724,13 @@ def _normalize_string_lines(value: object, *, key: str, state: _NormalizationSta
     return tuple(lines)
 
 
-def _normalize_known_value(key: str, value: object, state: _NormalizationState) -> object:
+def _normalize_known_value(
+    key: str,
+    value: object,
+    state: _NormalizationState,
+    *,
+    reference_mm: float,
+) -> object:
     defaults = DEFAULT_SETTINGS
     if key == "perimeter_mode":
         return _normalize_choice(
@@ -677,6 +811,10 @@ def _normalize_known_value(key: str, value: object, state: _NormalizationState) 
             return -1.0
         return _clamp_float(parsed, minimum=0.0, maximum=1.5, state=state)
     if key == "infill_percent":
+        return _normalize_percent(value, key=key, state=state, default=_coerce_float(defaults[key], 15.0))
+    if key == "infill_wall_overlap_percent":
+        return _normalize_percent(value, key=key, state=state, default=_coerce_float(defaults[key], 15.0))
+    if key == "top_bottom_infill_wall_overlap_percent":
         return _normalize_percent(value, key=key, state=state, default=_coerce_float(defaults[key], 15.0))
     if key == "infill_pattern":
         return _normalize_choice(
@@ -763,28 +901,210 @@ def _normalize_known_value(key: str, value: object, state: _NormalizationState) 
             default=str(defaults[key]),
             state=state,
         )
+    if key == "support_style":
+        return _normalize_choice(
+            value,
+            key=key,
+            allowed_aliases=SUPPORT_STYLE_ALIASES,
+            default=str(defaults[key]),
+            state=state,
+        )
     if key == "support_density_percent":
         return _normalize_percent(value, key=key, state=state, default=_coerce_float(defaults[key], 15.0))
     if key == "support_spacing_mm":
-        parsed = _parse_float(value, key=key, state=state)
-        if parsed is None:
-            return defaults[key]
-        return _clamp_float(parsed, minimum=0.1, maximum=20.0, state=state)
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.1,
+            maximum=20.0,
+            reference_mm=reference_mm,
+        )
+    if key == "support_base_spacing_mm":
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.1,
+            maximum=20.0,
+            reference_mm=reference_mm,
+        )
+    if key == "support_interface_spacing_mm":
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.1,
+            maximum=20.0,
+            reference_mm=reference_mm,
+        )
+    if key == "support_bottom_interface_spacing_mm":
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.1,
+            maximum=20.0,
+            reference_mm=reference_mm,
+        )
     if key == "support_xy_gap_mm":
-        parsed = _parse_float(value, key=key, state=state)
-        if parsed is None:
-            return defaults[key]
-        return _clamp_float(parsed, minimum=0.0, maximum=5.0, state=state)
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.0,
+            maximum=5.0,
+            reference_mm=reference_mm,
+        )
     if key == "support_z_gap_mm":
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.0,
+            maximum=3.0,
+            reference_mm=reference_mm,
+        )
+    if key == "support_bottom_z_gap_mm":
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.0,
+            maximum=3.0,
+            reference_mm=reference_mm,
+        )
+    if key == "support_build_plate_only":
+        parsed_bool = _parse_bool(value, key=key, state=state)
+        if parsed_bool is None:
+            return defaults[key]
+        return parsed_bool
+    if key == "support_threshold_angle_deg":
         parsed = _parse_float(value, key=key, state=state)
         if parsed is None:
             return defaults[key]
-        return _clamp_float(parsed, minimum=0.0, maximum=3.0, state=state)
+        return _clamp_float(parsed, minimum=1.0, maximum=89.0, state=state)
+    if key == "support_threshold_overlap_percent":
+        return _normalize_percent(value, key=key, state=state, default=_coerce_float(defaults[key], 0.0))
+    if key == "support_critical_regions_only":
+        parsed_bool = _parse_bool(value, key=key, state=state)
+        if parsed_bool is None:
+            return defaults[key]
+        return parsed_bool
+    if key == "support_remove_small_overhang":
+        parsed_bool = _parse_bool(value, key=key, state=state)
+        if parsed_bool is None:
+            return defaults[key]
+        return parsed_bool
     if key == "support_interface_layers":
         parsed = _parse_int(value, key=key, state=state)
         if parsed is None:
             return defaults[key]
         return _clamp_int(parsed, minimum=0, maximum=20, state=state)
+    if key == "support_interface_top_layers":
+        parsed = _parse_int(value, key=key, state=state)
+        if parsed is None:
+            return defaults[key]
+        return _clamp_int(parsed, minimum=0, maximum=20, state=state)
+    if key == "support_interface_bottom_layers":
+        parsed = _parse_int(value, key=key, state=state)
+        if parsed is None:
+            return defaults[key]
+        return _clamp_int(parsed, minimum=-1, maximum=20, state=state)
+    if key == "tree_support_branch_angle_deg":
+        parsed = _parse_float(value, key=key, state=state)
+        if parsed is None:
+            return defaults[key]
+        return _clamp_float(parsed, minimum=0.0, maximum=85.0, state=state)
+    if key == "tree_support_wall_count":
+        parsed = _parse_int(value, key=key, state=state)
+        if parsed is None:
+            return defaults[key]
+        return _clamp_int(parsed, minimum=0, maximum=8, state=state)
+    if key == "tree_support_branch_diameter_mm":
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.05,
+            maximum=20.0,
+            reference_mm=reference_mm,
+        )
+    if key == "tree_support_tip_diameter_mm":
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.05,
+            maximum=20.0,
+            reference_mm=reference_mm,
+        )
+    if key == "tree_support_branch_distance_mm":
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.05,
+            maximum=60.0,
+            reference_mm=reference_mm,
+        )
+    if key == "tree_support_branch_distance_organic_mm":
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.05,
+            maximum=60.0,
+            reference_mm=reference_mm,
+        )
+    if key == "tree_support_top_rate_percent":
+        return _normalize_percent(value, key=key, state=state, default=_coerce_float(defaults[key], 30.0))
+    if key == "tree_support_branch_diameter_angle_deg":
+        parsed = _parse_float(value, key=key, state=state)
+        if parsed is None:
+            return defaults[key]
+        return _clamp_float(parsed, minimum=0.0, maximum=89.0, state=state)
+    if key == "tree_support_branch_angle_organic_deg":
+        parsed = _parse_float(value, key=key, state=state)
+        if parsed is None:
+            return defaults[key]
+        return _clamp_float(parsed, minimum=0.0, maximum=85.0, state=state)
+    if key == "tree_support_branch_diameter_organic_mm":
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.05,
+            maximum=20.0,
+            reference_mm=reference_mm,
+        )
+    if key == "tree_support_auto_brim":
+        parsed_bool = _parse_bool(value, key=key, state=state)
+        if parsed_bool is None:
+            return defaults[key]
+        return parsed_bool
+    if key == "tree_support_brim_width_mm":
+        return _normalize_float_or_percent_distance(
+            value,
+            key=key,
+            state=state,
+            default=defaults[key],
+            minimum=0.0,
+            maximum=30.0,
+            reference_mm=reference_mm,
+        )
     if key == "tree_support_branch_merge_distance_ratio":
         parsed = _parse_float(value, key=key, state=state)
         if parsed is None:
@@ -1148,6 +1468,8 @@ def normalize_settings_with_report(
     normalized = dict(DEFAULT_SETTINGS)
     state = _NormalizationState()
     known_keys = set(DEFAULT_SETTINGS.keys())
+    provided_known_keys: set[str] = set()
+    deferred_percent_distance_values: dict[str, object] = {}
 
     for raw_key, raw_value in raw_settings.items():
         text_key = str(raw_key).strip()
@@ -1155,11 +1477,73 @@ def normalize_settings_with_report(
         if canonical_key != text_key:
             state.alias_applied_count += 1
         if canonical_key in known_keys:
-            normalized[canonical_key] = _normalize_known_value(canonical_key, raw_value, state)
+            provided_known_keys.add(canonical_key)
+            if canonical_key in _PERCENT_REFERENCE_DISTANCE_KEYS and _is_percent_literal(raw_value):
+                deferred_percent_distance_values[canonical_key] = raw_value
+                continue
+            deferred_percent_distance_values.pop(canonical_key, None)
+            reference_mm = _coerce_float(
+                normalized.get("extrusion_width", DEFAULT_SETTINGS["extrusion_width"]),
+                _coerce_float(DEFAULT_SETTINGS["extrusion_width"], 0.4),
+            )
+            normalized[canonical_key] = _normalize_known_value(
+                canonical_key,
+                raw_value,
+                state,
+                reference_mm=reference_mm,
+            )
         else:
             state.unknown_keys.append(text_key)
             if keep_unknown_keys:
                 normalized[text_key] = raw_value
+
+    if deferred_percent_distance_values:
+        final_reference_mm = _coerce_float(
+            normalized.get("extrusion_width", DEFAULT_SETTINGS["extrusion_width"]),
+            _coerce_float(DEFAULT_SETTINGS["extrusion_width"], 0.4),
+        )
+        for canonical_key, raw_value in deferred_percent_distance_values.items():
+            normalized[canonical_key] = _normalize_known_value(
+                canonical_key,
+                raw_value,
+                state,
+                reference_mm=final_reference_mm,
+            )
+
+    if "support_style" not in provided_known_keys:
+        support_type_value = str(normalized.get("support_type", DEFAULT_SETTINGS["support_type"])).strip().lower()
+        normalized["support_style"] = "tree" if support_type_value == "tree" else "pillars"
+    if "support_type" not in provided_known_keys and "support_style" in provided_known_keys:
+        support_style_value = str(normalized.get("support_style", DEFAULT_SETTINGS["support_style"])).strip().lower()
+        if support_style_value in {"tree", "organic"}:
+            normalized["support_type"] = "tree"
+        else:
+            normalized["support_type"] = "normal"
+
+    if "support_interface_layers" in provided_known_keys:
+        if "support_interface_top_layers" not in provided_known_keys:
+            normalized["support_interface_top_layers"] = int(normalized.get("support_interface_layers", 0))
+        if "support_interface_bottom_layers" not in provided_known_keys:
+            normalized["support_interface_bottom_layers"] = int(DEFAULT_SETTINGS["support_interface_bottom_layers"])
+    if "support_interface_top_layers" in provided_known_keys and "support_interface_layers" not in provided_known_keys:
+        normalized["support_interface_layers"] = int(normalized.get("support_interface_top_layers", 0))
+
+    if "support_spacing_mm" in provided_known_keys:
+        if "support_base_spacing_mm" not in provided_known_keys:
+            normalized["support_base_spacing_mm"] = float(normalized.get("support_spacing_mm", 0.1))
+        if "support_interface_spacing_mm" not in provided_known_keys:
+            normalized["support_interface_spacing_mm"] = float(normalized.get("support_spacing_mm", 0.1))
+        if "support_bottom_interface_spacing_mm" not in provided_known_keys:
+            normalized["support_bottom_interface_spacing_mm"] = float(normalized.get("support_interface_spacing_mm", 0.1))
+    if "support_base_spacing_mm" in provided_known_keys and "support_spacing_mm" not in provided_known_keys:
+        normalized["support_spacing_mm"] = float(normalized.get("support_base_spacing_mm", 0.1))
+    if "support_interface_spacing_mm" in provided_known_keys and "support_bottom_interface_spacing_mm" not in provided_known_keys:
+        normalized["support_bottom_interface_spacing_mm"] = float(normalized.get("support_interface_spacing_mm", 0.1))
+    if "support_bottom_interface_spacing_mm" in provided_known_keys and "support_interface_spacing_mm" not in provided_known_keys:
+        normalized["support_interface_spacing_mm"] = float(normalized.get("support_bottom_interface_spacing_mm", 0.1))
+
+    if "support_z_gap_mm" in provided_known_keys and "support_bottom_z_gap_mm" not in provided_known_keys:
+        normalized["support_bottom_z_gap_mm"] = float(normalized.get("support_z_gap_mm", 0.0))
 
     min_width = _coerce_float(normalized.get("variable_line_width_min", 0.1), 0.1)
     max_width = _coerce_float(normalized.get("variable_line_width_max", 0.1), 0.1)
@@ -1168,6 +1552,23 @@ def normalize_settings_with_report(
         normalized["variable_line_width_max"] = min_width
         state.clamped_value_count += 1
         state.add_warning("variable_line_width_bounds", "swapped_min_max", f"{min_width}>{max_width}")
+
+    branch_diameter_mm = _coerce_float(
+        normalized.get("tree_support_branch_diameter_mm", DEFAULT_SETTINGS["tree_support_branch_diameter_mm"]),
+        _coerce_float(DEFAULT_SETTINGS["tree_support_branch_diameter_mm"], 0.6),
+    )
+    tip_diameter_mm = _coerce_float(
+        normalized.get("tree_support_tip_diameter_mm", DEFAULT_SETTINGS["tree_support_tip_diameter_mm"]),
+        _coerce_float(DEFAULT_SETTINGS["tree_support_tip_diameter_mm"], 0.3),
+    )
+    if tip_diameter_mm > branch_diameter_mm:
+        normalized["tree_support_tip_diameter_mm"] = branch_diameter_mm
+        state.clamped_value_count += 1
+        state.add_warning(
+            "tree_support_tip_diameter_mm",
+            "clamped_to_branch_diameter",
+            f"{tip_diameter_mm}>{branch_diameter_mm}",
+        )
 
     report = SettingsNormalizationReport(
         normalized_at_utc=datetime.now(timezone.utc).isoformat(),

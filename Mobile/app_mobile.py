@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import toga
 from toga.style import Pack
@@ -12,18 +12,28 @@ class MobileBackend:
         self.base_url = base_url.rstrip("/")
         self.api_token = api_token.strip()
 
-    def _request(self, method: str, path: str, payload: Optional[dict] = None) -> Tuple[Optional[Any], Optional[str]]:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        payload: Optional[dict] = None,
+        query: Optional[dict] = None,
+    ) -> Tuple[Optional[Any], Optional[str]]:
         try:
             import requests
         except Exception as exc:
             return None, f"requests unavailable: {exc}"
 
         url = f"{self.base_url}/{path.lstrip('/')}"
-        headers: Dict[str, str] = {}
+        body = dict(payload or {})
+        params = dict(query or {})
         if self.api_token:
-            headers["Authorization"] = f"Bearer {self.api_token}"
+            if method.strip().upper() == "GET":
+                params.setdefault("auth_token", self.api_token)
+            else:
+                body.setdefault("auth_token", self.api_token)
         try:
-            resp = requests.request(method, url, json=payload, timeout=10, headers=headers)
+            resp = requests.request(method, url, json=body or None, params=params or None, timeout=10)
         except Exception as exc:
             return None, str(exc)
         if not resp.ok:
@@ -36,19 +46,45 @@ class MobileBackend:
             return resp.text, None
 
     def fetch_summary(self) -> Tuple[Optional[dict], Optional[str]]:
-        data, err = self._request("GET", "/api/mobile/summary")
-        if isinstance(data, dict):
-            return data, None
-        return None, err or "Invalid summary response"
+        data, err = self._request("GET", "/api/v1/queue/snapshot")
+        if not isinstance(data, dict):
+            return None, err or "Invalid summary response"
+        snapshot = data.get("snapshot")
+        if not isinstance(snapshot, dict):
+            return None, "Invalid queue snapshot payload"
+        queued = int(snapshot.get("queue_depth", 0) or 0)
+        total = int(snapshot.get("job_count", 0) or 0)
+        jobs = snapshot.get("jobs", [])
+        return {
+            "status": f"Connected | queued: {queued} | jobs: {total}",
+            "jobs": jobs if isinstance(jobs, list) else [],
+        }, None
 
     def job_action(self, job_id: str, action: str) -> Tuple[bool, str]:
-        payload = {"action": action}
-        data, err = self._request("POST", f"/api/jobs/{job_id}/action", payload=payload)
-        if err:
-            return False, err
-        message = "OK"
-        if isinstance(data, dict) and data.get("message"):
-            message = str(data["message"])
+        key = str(job_id or "").strip()
+        if not key:
+            return False, "Missing job ID."
+        status_data, status_err = self._request("GET", "/api/v1/jobs/status", query={"job_id": key})
+        if status_err:
+            return False, status_err
+        if not isinstance(status_data, dict):
+            return False, "Invalid status response."
+        job_payload = status_data.get("job")
+        if not isinstance(job_payload, dict):
+            return False, "Job not found."
+        events_data, events_err = self._request("GET", "/api/v1/jobs/events", query={"job_id": key})
+        if events_err:
+            return False, events_err
+        latest_event = ""
+        if isinstance(events_data, dict):
+            events = events_data.get("events", [])
+            if isinstance(events, list) and events:
+                latest_event = str(events[-1])
+        current_status = str(job_payload.get("status", "unknown")).strip() or "unknown"
+        verb = str(action or "status").strip().lower() or "status"
+        message = f"{verb.title()} check: {current_status}"
+        if latest_event:
+            message = f"{message} | latest event: {latest_event}"
         return True, message
 
 
@@ -130,8 +166,8 @@ class MobileApp(toga.App):
             if not isinstance(job, dict):
                 continue
             rows.append([
-                str(job.get("id", "")),
-                str(job.get("name", "")),
+                str(job.get("job_id", "")),
+                str(job.get("model_name", "")),
                 str(job.get("status", "")),
             ])
         self.jobs_table.data = rows
@@ -146,10 +182,10 @@ class MobileApp(toga.App):
             return
         ok, msg = self.backend.job_action(job_id, action)
         if ok:
-            self._set_status(f"{action.title()} requested for job {job_id}.")
+            self._set_status(msg)
             self.refresh(None)
         else:
-            self._set_status(f"{action.title()} failed: {msg}")
+            self._set_status(msg)
 
     def pause_job(self, widget) -> None:
         self._job_action("pause")

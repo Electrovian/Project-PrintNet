@@ -69,6 +69,16 @@ def run(context: SlicerContext) -> dict:
 
     infill_percent = _to_float(context.resolved_settings.get("infill_percent", 15.0), 15.0)
     infill_percent = max(0.0, min(infill_percent, 100.0))
+    infill_wall_overlap_percent = _to_float(
+        context.resolved_settings.get("infill_wall_overlap_percent", 15.0),
+        15.0,
+    )
+    infill_wall_overlap_percent = max(0.0, min(100.0, infill_wall_overlap_percent))
+    top_bottom_infill_wall_overlap_percent = _to_float(
+        context.resolved_settings.get("top_bottom_infill_wall_overlap_percent", 15.0),
+        15.0,
+    )
+    top_bottom_infill_wall_overlap_percent = max(0.0, min(100.0, top_bottom_infill_wall_overlap_percent))
     infill_pattern = str(context.resolved_settings.get("infill_pattern", "rectilinear")).strip().lower()
     infill_angle_start = _to_float(context.resolved_settings.get("infill_angle_start", 45.0), 45.0)
     infill_angle_step = _to_float(context.resolved_settings.get("infill_angle_step", 90.0), 90.0)
@@ -114,6 +124,8 @@ def run(context: SlicerContext) -> dict:
             angle_start_deg=infill_angle_start,
             angle_step_deg=infill_angle_step,
             angle_template=infill_angle_template,
+            infill_wall_overlap_percent=infill_wall_overlap_percent,
+            top_bottom_infill_wall_overlap_percent=top_bottom_infill_wall_overlap_percent,
             infill_anchor=infill_anchor,
             infill_anchor_max=infill_anchor_max,
             combine_infill_enabled=infill_combination_enabled,
@@ -131,6 +143,8 @@ def run(context: SlicerContext) -> dict:
             "infill_percent": infill_percent,
             "infill_pattern": infill_pattern,
             "infill_density_ratio": density_ratio,
+            "infill_wall_overlap_percent": infill_wall_overlap_percent,
+            "top_bottom_infill_wall_overlap_percent": top_bottom_infill_wall_overlap_percent,
             "infill_angle_start_deg": infill_angle_start,
             "infill_angle_step_deg": infill_angle_step,
             "infill_anchor": infill_anchor,
@@ -146,6 +160,19 @@ def run(context: SlicerContext) -> dict:
             "layer_infill_counts": [plan.path_count for plan in layer_plans],
             "layer_infill_angles_deg": [plan.angle_deg for plan in layer_plans],
             "layer_infill_anchor_angles_deg": [plan.anchor_angle_deg for plan in layer_plans],
+            "layer_infill_overlap_multipliers": [float(plan.overlap_multiplier) for plan in layer_plans],
+            "layer_infill_overlap_geometric_offsets_mm": [
+                float(plan.overlap_geometric_offset_mm) for plan in layer_plans
+            ],
+            "layer_infill_overlap_top_bottom_offsets_mm": [
+                float(plan.overlap_top_bottom_geometric_offset_mm) for plan in layer_plans
+            ],
+            "layer_infill_overlap_geometric_applied": [
+                bool(plan.overlap_geometric_applied) for plan in layer_plans
+            ],
+            "layer_infill_overlap_geometric_fallback_used": [
+                bool(plan.overlap_geometric_fallback_used) for plan in layer_plans
+            ],
             "layer_infill_combined_counts": [plan.combined_layer_count for plan in layer_plans],
             "layer_infill_thickness_layers": [plan.combined_thickness_layers for plan in layer_plans],
             "layer_infill_void_flags": [bool(plan.is_void_layer) for plan in layer_plans],
@@ -180,6 +207,14 @@ def run(context: SlicerContext) -> dict:
                 "infill_path_length_mm_total": float(report.path_length_mm_total),
                 "void_layer_count": int(report.void_layer_count),
                 "support_surface_ratio_avg": float(report.support_surface_ratio_avg),
+                "infill_wall_overlap_percent": float(infill_wall_overlap_percent),
+                "top_bottom_infill_wall_overlap_percent": float(top_bottom_infill_wall_overlap_percent),
+                "overlap_geometric_offset_mm_avg": float(
+                    sum(float(plan.overlap_geometric_offset_mm) for plan in layer_plans) / max(1, len(layer_plans))
+                ),
+                "overlap_geometric_fallback_count": int(
+                    sum(1 for plan in layer_plans if bool(plan.overlap_geometric_fallback_used))
+                ),
             },
         )
         context.stage_artifacts[STAGE_NAME] = artifact
@@ -192,6 +227,8 @@ def run(context: SlicerContext) -> dict:
         "infill_percent": infill_percent,
         "infill_pattern": infill_pattern,
         "infill_density_ratio": density_ratio,
+        "infill_wall_overlap_percent": infill_wall_overlap_percent,
+        "top_bottom_infill_wall_overlap_percent": top_bottom_infill_wall_overlap_percent,
         "infill_angle_start_deg": infill_angle_start,
         "infill_angle_step_deg": infill_angle_step,
         "infill_anchor": infill_anchor,
@@ -207,6 +244,11 @@ def run(context: SlicerContext) -> dict:
         "layer_infill_counts": [],
         "layer_infill_angles_deg": [],
         "layer_infill_anchor_angles_deg": [],
+        "layer_infill_overlap_multipliers": [],
+        "layer_infill_overlap_geometric_offsets_mm": [],
+        "layer_infill_overlap_top_bottom_offsets_mm": [],
+        "layer_infill_overlap_geometric_applied": [],
+        "layer_infill_overlap_geometric_fallback_used": [],
         "layer_infill_combined_counts": [],
         "layer_infill_thickness_layers": [],
         "layer_infill_void_flags": [],
@@ -229,6 +271,10 @@ def run(context: SlicerContext) -> dict:
             "infill_path_length_mm_total": 0.0,
             "void_layer_count": 0,
             "support_surface_ratio_avg": 0.0,
+            "infill_wall_overlap_percent": float(infill_wall_overlap_percent),
+            "top_bottom_infill_wall_overlap_percent": float(top_bottom_infill_wall_overlap_percent),
+            "overlap_geometric_offset_mm_avg": 0.0,
+            "overlap_geometric_fallback_count": 0,
         },
     )
     context.stage_artifacts[STAGE_NAME] = artifact

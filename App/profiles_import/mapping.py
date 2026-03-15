@@ -124,6 +124,44 @@ def _to_float(
     return result
 
 
+def _to_float_or_percent_distance(
+    value: object,
+    *,
+    warning_context: str,
+    warnings: list[str],
+    reference_mm: float,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float | None:
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    if text.endswith("%"):
+        number_text = text[:-1].strip()
+        try:
+            numeric = float(number_text)
+        except (TypeError, ValueError, OverflowError):
+            warnings.append(f"{warning_context}:invalid_percent_distance:{value}")
+            return None
+        result = max(0.0, float(reference_mm)) * (numeric * 0.01)
+    else:
+        try:
+            result = _parse_float_value(value)
+        except (TypeError, ValueError, OverflowError):
+            warnings.append(f"{warning_context}:invalid_float:{value}")
+            return None
+
+    if minimum is not None and result < minimum:
+        result = minimum
+    if maximum is not None and result > maximum:
+        result = maximum
+    return float(result)
+
+
 def _to_int(
     value: object,
     *,
@@ -295,6 +333,19 @@ def _normalize_pattern(
     return allowed_values.get(normalized, next(iter(allowed_values.values())))
 
 
+def _normalize_support_style(value: object) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if not normalized:
+        return None
+    if normalized in {"tree", "organic"}:
+        return normalized
+    if normalized in {"normal", "default", "pillar", "pillars"}:
+        return "pillars"
+    return None
+
+
 def _map_machine_profile(
     profile: ResolvedProfileDocument,
 ) -> tuple[dict, set[str], list[str]]:
@@ -419,6 +470,8 @@ def _map_process_profile(
         if numeric is not None:
             mapped["extrusion_width"] = numeric
 
+    distance_reference_mm = float(mapped.get("extrusion_width", 0.4))
+
     key, value = _first_key(data, ("wall_loops", "perimeters", "wall_line_count"))
     if key:
         mapped_source_keys.add(key)
@@ -464,6 +517,20 @@ def _map_process_profile(
         percent = _to_percent(value, warning_context=f"{context_prefix}:{key}", warnings=warnings)
         if percent is not None:
             mapped["infill_percent"] = percent
+
+    key, value = _first_key(data, ("infill_overlap", "infill_wall_overlap"))
+    if key:
+        mapped_source_keys.add(key)
+        percent = _to_percent(value, warning_context=f"{context_prefix}:{key}", warnings=warnings)
+        if percent is not None:
+            mapped["infill_wall_overlap_percent"] = percent
+
+    key, value = _first_key(data, ("top_bottom_infill_wall_overlap",))
+    if key:
+        mapped_source_keys.add(key)
+        percent = _to_percent(value, warning_context=f"{context_prefix}:{key}", warnings=warnings)
+        if percent is not None:
+            mapped["top_bottom_infill_wall_overlap_percent"] = percent
 
     key, value = _first_key(data, ("sparse_infill_pattern", "infill_pattern"))
     if key:
@@ -512,27 +579,240 @@ def _map_process_profile(
         if enabled is not None:
             mapped["support_enabled"] = enabled
 
+    key, value = _first_key(data, ("support_style", "support_structure"))
+    if key:
+        mapped_source_keys.add(key)
+        style = _normalize_support_style(value)
+        if style:
+            mapped["support_style"] = style
+            if "support_type" not in mapped:
+                mapped["support_type"] = "tree" if style in {"tree", "organic"} else "normal"
+
     key, value = _first_key(data, ("support_type",))
     if key:
         mapped_source_keys.add(key)
         normalized = str(value).strip().lower()
         if normalized:
-            mapped["support_type"] = "tree" if "tree" in normalized else "normal"
+            mapped["support_type"] = "tree" if ("tree" in normalized or "organic" in normalized) else "normal"
+            if "support_style" not in mapped:
+                mapped["support_style"] = "organic" if "organic" in normalized else (
+                    "tree" if "tree" in normalized else "pillars"
+                )
 
-    key, value = _first_key(data, ("support_top_z_distance", "support_z_distance"))
+    key, value = _first_key(data, ("support_on_build_plate_only", "support_build_plate_only"))
     if key:
         mapped_source_keys.add(key)
-        numeric = _to_float(
+        build_plate_only = _to_bool(value, warning_context=f"{context_prefix}:{key}", warnings=warnings)
+        if build_plate_only is not None:
+            mapped["support_build_plate_only"] = build_plate_only
+
+    key, value = _first_key(
+        data,
+        (
+            "support_line_spacing",
+            "support_spacing",
+            "support_material_spacing",
+            "support_base_pattern_spacing",
+        ),
+    )
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
             value,
             warning_context=f"{context_prefix}:{key}",
             warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.1,
+            maximum=20.0,
+        )
+        if numeric is not None:
+            mapped["support_spacing_mm"] = numeric
+            mapped.setdefault("support_base_spacing_mm", numeric)
+            mapped.setdefault("support_interface_spacing_mm", numeric)
+            mapped.setdefault("support_bottom_interface_spacing_mm", numeric)
+
+    key, value = _first_key(data, ("support_base_pattern_spacing",))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.1,
+            maximum=20.0,
+        )
+        if numeric is not None:
+            mapped["support_base_spacing_mm"] = numeric
+            mapped.setdefault("support_spacing_mm", numeric)
+
+    key, value = _first_key(data, ("support_interface_spacing",))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.1,
+            maximum=20.0,
+        )
+        if numeric is not None:
+            mapped["support_interface_spacing_mm"] = numeric
+            mapped.setdefault("support_bottom_interface_spacing_mm", numeric)
+
+    key, value = _first_key(data, ("support_bottom_interface_spacing",))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.1,
+            maximum=20.0,
+        )
+        if numeric is not None:
+            mapped["support_bottom_interface_spacing_mm"] = numeric
+
+    key, value = _first_key(
+        data,
+        (
+            "support_top_z_distance",
+            "support_z_distance",
+            "support_material_contact_distance",
+        ),
+    )
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
             minimum=0.0,
             maximum=5.0,
         )
         if numeric is not None:
-            mapped["support_z_gap"] = numeric
+            mapped["support_z_gap_mm"] = numeric
 
-    key, value = _first_key(data, ("support_object_xy_distance", "support_xy_distance"))
+    key, value = _first_key(data, ("support_bottom_z_distance", "support_material_bottom_contact_distance"))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.0,
+            maximum=5.0,
+        )
+        if numeric is not None:
+            mapped["support_bottom_z_gap_mm"] = numeric
+
+    key, value = _first_key(
+        data,
+        (
+            "support_object_xy_distance",
+            "support_xy_distance",
+            "support_material_xy_spacing",
+        ),
+    )
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.0,
+            maximum=10.0,
+        )
+        if numeric is not None:
+            mapped["support_xy_gap_mm"] = numeric
+
+    key, value = _first_key(data, ("support_threshold_overlap", "support_threshold_overlap_percent"))
+    if key:
+        mapped_source_keys.add(key)
+        overlap = _to_percent(value, warning_context=f"{context_prefix}:{key}", warnings=warnings)
+        if overlap is not None:
+            mapped["support_threshold_overlap_percent"] = overlap
+
+    key, value = _first_key(data, ("support_threshold_angle",))
+    if key:
+        mapped_source_keys.add(key)
+        angle = _to_float(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            minimum=1.0,
+            maximum=89.0,
+        )
+        if angle is not None:
+            mapped["support_threshold_angle_deg"] = angle
+
+    key, value = _first_key(data, ("support_critical_regions_only",))
+    if key:
+        mapped_source_keys.add(key)
+        enabled = _to_bool(value, warning_context=f"{context_prefix}:{key}", warnings=warnings)
+        if enabled is not None:
+            mapped["support_critical_regions_only"] = enabled
+
+    key, value = _first_key(data, ("support_remove_small_overhang",))
+    if key:
+        mapped_source_keys.add(key)
+        enabled = _to_bool(value, warning_context=f"{context_prefix}:{key}", warnings=warnings)
+        if enabled is not None:
+            mapped["support_remove_small_overhang"] = enabled
+
+    key, value = _first_key(data, ("support_interface_layer_count",))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_int(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            minimum=0,
+            maximum=20,
+        )
+        if numeric is not None:
+            mapped["support_interface_layers"] = numeric
+            mapped.setdefault("support_interface_top_layers", numeric)
+
+    key, value = _first_key(data, ("support_interface_top_layers", "support_material_interface_layers"))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_int(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            minimum=0,
+            maximum=20,
+        )
+        if numeric is not None:
+            mapped["support_interface_top_layers"] = numeric
+            mapped.setdefault("support_interface_layers", numeric)
+
+    key, value = _first_key(
+        data,
+        (
+            "support_interface_bottom_layers",
+            "support_material_bottom_interface_layers",
+        ),
+    )
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_int(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            minimum=-1,
+            maximum=20,
+        )
+        if numeric is not None:
+            mapped["support_interface_bottom_layers"] = numeric
+
+    key, value = _first_key(data, ("tree_support_branch_angle", "support_tree_angle", "support_tree_angle_deg"))
     if key:
         mapped_source_keys.add(key)
         numeric = _to_float(
@@ -540,10 +820,165 @@ def _map_process_profile(
             warning_context=f"{context_prefix}:{key}",
             warnings=warnings,
             minimum=0.0,
-            maximum=10.0,
+            maximum=85.0,
         )
         if numeric is not None:
-            mapped["support_xy_gap"] = numeric
+            mapped["tree_support_branch_angle_deg"] = numeric
+
+    key, value = _first_key(
+        data,
+        (
+            "tree_support_branch_angle_organic",
+            "support_tree_angle_organic",
+        ),
+    )
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            minimum=0.0,
+            maximum=85.0,
+        )
+        if numeric is not None:
+            mapped["tree_support_branch_angle_organic_deg"] = numeric
+
+    key, value = _first_key(data, ("tree_support_wall_count",))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_int(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            minimum=0,
+            maximum=8,
+        )
+        if numeric is not None:
+            mapped["tree_support_wall_count"] = numeric
+
+    key, value = _first_key(data, ("support_tree_branch_distance", "tree_support_branch_distance"))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.05,
+            maximum=60.0,
+        )
+        if numeric is not None:
+            mapped["tree_support_branch_distance_mm"] = numeric
+
+    key, value = _first_key(
+        data,
+        (
+            "support_tree_branch_distance_organic",
+            "tree_support_branch_distance_organic",
+        ),
+    )
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.05,
+            maximum=60.0,
+        )
+        if numeric is not None:
+            mapped["tree_support_branch_distance_organic_mm"] = numeric
+
+    key, value = _first_key(data, ("support_tree_top_rate", "tree_support_top_rate"))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_percent(value, warning_context=f"{context_prefix}:{key}", warnings=warnings)
+        if numeric is not None:
+            mapped["tree_support_top_rate_percent"] = numeric
+
+    key, value = _first_key(data, ("support_tree_branch_diameter_angle", "tree_support_branch_diameter_angle"))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            minimum=0.0,
+            maximum=89.0,
+        )
+        if numeric is not None:
+            mapped["tree_support_branch_diameter_angle_deg"] = numeric
+
+    key, value = _first_key(data, ("tree_support_branch_diameter",))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.05,
+            maximum=20.0,
+        )
+        if numeric is not None:
+            mapped["tree_support_branch_diameter_mm"] = numeric
+
+    key, value = _first_key(
+        data,
+        (
+            "support_tree_branch_diameter_organic",
+            "tree_support_branch_diameter_organic",
+        ),
+    )
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.05,
+            maximum=20.0,
+        )
+        if numeric is not None:
+            mapped["tree_support_branch_diameter_organic_mm"] = numeric
+
+    key, value = _first_key(data, ("tree_support_tip_diameter",))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.05,
+            maximum=20.0,
+        )
+        if numeric is not None:
+            mapped["tree_support_tip_diameter_mm"] = numeric
+
+    key, value = _first_key(data, ("tree_support_auto_brim",))
+    if key:
+        mapped_source_keys.add(key)
+        enabled = _to_bool(value, warning_context=f"{context_prefix}:{key}", warnings=warnings)
+        if enabled is not None:
+            mapped["tree_support_auto_brim"] = enabled
+
+    key, value = _first_key(data, ("tree_support_brim_width",))
+    if key:
+        mapped_source_keys.add(key)
+        numeric = _to_float_or_percent_distance(
+            value,
+            warning_context=f"{context_prefix}:{key}",
+            warnings=warnings,
+            reference_mm=distance_reference_mm,
+            minimum=0.0,
+            maximum=30.0,
+        )
+        if numeric is not None:
+            mapped["tree_support_brim_width_mm"] = numeric
 
     key, value = _first_key(data, ("support_base_pattern", "support_pattern"))
     if key:

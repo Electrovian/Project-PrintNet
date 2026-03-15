@@ -36,17 +36,29 @@ class SettingsPanelTests(QtTestCase):
             top_layers=4,
             bottom_layers=2,
             infill_percent=22.0,
+            infill_wall_overlap_percent=18.0,
+            top_bottom_infill_wall_overlap_percent=26.0,
             infill_pattern="grid",
             support_enabled=True,
             support_type="tree",
-            support_style="tree",
+            support_style="organic",
             overhang_angle=50.0,
+            support_threshold_angle_deg=52.0,
             support_build_plate_only=True,
             support_z_gap=0.35,
+            support_bottom_z_gap_mm=0.25,
             support_xy_gap=0.45,
             interface_layers=3,
+            support_interface_top_layers=3,
+            support_interface_bottom_layers=-1,
+            support_critical_regions_only=True,
+            support_remove_small_overhang=True,
             interface_density=0.75,
             support_spacing=2.5,
+            support_base_spacing_mm=2.5,
+            support_interface_spacing_mm=1.4,
+            support_bottom_interface_spacing_mm=1.1,
+            support_threshold_overlap_percent=35.0,
             support_speed=70.0,
             support_interface_speed=55.0,
             support_pattern="grid",
@@ -54,6 +66,18 @@ class SettingsPanelTests(QtTestCase):
             support_filament_base="support",
             support_filament_interface="support",
             tree_branch_angle=35.0,
+            tree_support_branch_angle_deg=35.0,
+            tree_support_wall_count=3,
+            tree_support_branch_diameter_mm=0.9,
+            tree_support_tip_diameter_mm=0.45,
+            tree_support_branch_distance_mm=3.1,
+            tree_support_top_rate_percent=65.0,
+            tree_support_branch_diameter_angle_deg=14.0,
+            tree_support_branch_angle_organic_deg=29.0,
+            tree_support_branch_diameter_organic_mm=1.05,
+            tree_support_branch_distance_organic_mm=3.8,
+            tree_support_auto_brim=True,
+            tree_support_brim_width_mm=4.0,
             tree_merge_distance=3.5,
             prime_tower_enabled=True,
             prime_tower_width=40.0,
@@ -87,17 +111,29 @@ class SettingsPanelTests(QtTestCase):
         self.assertEqual(updated.top_layers, 4)
         self.assertEqual(updated.bottom_layers, 2)
         self.assertEqual(updated.infill_percent, 22.0)
+        self.assertEqual(updated.infill_wall_overlap_percent, 18.0)
+        self.assertEqual(updated.top_bottom_infill_wall_overlap_percent, 26.0)
         self.assertEqual(updated.infill_pattern, "grid")
         self.assertTrue(updated.support_enabled)
         self.assertEqual(updated.support_type, "tree")
-        self.assertEqual(updated.support_style, "tree")
+        self.assertEqual(updated.support_style, "organic")
         self.assertAlmostEqual(updated.overhang_angle, 50.0, places=1)
+        self.assertAlmostEqual(updated.support_threshold_angle_deg, 52.0, places=1)
         self.assertTrue(updated.support_build_plate_only)
         self.assertAlmostEqual(updated.support_z_gap, 0.35, places=2)
+        self.assertAlmostEqual(updated.support_bottom_z_gap_mm, 0.25, places=2)
         self.assertAlmostEqual(updated.support_xy_gap, 0.45, places=2)
         self.assertEqual(updated.interface_layers, 3)
+        self.assertEqual(updated.support_interface_top_layers, 3)
+        self.assertEqual(updated.support_interface_bottom_layers, -1)
+        self.assertTrue(updated.support_critical_regions_only)
+        self.assertTrue(updated.support_remove_small_overhang)
         self.assertAlmostEqual(updated.interface_density, 0.75, places=2)
         self.assertAlmostEqual(updated.support_spacing, 2.5, places=2)
+        self.assertAlmostEqual(updated.support_base_spacing_mm, 2.5, places=2)
+        self.assertAlmostEqual(updated.support_interface_spacing_mm, 1.4, places=2)
+        self.assertAlmostEqual(updated.support_bottom_interface_spacing_mm, 1.1, places=2)
+        self.assertAlmostEqual(updated.support_threshold_overlap_percent, 35.0, places=2)
         self.assertAlmostEqual(updated.support_speed, 70.0, places=2)
         self.assertAlmostEqual(updated.support_interface_speed, 55.0, places=2)
         self.assertEqual(updated.support_pattern, "grid")
@@ -105,6 +141,18 @@ class SettingsPanelTests(QtTestCase):
         self.assertEqual(updated.support_filament_base, "support")
         self.assertEqual(updated.support_filament_interface, "support")
         self.assertAlmostEqual(updated.tree_branch_angle, 35.0, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_angle_deg, 35.0, places=2)
+        self.assertEqual(updated.tree_support_wall_count, 3)
+        self.assertAlmostEqual(updated.tree_support_branch_diameter_mm, 0.9, places=2)
+        self.assertAlmostEqual(updated.tree_support_tip_diameter_mm, 0.45, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_distance_mm, 3.1, places=2)
+        self.assertAlmostEqual(updated.tree_support_top_rate_percent, 65.0, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_diameter_angle_deg, 14.0, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_angle_organic_deg, 29.0, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_diameter_organic_mm, 1.05, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_distance_organic_mm, 3.8, places=2)
+        self.assertTrue(updated.tree_support_auto_brim)
+        self.assertAlmostEqual(updated.tree_support_brim_width_mm, 4.0, places=2)
         self.assertAlmostEqual(updated.tree_merge_distance, 3.5, places=2)
         self.assertTrue(updated.prime_tower_enabled)
         self.assertAlmostEqual(updated.prime_tower_width, 40.0, places=2)

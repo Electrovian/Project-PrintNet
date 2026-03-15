@@ -306,17 +306,25 @@ class OtherSectionMixin:
             support_type = str(self.support_type_combo.currentData() or "").strip().lower()
         if hasattr(self, "support_style_combo"):
             support_style = str(self.support_style_combo.currentData() or "").strip().lower()
-        tree_mode = enabled and (support_type == "tree" or support_style == "tree")
+        tree_mode = enabled and (support_type == "tree" or support_style in {"tree", "organic"})
 
         for control in (
             self.support_type_combo,
             self.support_style_combo,
             self.support_angle_spin,
+            self.support_threshold_angle_deg_spin,
             self.support_build_plate_check,
             self.support_z_gap_spin,
+            self.support_bottom_z_gap_spin,
             self.support_xy_gap_spin,
             self.support_spacing_spin,
+            self.support_interface_spacing_spin,
+            self.support_bottom_interface_spacing_spin,
+            self.support_threshold_overlap_spin,
+            self.support_critical_regions_only_check,
+            self.support_remove_small_overhang_check,
             self.support_interface_layers_spin,
+            self.support_interface_bottom_layers_spin,
             self.support_interface_density_spin,
             self.support_pattern_combo,
             self.support_interface_pattern_combo,
@@ -327,9 +335,20 @@ class OtherSectionMixin:
         ):
             control.setEnabled(enabled)
 
-        self.support_style_combo.setEnabled(enabled and support_type != "tree")
+        self.support_style_combo.setEnabled(enabled and support_type == "tree")
         for control in (
             self.tree_branch_angle_spin,
+            self.tree_support_wall_count_spin,
+            self.tree_support_branch_diameter_spin,
+            self.tree_support_tip_diameter_spin,
+            self.tree_support_branch_distance_spin,
+            self.tree_support_top_rate_spin,
+            self.tree_support_branch_diameter_angle_spin,
+            self.tree_support_branch_angle_organic_spin,
+            self.tree_support_branch_diameter_organic_spin,
+            self.tree_support_branch_distance_organic_spin,
+            self.tree_support_auto_brim_check,
+            self.tree_support_brim_width_spin,
             self.tree_merge_distance_spin,
         ):
             control.setEnabled(tree_mode)
@@ -647,17 +666,29 @@ class OtherSectionMixin:
             top_layers=int(self.top_shell_layers_spin.value()),
             bottom_layers=int(self.bottom_shell_layers_spin.value()),
             infill_percent=float(self.infill_density_spin.value()),
+            infill_wall_overlap_percent=float(self.infill_wall_overlap_spin.value()),
+            top_bottom_infill_wall_overlap_percent=float(self.top_bottom_infill_wall_overlap_spin.value()),
             infill_pattern=self._combo_value(self.infill_pattern_combo, "rectilinear"),
             support_enabled=bool(self.support_enable_check.isChecked()),
             support_type=self._combo_value(self.support_type_combo, "normal"),
             support_style=self._combo_value(self.support_style_combo, "pillars"),
             overhang_angle=float(self.support_angle_spin.value()),
+            support_threshold_angle_deg=float(self.support_threshold_angle_deg_spin.value()),
             support_build_plate_only=bool(self.support_build_plate_check.isChecked()),
             support_z_gap=float(self.support_z_gap_spin.value()),
+            support_bottom_z_gap_mm=float(self.support_bottom_z_gap_spin.value()),
             support_xy_gap=float(self.support_xy_gap_spin.value()),
+            support_critical_regions_only=bool(self.support_critical_regions_only_check.isChecked()),
+            support_remove_small_overhang=bool(self.support_remove_small_overhang_check.isChecked()),
             interface_layers=int(self.support_interface_layers_spin.value()),
+            support_interface_top_layers=int(self.support_interface_layers_spin.value()),
+            support_interface_bottom_layers=int(self.support_interface_bottom_layers_spin.value()),
             interface_density=float(self.support_interface_density_spin.value()) / 100.0,
             support_spacing=float(self.support_spacing_spin.value()),
+            support_base_spacing_mm=float(self.support_spacing_spin.value()),
+            support_interface_spacing_mm=float(self.support_interface_spacing_spin.value()),
+            support_bottom_interface_spacing_mm=float(self.support_bottom_interface_spacing_spin.value()),
+            support_threshold_overlap_percent=float(self.support_threshold_overlap_spin.value()),
             support_speed=float(self.support_speed_spin.value()),
             support_interface_speed=float(self.support_interface_speed_spin.value()),
             support_pattern=self._combo_value(self.support_pattern_combo, "rectilinear"),
@@ -666,6 +697,18 @@ class OtherSectionMixin:
             support_filament_base=self._combo_value(self.support_base_combo, "default"),
             support_filament_interface=self._combo_value(self.support_interface_combo, "default"),
             tree_branch_angle=float(self.tree_branch_angle_spin.value()),
+            tree_support_branch_angle_deg=float(self.tree_branch_angle_spin.value()),
+            tree_support_wall_count=int(self.tree_support_wall_count_spin.value()),
+            tree_support_branch_diameter_mm=float(self.tree_support_branch_diameter_spin.value()),
+            tree_support_tip_diameter_mm=float(self.tree_support_tip_diameter_spin.value()),
+            tree_support_branch_distance_mm=float(self.tree_support_branch_distance_spin.value()),
+            tree_support_top_rate_percent=float(self.tree_support_top_rate_spin.value()),
+            tree_support_branch_diameter_angle_deg=float(self.tree_support_branch_diameter_angle_spin.value()),
+            tree_support_branch_angle_organic_deg=float(self.tree_support_branch_angle_organic_spin.value()),
+            tree_support_branch_diameter_organic_mm=float(self.tree_support_branch_diameter_organic_spin.value()),
+            tree_support_branch_distance_organic_mm=float(self.tree_support_branch_distance_organic_spin.value()),
+            tree_support_auto_brim=bool(self.tree_support_auto_brim_check.isChecked()),
+            tree_support_brim_width_mm=float(self.tree_support_brim_width_spin.value()),
             tree_merge_distance=float(self.tree_merge_distance_spin.value()),
             prime_tower_enabled=bool(self.prime_tower_enable_check.isChecked()),
             prime_tower_width=float(self.prime_tower_width_spin.value()),
@@ -852,6 +895,10 @@ class OtherSectionMixin:
             self.bottom_shell_layers_spin.setValue(int(data["bottom_layers"]))
         if "infill_percent" in data:
             self.infill_density_spin.setValue(int(float(data["infill_percent"])))
+        if "infill_wall_overlap_percent" in data:
+            self.infill_wall_overlap_spin.setValue(float(data["infill_wall_overlap_percent"]))
+        if "top_bottom_infill_wall_overlap_percent" in data:
+            self.top_bottom_infill_wall_overlap_spin.setValue(float(data["top_bottom_infill_wall_overlap_percent"]))
         if "infill_pattern" in data:
             self._set_combo_value(self.infill_pattern_combo, data["infill_pattern"])
         if "support_enabled" in data:
@@ -862,19 +909,47 @@ class OtherSectionMixin:
             self._set_combo_value(self.support_style_combo, data["support_style"])
         if "overhang_angle" in data:
             self.support_angle_spin.setValue(float(data["overhang_angle"]))
+        if "support_threshold_angle_deg" in data:
+            self.support_threshold_angle_deg_spin.setValue(float(data["support_threshold_angle_deg"]))
         if "support_build_plate_only" in data:
             self.support_build_plate_check.setChecked(bool(data["support_build_plate_only"]))
         if "support_z_gap" in data:
             self.support_z_gap_spin.setValue(float(data["support_z_gap"]))
+        if "support_z_gap_mm" in data:
+            self.support_z_gap_spin.setValue(float(data["support_z_gap_mm"]))
+        if "support_bottom_z_gap_mm" in data:
+            self.support_bottom_z_gap_spin.setValue(float(data["support_bottom_z_gap_mm"]))
         if "support_xy_gap" in data:
             self.support_xy_gap_spin.setValue(float(data["support_xy_gap"]))
+        if "support_xy_gap_mm" in data:
+            self.support_xy_gap_spin.setValue(float(data["support_xy_gap_mm"]))
+        if "support_critical_regions_only" in data:
+            self.support_critical_regions_only_check.setChecked(bool(data["support_critical_regions_only"]))
+        if "support_remove_small_overhang" in data:
+            self.support_remove_small_overhang_check.setChecked(bool(data["support_remove_small_overhang"]))
         if "interface_layers" in data:
             self.support_interface_layers_spin.setValue(int(data["interface_layers"]))
+        if "support_interface_layers" in data:
+            self.support_interface_layers_spin.setValue(int(data["support_interface_layers"]))
+        if "support_interface_top_layers" in data:
+            self.support_interface_layers_spin.setValue(int(data["support_interface_top_layers"]))
+        if "support_interface_bottom_layers" in data:
+            self.support_interface_bottom_layers_spin.setValue(int(data["support_interface_bottom_layers"]))
         if "interface_density" in data:
             density = max(0.0, min(1.0, float(data["interface_density"]))) * 100.0
             self.support_interface_density_spin.setValue(density)
         if "support_spacing" in data:
             self.support_spacing_spin.setValue(float(data["support_spacing"]))
+        if "support_spacing_mm" in data:
+            self.support_spacing_spin.setValue(float(data["support_spacing_mm"]))
+        if "support_base_spacing_mm" in data:
+            self.support_spacing_spin.setValue(float(data["support_base_spacing_mm"]))
+        if "support_interface_spacing_mm" in data:
+            self.support_interface_spacing_spin.setValue(float(data["support_interface_spacing_mm"]))
+        if "support_bottom_interface_spacing_mm" in data:
+            self.support_bottom_interface_spacing_spin.setValue(float(data["support_bottom_interface_spacing_mm"]))
+        if "support_threshold_overlap_percent" in data:
+            self.support_threshold_overlap_spin.setValue(float(data["support_threshold_overlap_percent"]))
         if "support_speed" in data:
             self.support_speed_spin.setValue(float(data["support_speed"]))
         if "support_interface_speed" in data:
@@ -890,6 +965,30 @@ class OtherSectionMixin:
             self._set_combo_value(self.support_interface_combo, data["support_filament_interface"])
         if "tree_branch_angle" in data:
             self.tree_branch_angle_spin.setValue(float(data["tree_branch_angle"]))
+        if "tree_support_branch_angle_deg" in data:
+            self.tree_branch_angle_spin.setValue(float(data["tree_support_branch_angle_deg"]))
+        if "tree_support_wall_count" in data:
+            self.tree_support_wall_count_spin.setValue(int(data["tree_support_wall_count"]))
+        if "tree_support_branch_diameter_mm" in data:
+            self.tree_support_branch_diameter_spin.setValue(float(data["tree_support_branch_diameter_mm"]))
+        if "tree_support_tip_diameter_mm" in data:
+            self.tree_support_tip_diameter_spin.setValue(float(data["tree_support_tip_diameter_mm"]))
+        if "tree_support_branch_distance_mm" in data:
+            self.tree_support_branch_distance_spin.setValue(float(data["tree_support_branch_distance_mm"]))
+        if "tree_support_top_rate_percent" in data:
+            self.tree_support_top_rate_spin.setValue(float(data["tree_support_top_rate_percent"]))
+        if "tree_support_branch_diameter_angle_deg" in data:
+            self.tree_support_branch_diameter_angle_spin.setValue(float(data["tree_support_branch_diameter_angle_deg"]))
+        if "tree_support_branch_angle_organic_deg" in data:
+            self.tree_support_branch_angle_organic_spin.setValue(float(data["tree_support_branch_angle_organic_deg"]))
+        if "tree_support_branch_diameter_organic_mm" in data:
+            self.tree_support_branch_diameter_organic_spin.setValue(float(data["tree_support_branch_diameter_organic_mm"]))
+        if "tree_support_branch_distance_organic_mm" in data:
+            self.tree_support_branch_distance_organic_spin.setValue(float(data["tree_support_branch_distance_organic_mm"]))
+        if "tree_support_auto_brim" in data:
+            self.tree_support_auto_brim_check.setChecked(bool(data["tree_support_auto_brim"]))
+        if "tree_support_brim_width_mm" in data:
+            self.tree_support_brim_width_spin.setValue(float(data["tree_support_brim_width_mm"]))
         if "tree_merge_distance" in data:
             self.tree_merge_distance_spin.setValue(float(data["tree_merge_distance"]))
         if "prime_tower_enabled" in data:

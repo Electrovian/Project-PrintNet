@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from math import atan2, ceil, cos, radians, sin
+from math import atan2, ceil, cos, radians, sin, tan
 from typing import Sequence
 
 from .errors import SlicerV2SupportPlanningError
@@ -17,6 +17,10 @@ from .region_expansion import RegionExpansionParameters, merge_expansions_into_p
 SUPPORT_TYPE_NORMAL = "normal"
 SUPPORT_TYPE_TREE = "tree"
 ALLOWED_SUPPORT_TYPES = {SUPPORT_TYPE_NORMAL, SUPPORT_TYPE_TREE}
+SUPPORT_STYLE_PILLARS = "pillars"
+SUPPORT_STYLE_TREE = "tree"
+SUPPORT_STYLE_ORGANIC = "organic"
+ALLOWED_SUPPORT_STYLES = {SUPPORT_STYLE_PILLARS, SUPPORT_STYLE_TREE, SUPPORT_STYLE_ORGANIC}
 
 
 @dataclass
@@ -30,6 +34,7 @@ class SupportRegionPlan:
     interface_path_count: int
     span_major_mm: float
     span_minor_mm: float
+    unsupported_overlap_ratio: float = 0.0
     footprint_polygon_count: int = 0
     footprint_area_mm2: float = 0.0
     center_x_mm: float = 0.0
@@ -89,6 +94,7 @@ class LayerSupportPlan:
     tree_pruned_branch_count: int
     tree_parent_assignment_count: int
     tree_trunk_count: int
+    unsupported_overlap_ratio_avg: float = 0.0
     support_regions: list[SupportRegionPlan] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
@@ -103,11 +109,36 @@ class SupportPlanningReport:
     unsupported_island_count_total: int
     support_enabled: bool
     support_type: str
+    support_style: str
     support_density_percent: float
+    support_build_plate_only: bool
     support_spacing_mm: float
+    support_base_spacing_mm: float
+    support_interface_spacing_mm: float
+    support_bottom_interface_spacing_mm: float
     support_xy_gap_mm: float
     support_z_gap_mm: float
+    support_bottom_z_gap_mm: float
+    support_threshold_angle_deg: float
+    support_threshold_overlap_percent: float
+    support_critical_regions_only: bool
+    support_remove_small_overhang: bool
     support_interface_layers: int
+    support_interface_top_layers: int
+    support_interface_bottom_layers: int
+    support_interface_bottom_layers_effective: int
+    tree_support_branch_angle_deg: float
+    tree_support_wall_count: int
+    tree_support_branch_diameter_mm: float
+    tree_support_tip_diameter_mm: float
+    tree_support_branch_distance_mm: float
+    tree_support_branch_distance_organic_mm: float
+    tree_support_top_rate_percent: float
+    tree_support_branch_diameter_angle_deg: float
+    tree_support_branch_angle_organic_deg: float
+    tree_support_branch_diameter_organic_mm: float
+    tree_support_auto_brim: bool
+    tree_support_brim_width_mm: float
     support_region_count_total: int
     support_path_count_total: int
     support_path_length_mm_total: float
@@ -153,6 +184,15 @@ def _validate_support_type(value: str) -> str:
     return text
 
 
+def _validate_support_style(value: str) -> str:
+    text = str(value).strip().lower()
+    if text in {"default", "normal", "pillar"}:
+        text = SUPPORT_STYLE_PILLARS
+    if text not in ALLOWED_SUPPORT_STYLES:
+        raise SlicerV2SupportPlanningError(f"SUPPORT_STYLE_UNSUPPORTED:{value}")
+    return text
+
+
 def _validate_ratio(value: float, *, code: str, minimum: float, maximum: float) -> float:
     parsed = float(value)
     if parsed < minimum or parsed > maximum:
@@ -178,6 +218,15 @@ def _validate_interface_layers(value: int) -> int:
     parsed = int(value)
     if parsed < 0:
         raise SlicerV2SupportPlanningError("SUPPORT_INTERFACE_LAYER_COUNT_INVALID")
+    if parsed > 20:
+        raise SlicerV2SupportPlanningError("SUPPORT_INTERFACE_LAYER_COUNT_EXCESSIVE")
+    return parsed
+
+
+def _validate_interface_bottom_layers(value: int) -> int:
+    parsed = int(value)
+    if parsed < -1:
+        raise SlicerV2SupportPlanningError("SUPPORT_INTERFACE_BOTTOM_LAYER_COUNT_INVALID")
     if parsed > 20:
         raise SlicerV2SupportPlanningError("SUPPORT_INTERFACE_LAYER_COUNT_EXCESSIVE")
     return parsed
@@ -234,6 +283,98 @@ def _line_metrics(start: Point2, end: Point2, clip: Sequence[Polygon | Island]) 
         if index == 0 or not split[index - 1].clipped:
             segment_count += 1
     return (segment_count, float(path_length_mm))
+
+
+def _allowable_overhang_offset_mm(layer_height_mm: float, threshold_angle_deg: float) -> float:
+    layer_height = max(EPSILON, float(layer_height_mm))
+    angle_deg = max(0.0, min(89.0, float(threshold_angle_deg)))
+    if angle_deg <= EPSILON:
+        return float(layer_height * 10_000.0)
+    tangent = tan(radians(angle_deg))
+    if abs(tangent) <= EPSILON:
+        return float(layer_height * 10_000.0)
+    return float(max(0.0, layer_height / tangent))
+
+
+def _point_supported_with_offset(point: Point2, lower_islands: Sequence[Island], allowed_offset_mm: float) -> bool:
+    for lower in lower_islands:
+        if lower.contains_point(point, include_boundary=True):
+            return True
+    if allowed_offset_mm <= EPSILON:
+        return False
+    offsets = (
+        (allowed_offset_mm, 0.0),
+        (-allowed_offset_mm, 0.0),
+        (0.0, allowed_offset_mm),
+        (0.0, -allowed_offset_mm),
+        (allowed_offset_mm * 0.70710678, allowed_offset_mm * 0.70710678),
+        (allowed_offset_mm * 0.70710678, -allowed_offset_mm * 0.70710678),
+        (-allowed_offset_mm * 0.70710678, allowed_offset_mm * 0.70710678),
+        (-allowed_offset_mm * 0.70710678, -allowed_offset_mm * 0.70710678),
+    )
+    for dx, dy in offsets:
+        candidate = Point2(float(point.x + dx), float(point.y + dy))
+        for lower in lower_islands:
+            if lower.contains_point(candidate, include_boundary=True):
+                return True
+    return False
+
+
+def _estimate_vertical_supported_ratio_scanline(
+    upper_island: Island,
+    lower_islands: Sequence[Island],
+    *,
+    sample_step_mm: float,
+    allowed_offset_mm: float,
+) -> float:
+    if not lower_islands:
+        return 0.0
+
+    bounds = upper_island.bounds
+    width = max(0.0, float(bounds.width))
+    height = max(0.0, float(bounds.height))
+    if width <= EPSILON or height <= EPSILON:
+        return 0.0
+
+    step = max(0.05, float(sample_step_mm))
+    x_min = float(bounds.min_x)
+    x_max = float(bounds.max_x)
+    y_min = float(bounds.min_y)
+    y_max = float(bounds.max_y)
+    x_samples = max(1, int(ceil(width / step)))
+    y_samples = max(1, int(ceil(height / step)))
+
+    supported = 0
+    inside = 0
+    for y_index in range(y_samples):
+        y = y_min + ((y_index + 0.5) * step)
+        if y > y_max + EPSILON:
+            continue
+        for x_index in range(x_samples):
+            x = x_min + ((x_index + 0.5) * step)
+            if x > x_max + EPSILON:
+                continue
+            point = Point2(float(x), float(y))
+            if not upper_island.contains_point(point, include_boundary=True):
+                continue
+            inside += 1
+            if _point_supported_with_offset(point, lower_islands, allowed_offset_mm):
+                supported += 1
+    if inside <= 0:
+        return 0.0
+    return float(max(0.0, min(1.0, supported / max(1, inside))))
+
+
+def _is_critical_unsupported_region(island: Island, *, supported_ratio: float, extrusion_width_mm: float) -> bool:
+    deficit = max(0.0, min(1.0, 1.0 - float(supported_ratio)))
+    span_major = max(float(island.bounds.width), float(island.bounds.height))
+    span_minor = min(float(island.bounds.width), float(island.bounds.height))
+    area_mm2 = max(0.0, float(island.area))
+    width = max(EPSILON, float(extrusion_width_mm))
+    severe = deficit >= 0.55
+    edge_like = span_minor <= (width * 3.0) and span_major >= (width * 6.0)
+    broad = area_mm2 >= (width * width * 36.0) and deficit >= 0.30
+    return bool(severe or edge_like or broad)
 
 
 def _scanline_fill_metrics(polygons: Sequence[Polygon], spacing_mm: float, angle_deg: float) -> tuple[int, float, float, float]:
@@ -318,8 +459,11 @@ def _estimate_region(
     island_index: int,
     polygons: Sequence[Polygon],
     support_type: str,
-    support_interface_layers: int,
-    support_spacing_mm: float,
+    support_interface_top_layers: int,
+    support_interface_bottom_layers: int,
+    support_base_spacing_mm: float,
+    support_interface_spacing_mm: float,
+    support_bottom_interface_spacing_mm: float,
     support_density_ratio: float,
     extrusion_width_mm: float,
 ) -> SupportRegionPlan:
@@ -331,7 +475,7 @@ def _estimate_region(
     span_major = max(width_mm, height_mm)
     span_minor = min(width_mm, height_mm)
     spacing = _resolve_spacing(
-        support_spacing_mm=support_spacing_mm,
+        support_spacing_mm=support_base_spacing_mm,
         support_density_ratio=support_density_ratio,
         extrusion_width_mm=extrusion_width_mm,
         support_type=support_type,
@@ -345,7 +489,28 @@ def _estimate_region(
         path_count = max(1, int(ceil(path_count * 0.7)))
         path_length = float(path_length * 0.75)
 
-    interface_path_count = min(path_count, support_interface_layers * 2) if support_interface_layers > 0 else 0
+    top_interface_layers = max(0, int(support_interface_top_layers))
+    bottom_interface_layers = max(0, int(support_interface_bottom_layers))
+    interface_path_count = 0
+    if top_interface_layers > 0:
+        top_spacing = max(EPSILON, float(support_interface_spacing_mm))
+        top_base_count, _interface_length, _span_major, _span_minor = _scanline_fill_metrics(
+            polygons,
+            top_spacing,
+            angle,
+        )
+        interface_path_count += max(1, int(top_base_count * max(1.0, top_interface_layers * 0.5)))
+    if bottom_interface_layers > 0:
+        bottom_spacing = max(EPSILON, float(support_bottom_interface_spacing_mm))
+        bottom_base_count, _interface_length, _span_major, _span_minor = _scanline_fill_metrics(
+            polygons,
+            bottom_spacing,
+            angle,
+        )
+        interface_path_count += max(1, int(bottom_base_count * max(1.0, bottom_interface_layers * 0.5)))
+    if interface_path_count > 0:
+        interface_layers = top_interface_layers + bottom_interface_layers
+        interface_path_count = max(interface_path_count, min(path_count, max(1, interface_layers * 2)))
     pattern = "lines" if support_type == SUPPORT_TYPE_NORMAL else "tree_branch"
     area_mm2 = float(sum(poly.area for poly in polygons))
 
@@ -749,6 +914,7 @@ def _apply_tree_branch_heuristics(
     layer_plans: Sequence[LayerSupportPlan],
     layer_graphs: Sequence[LayerIslandGraph],
     support_spacing_mm: float,
+    support_style: str,
     branch_merge_distance_ratio: float,
     branch_growth_ratio: float,
     min_branch_radius_mm: float,
@@ -757,6 +923,18 @@ def _apply_tree_branch_heuristics(
     parent_root_bonus: float,
     trunk_root_bonus: float,
     trunk_depth_bonus: float,
+    branch_angle_deg: float,
+    wall_count: int,
+    branch_diameter_mm: float,
+    tip_diameter_mm: float,
+    branch_distance_mm: float,
+    top_rate_percent: float,
+    branch_diameter_angle_deg: float,
+    branch_angle_organic_deg: float,
+    branch_diameter_organic_mm: float,
+    branch_distance_organic_mm: float,
+    auto_brim: bool,
+    brim_width_mm: float,
     strict_parity_mode: bool,
 ) -> tuple[list[TreeSupportBranchPlan], list[str]]:
     warnings: list[str] = []
@@ -766,13 +944,50 @@ def _apply_tree_branch_heuristics(
     merge_ratio = max(0.5, min(4.0, float(branch_merge_distance_ratio)))
     growth_ratio = max(1.0, min(2.0, float(branch_growth_ratio)))
     min_radius = max(0.05, float(min_branch_radius_mm))
-    merge_distance = max(min_radius, float(support_spacing_mm) * merge_ratio)
+    style = _validate_support_style(support_style)
+    organic_style = style == SUPPORT_STYLE_ORGANIC
+    base_branch_angle = max(5.0, min(85.0, float(branch_angle_deg)))
+    organic_branch_angle = max(5.0, min(85.0, float(branch_angle_organic_deg)))
+    branch_angle = organic_branch_angle if organic_style else base_branch_angle
+    wall_count_clamped = max(0, min(8, int(wall_count)))
+    base_branch_diameter = max(min_radius * 2.0, float(branch_diameter_mm))
+    organic_branch_diameter = max(min_radius * 2.0, float(branch_diameter_organic_mm))
+    branch_diameter = organic_branch_diameter if organic_style else base_branch_diameter
+    tip_diameter = max(0.05, min(branch_diameter, float(tip_diameter_mm)))
+    branch_distance = max(0.05, float(branch_distance_organic_mm if organic_style else branch_distance_mm))
+    top_rate = max(0.0, min(100.0, float(top_rate_percent)))
+    diameter_angle = max(0.0, min(89.0, float(branch_diameter_angle_deg)))
+    auto_brim_enabled = bool(auto_brim)
+    brim_width = max(0.0, float(brim_width_mm))
+    angle_scale = 0.75 + (branch_angle / 120.0)
+    wall_scale = 1.0 + (wall_count_clamped * 0.1)
+    top_rate_scale = 1.0 + (top_rate * 0.002)
+    diameter_angle_scale = 1.0 + (diameter_angle / 180.0)
+    brim_scale = 1.0 + (min(12.0, brim_width) * 0.02 if auto_brim_enabled else 0.0)
+    growth_ratio = max(1.0, min(2.2, growth_ratio * (1.0 + (wall_count_clamped * 0.02)) * top_rate_scale))
+    min_radius = max(min_radius, tip_diameter * 0.5)
+    max_radius_cap = max(min_radius, (branch_diameter * 0.5) * wall_scale * brim_scale * diameter_angle_scale)
+    distance_scale = max(0.3, branch_distance / max(EPSILON, float(support_spacing_mm)))
+    merge_distance = max(min_radius, float(support_spacing_mm) * merge_ratio * angle_scale * distance_scale)
     route_weight = max(0.0, float(parent_weight_route))
     load_weight = max(0.0, float(parent_weight_load))
     root_bonus_weight = max(0.0, float(parent_root_bonus))
     trunk_root_bonus_weight = max(0.0, float(trunk_root_bonus))
     trunk_depth_bonus_weight = max(0.0, float(trunk_depth_bonus))
     strict_mode = bool(strict_parity_mode)
+    warnings.append(
+        "tree_support:modifiers"
+        f":style={style}"
+        f":angle={branch_angle:.2f}"
+        f":walls={wall_count_clamped}"
+        f":diameter={branch_diameter:.3f}"
+        f":tip={tip_diameter:.3f}"
+        f":distance={branch_distance:.3f}"
+        f":top_rate={top_rate:.2f}"
+        f":diameter_angle={diameter_angle:.2f}"
+        f":auto_brim={1 if auto_brim_enabled else 0}"
+        f":brim_width={brim_width:.3f}"
+    )
 
     by_layer: dict[int, LayerSupportPlan] = {int(plan.layer_index): plan for plan in layer_plans}
     graph_by_layer: dict[int, LayerIslandGraph] = {int(graph.layer_index): graph for graph in layer_graphs}
@@ -852,7 +1067,7 @@ def _apply_tree_branch_heuristics(
                 parent_branch.tip_layer_index = int(min(parent_branch.tip_layer_index, layer_index))
                 parent_branch.length_mm = float(parent_branch.length_mm + max(layer_step * 0.5, 0.0))
                 parent_branch.radius_mm = float(
-                    max(min_radius, min(parent_branch.radius_mm * growth_ratio, support_spacing_mm * 1.8))
+                    max(min_radius, min(parent_branch.radius_mm * growth_ratio, max_radius_cap))
                 )
                 parent_branch.connected_region_count = int(parent_branch.connected_region_count + 1)
                 parent_branch.selection_score = float(max(parent_branch.selection_score, best_parent_score))
@@ -864,7 +1079,7 @@ def _apply_tree_branch_heuristics(
                     parent_branch.trunk_assignment = "trunk"
 
                 should_spawn_child = (
-                    best_dist >= (merge_distance * 0.55)
+                    best_dist >= (merge_distance * max(0.20, (0.45 + (branch_angle / 180.0)) - (top_rate * 0.0025)))
                     or best_path_collision_avoided
                     or len(best_path) > 2
                     or best_parent_score < 0.5
@@ -886,7 +1101,7 @@ def _apply_tree_branch_heuristics(
                         tip_layer_index=int(layer_index),
                         x_mm=float(region.center_x_mm),
                         y_mm=float(region.center_y_mm),
-                        radius_mm=float(max(min_radius, parent_branch.radius_mm * 0.8)),
+                        radius_mm=float(max(min_radius, min(max_radius_cap, parent_branch.radius_mm * 0.8))),
                         length_mm=float(max(layer_step, best_path_length * 0.4)),
                         connected_region_count=1,
                         waypoint_count=max(0, len(best_path) - 2),
@@ -950,8 +1165,8 @@ def _apply_tree_branch_heuristics(
                     tip_layer_index=int(layer_index),
                     x_mm=float(region.center_x_mm),
                     y_mm=float(region.center_y_mm),
-                    radius_mm=float(max(min_radius, support_spacing_mm * 0.25)),
-                    length_mm=float(max(layer_step, min_radius)),
+                    radius_mm=float(max(min_radius, min(max_radius_cap, support_spacing_mm * 0.25 * wall_scale))),
+                    length_mm=float(max(layer_step, min_radius + (brim_width * 0.1 if auto_brim_enabled else 0.0))),
                     connected_region_count=1,
                     waypoint_count=0,
                     collision_avoidance_count=0,
@@ -1035,7 +1250,7 @@ def _apply_tree_branch_heuristics(
                     other = branches[old_trunk_id]
                     trunk_score, other_score = other_score, trunk_score
 
-                trunk.radius_mm = float(min(support_spacing_mm * 2.0, trunk.radius_mm + (other.radius_mm * 0.35)))
+                trunk.radius_mm = float(min(max_radius_cap * 1.15, trunk.radius_mm + (other.radius_mm * 0.35)))
                 trunk.length_mm = float(max(trunk.length_mm, other.length_mm) + (layer_step * 0.5))
                 trunk.connected_region_count += int(other.connected_region_count)
                 trunk.waypoint_count = int(trunk.waypoint_count + other.waypoint_count)
@@ -1248,6 +1463,30 @@ def build_support_plan(
     support_z_gap_mm: float,
     support_interface_layers: int,
     extrusion_width_mm: float,
+    support_style: str = "pillars",
+    support_base_spacing_mm: float = 2.5,
+    support_interface_spacing_mm: float = 2.5,
+    support_bottom_interface_spacing_mm: float = 2.5,
+    support_bottom_z_gap_mm: float = 0.2,
+    support_build_plate_only: bool = False,
+    support_threshold_angle_deg: float = 45.0,
+    support_threshold_overlap_percent: float = 0.0,
+    support_critical_regions_only: bool = False,
+    support_remove_small_overhang: bool = False,
+    support_interface_top_layers: int = 2,
+    support_interface_bottom_layers: int = 0,
+    tree_support_branch_angle_deg: float = 45.0,
+    tree_support_wall_count: int = 1,
+    tree_support_branch_diameter_mm: float = 0.6,
+    tree_support_tip_diameter_mm: float = 0.3,
+    tree_support_branch_distance_mm: float = 2.0,
+    tree_support_branch_distance_organic_mm: float = 2.5,
+    tree_support_top_rate_percent: float = 30.0,
+    tree_support_branch_diameter_angle_deg: float = 5.0,
+    tree_support_branch_angle_organic_deg: float = 35.0,
+    tree_support_branch_diameter_organic_mm: float = 0.7,
+    tree_support_auto_brim: bool = False,
+    tree_support_brim_width_mm: float = 0.0,
     tree_branch_merge_distance_ratio: float = 1.2,
     tree_branch_growth_ratio: float = 1.08,
     tree_min_branch_radius_mm: float = 0.3,
@@ -1261,7 +1500,18 @@ def build_support_plan(
 ) -> tuple[list[LayerSupportPlan], SupportPlanningReport]:
     graphs = _validate_layer_graphs(layer_graphs)
     edges = _validate_vertical_edges(vertical_edges)
-    normalized_type = _validate_support_type(support_type)
+    normalized_style = _validate_support_style(support_style)
+    normalized_type_input = str(support_type).strip().lower()
+    if normalized_type_input not in ALLOWED_SUPPORT_TYPES:
+        if normalized_style in {SUPPORT_STYLE_TREE, SUPPORT_STYLE_ORGANIC}:
+            normalized_type_input = SUPPORT_TYPE_TREE
+        else:
+            raise SlicerV2SupportPlanningError(f"SUPPORT_TYPE_UNSUPPORTED:{support_type}")
+    normalized_type = _validate_support_type(normalized_type_input)
+    if normalized_type == SUPPORT_TYPE_TREE and normalized_style == SUPPORT_STYLE_PILLARS:
+        normalized_style = SUPPORT_STYLE_TREE
+    if normalized_type != SUPPORT_TYPE_TREE and normalized_style in {SUPPORT_STYLE_TREE, SUPPORT_STYLE_ORGANIC}:
+        normalized_style = SUPPORT_STYLE_PILLARS
     density_percent = _validate_ratio(
         support_density_percent,
         code="SUPPORT_DENSITY_PERCENT_INVALID",
@@ -1269,10 +1519,106 @@ def build_support_plan(
         maximum=100.0,
     )
     spacing_mm = _validate_positive(support_spacing_mm, code="SUPPORT_SPACING_INVALID")
+    base_spacing_mm = _validate_positive(support_base_spacing_mm, code="SUPPORT_BASE_SPACING_INVALID")
+    interface_spacing_mm = _validate_positive(
+        support_interface_spacing_mm,
+        code="SUPPORT_INTERFACE_SPACING_INVALID",
+    )
+    bottom_interface_spacing_mm = _validate_positive(
+        support_bottom_interface_spacing_mm,
+        code="SUPPORT_BOTTOM_INTERFACE_SPACING_INVALID",
+    )
     xy_gap_mm = _validate_non_negative(support_xy_gap_mm, code="SUPPORT_XY_GAP_INVALID")
     z_gap_mm = _validate_non_negative(support_z_gap_mm, code="SUPPORT_Z_GAP_INVALID")
+    bottom_z_gap_mm = _validate_non_negative(support_bottom_z_gap_mm, code="SUPPORT_BOTTOM_Z_GAP_INVALID")
+    threshold_angle_deg = _validate_ratio(
+        support_threshold_angle_deg,
+        code="SUPPORT_THRESHOLD_ANGLE_INVALID",
+        minimum=1.0,
+        maximum=89.0,
+    )
+    overlap_threshold_percent = _validate_ratio(
+        support_threshold_overlap_percent,
+        code="SUPPORT_OVERLAP_THRESHOLD_INVALID",
+        minimum=0.0,
+        maximum=100.0,
+    )
+    critical_regions_only = bool(support_critical_regions_only)
+    remove_small_overhang = bool(support_remove_small_overhang)
     interface_layers = _validate_interface_layers(support_interface_layers)
+    interface_top_layers = _validate_interface_layers(support_interface_top_layers)
+    interface_bottom_layers_requested = _validate_interface_bottom_layers(support_interface_bottom_layers)
+    interface_bottom_layers = (
+        interface_top_layers if interface_bottom_layers_requested == -1 else interface_bottom_layers_requested
+    )
+    build_plate_only = bool(support_build_plate_only)
     width_mm = _validate_positive(extrusion_width_mm, code="SUPPORT_EXTRUSION_WIDTH_INVALID")
+    tree_branch_angle_deg = _validate_ratio(
+        tree_support_branch_angle_deg,
+        code="SUPPORT_TREE_BRANCH_ANGLE_INVALID",
+        minimum=0.0,
+        maximum=85.0,
+    )
+    tree_wall_count = max(0, min(8, int(tree_support_wall_count)))
+    tree_branch_diameter_mm = _validate_positive(
+        tree_support_branch_diameter_mm,
+        code="SUPPORT_TREE_BRANCH_DIAMETER_INVALID",
+    )
+    tree_tip_diameter_mm = _validate_positive(
+        tree_support_tip_diameter_mm,
+        code="SUPPORT_TREE_TIP_DIAMETER_INVALID",
+    )
+    if tree_tip_diameter_mm > tree_branch_diameter_mm:
+        tree_tip_diameter_mm = tree_branch_diameter_mm
+    tree_branch_distance_mm = _validate_positive(
+        tree_support_branch_distance_mm,
+        code="SUPPORT_TREE_BRANCH_DISTANCE_INVALID",
+    )
+    tree_branch_distance_organic_mm = _validate_positive(
+        tree_support_branch_distance_organic_mm,
+        code="SUPPORT_TREE_BRANCH_DISTANCE_ORGANIC_INVALID",
+    )
+    tree_top_rate_percent = _validate_ratio(
+        tree_support_top_rate_percent,
+        code="SUPPORT_TREE_TOP_RATE_INVALID",
+        minimum=0.0,
+        maximum=100.0,
+    )
+    tree_branch_diameter_angle_deg = _validate_ratio(
+        tree_support_branch_diameter_angle_deg,
+        code="SUPPORT_TREE_BRANCH_DIAMETER_ANGLE_INVALID",
+        minimum=0.0,
+        maximum=89.0,
+    )
+    tree_branch_angle_organic_deg = _validate_ratio(
+        tree_support_branch_angle_organic_deg,
+        code="SUPPORT_TREE_BRANCH_ANGLE_ORGANIC_INVALID",
+        minimum=0.0,
+        maximum=85.0,
+    )
+    tree_branch_diameter_organic_mm = _validate_positive(
+        tree_support_branch_diameter_organic_mm,
+        code="SUPPORT_TREE_BRANCH_DIAMETER_ORGANIC_INVALID",
+    )
+    tree_auto_brim = bool(tree_support_auto_brim)
+    tree_brim_width_mm = _validate_non_negative(
+        tree_support_brim_width_mm,
+        code="SUPPORT_TREE_BRIM_WIDTH_INVALID",
+    )
+    if abs(base_spacing_mm - 2.5) <= EPSILON and abs(spacing_mm - 2.5) > EPSILON:
+        base_spacing_mm = spacing_mm
+    if abs(interface_spacing_mm - 2.5) <= EPSILON and abs(spacing_mm - 2.5) > EPSILON:
+        interface_spacing_mm = spacing_mm
+    if abs(bottom_interface_spacing_mm - 2.5) <= EPSILON and abs(interface_spacing_mm - 2.5) > EPSILON:
+        bottom_interface_spacing_mm = interface_spacing_mm
+    if interface_top_layers == 2 and interface_layers != 2:
+        interface_top_layers = interface_layers
+    elif interface_top_layers != 2 and interface_layers == 2:
+        interface_layers = interface_top_layers
+    if interface_bottom_layers_requested == -1:
+        interface_bottom_layers = interface_top_layers
+    if abs(bottom_z_gap_mm - 0.2) <= EPSILON and abs(z_gap_mm - 0.2) > EPSILON:
+        bottom_z_gap_mm = z_gap_mm
     branch_merge_ratio = _validate_ratio(
         tree_branch_merge_distance_ratio,
         code="SUPPORT_TREE_BRANCH_MERGE_RATIO_INVALID",
@@ -1323,28 +1669,101 @@ def build_support_plan(
     if normalized_type == SUPPORT_TYPE_TREE:
         warnings.append("support_planning:tree_mode_mvp_estimate")
         warnings.append("support_planning:tree_branch_graph_enabled")
+        warnings.append(f"support_planning:tree_style={normalized_style}")
         if bool(tree_support_strict_parity_mode):
             warnings.append("support_planning:tree_strict_parity_mode")
 
     density_ratio = density_percent / 100.0
     if support_enabled and density_ratio <= EPSILON:
         warnings.append("support_planning:density_zero")
+    if build_plate_only:
+        warnings.append("support_planning:build_plate_only")
+    if critical_regions_only:
+        warnings.append("support_planning:critical_regions_only")
+    if remove_small_overhang:
+        warnings.append("support_planning:remove_small_overhang")
 
     supported_map = _supported_islands_by_layer(edges)
     graph_lookup = _layer_lookup(graphs)
+    first_layer_index = min((int(graph.layer_index) for graph in graphs), default=0)
 
     def _build_layer(graph: LayerIslandGraph) -> tuple[LayerSupportPlan, list[str]]:
         layer_warnings: list[str] = []
         unsupported_indices: list[int] = []
-        if graph.layer_index > 0:
+        overlap_ratio_by_island: dict[int, float] = {}
+        lower_graph = graph_lookup.get(int(graph.layer_index) - 1)
+        lower_islands = tuple(lower_graph.islands) if lower_graph is not None else ()
+        threshold_ratio = max(0.0, min(1.0, overlap_threshold_percent * 0.01))
+        if graph.layer_index > first_layer_index:
             supported_indices = supported_map.get(graph.layer_index, set())
-            for island_index in range(graph.island_count):
-                if island_index not in supported_indices:
-                    unsupported_indices.append(island_index)
+            sample_step_mm = max(0.1, min(1.2, width_mm * 0.5))
+            layer_height_mm = _layer_height_lookup(graphs, int(graph.layer_index), 0.2)
+            allowed_horizontal_offset_mm = _allowable_overhang_offset_mm(layer_height_mm, threshold_angle_deg)
+            candidate_unsupported: list[int] = []
+            for island_index, island in enumerate(graph.islands):
+                overlap_ratio = _estimate_vertical_supported_ratio_scanline(
+                    island,
+                    lower_islands,
+                    sample_step_mm=sample_step_mm,
+                    allowed_offset_mm=allowed_horizontal_offset_mm,
+                )
+                if island_index in supported_indices and overlap_ratio <= EPSILON:
+                    overlap_ratio = max(overlap_ratio, 0.01)
+                overlap_ratio_by_island[island_index] = overlap_ratio
+
+                if threshold_ratio <= EPSILON:
+                    unsupported = overlap_ratio <= EPSILON and island_index not in supported_indices
+                else:
+                    unsupported = overlap_ratio + EPSILON < threshold_ratio
+                if unsupported:
+                    candidate_unsupported.append(island_index)
+
+            if remove_small_overhang and candidate_unsupported:
+                filtered: list[int] = []
+                minimum_area_mm2 = max(0.2, (width_mm * width_mm * 6.0))
+                dropped_count = 0
+                for island_index in candidate_unsupported:
+                    area_mm2 = max(0.0, float(graph.islands[island_index].area))
+                    if area_mm2 + EPSILON < minimum_area_mm2:
+                        dropped_count += 1
+                        continue
+                    filtered.append(island_index)
+                if dropped_count > 0:
+                    layer_warnings.append(
+                        f"layer_{graph.layer_index}:small_overhang_filtered={dropped_count}"
+                    )
+                candidate_unsupported = filtered
+
+            if critical_regions_only and candidate_unsupported:
+                filtered: list[int] = []
+                dropped_count = 0
+                for island_index in candidate_unsupported:
+                    island = graph.islands[island_index]
+                    supported_ratio = float(overlap_ratio_by_island.get(island_index, 0.0))
+                    if _is_critical_unsupported_region(
+                        island,
+                        supported_ratio=supported_ratio,
+                        extrusion_width_mm=width_mm,
+                    ):
+                        filtered.append(island_index)
+                    else:
+                        dropped_count += 1
+                if dropped_count > 0:
+                    layer_warnings.append(
+                        f"layer_{graph.layer_index}:critical_region_filtered={dropped_count}"
+                    )
+                candidate_unsupported = filtered
+
+            unsupported_indices = candidate_unsupported
 
         regions: list[SupportRegionPlan] = []
-        lower_graph = graph_lookup.get(int(graph.layer_index) - 1)
         lower_boundaries: list[Polygon] = [island.outer for island in lower_graph.islands] if lower_graph is not None else []
+        build_plate_graph = graph_lookup.get(first_layer_index)
+        build_plate_boundaries: list[Polygon] = (
+            [island.outer for island in build_plate_graph.islands]
+            if build_plate_graph is not None
+            else []
+        )
         if support_enabled and density_ratio > EPSILON:
             for island_index in unsupported_indices:
                 island = graph.islands[island_index]
@@ -1353,28 +1772,64 @@ def build_support_plan(
                 if width <= EPSILON or height <= EPSILON:
                     layer_warnings.append(f"layer_{graph.layer_index}:island_{island_index}:degenerate_bounds")
                     continue
+
+                layer_height_mm = _layer_height_lookup(graphs, int(graph.layer_index), 0.2)
+                top_gap_layers = int(max(0, ceil(z_gap_mm / max(layer_height_mm, EPSILON))))
+                bottom_gap_layers = int(max(0, ceil(bottom_z_gap_mm / max(layer_height_mm, EPSILON))))
+                min_target_layer = int(first_layer_index + max(0, bottom_gap_layers - 1))
+                if min_target_layer >= int(graph.layer_index):
+                    layer_warnings.append(
+                        f"layer_{graph.layer_index}:island_{island_index}:support_bottom_gap_blocks_target"
+                    )
+                    continue
+                if build_plate_only:
+                    target_layer_index = min_target_layer
+                else:
+                    target_layer_index = int(graph.layer_index) - max(1, top_gap_layers)
+                    if target_layer_index < min_target_layer:
+                        target_layer_index = min_target_layer
+                if target_layer_index >= int(graph.layer_index):
+                    layer_warnings.append(
+                        f"layer_{graph.layer_index}:island_{island_index}:support_top_gap_blocks_target"
+                    )
+                    continue
+                if target_layer_index < first_layer_index:
+                    target_layer_index = int(first_layer_index)
+
+                if build_plate_only:
+                    footprint_boundaries = build_plate_boundaries
+                else:
+                    boundary_graph = graph_lookup.get(int(target_layer_index) - 1)
+                    footprint_boundaries = (
+                        [candidate.outer for candidate in boundary_graph.islands]
+                        if boundary_graph is not None
+                        else lower_boundaries
+                    )
                 region_polygons = _expand_support_footprint(
                     island=island,
                     xy_gap_mm=xy_gap_mm,
-                    support_spacing_mm=spacing_mm,
+                    support_spacing_mm=base_spacing_mm,
                     extrusion_width_mm=width_mm,
-                    boundary_polygons=lower_boundaries,
+                    boundary_polygons=footprint_boundaries,
                 )
                 if not region_polygons:
                     layer_warnings.append(f"layer_{graph.layer_index}:island_{island_index}:footprint_empty")
                     continue
-                regions.append(
-                    _estimate_region(
-                        layer_index=graph.layer_index,
-                        island_index=island_index,
-                        polygons=region_polygons,
-                        support_type=normalized_type,
-                        support_interface_layers=interface_layers,
-                        support_spacing_mm=spacing_mm,
-                        support_density_ratio=density_ratio,
-                        extrusion_width_mm=width_mm,
-                    )
+                region = _estimate_region(
+                    layer_index=target_layer_index,
+                    island_index=island_index,
+                    polygons=region_polygons,
+                    support_type=normalized_type,
+                    support_interface_top_layers=interface_top_layers,
+                    support_interface_bottom_layers=interface_bottom_layers,
+                    support_base_spacing_mm=base_spacing_mm,
+                    support_interface_spacing_mm=interface_spacing_mm,
+                    support_bottom_interface_spacing_mm=bottom_interface_spacing_mm,
+                    support_density_ratio=density_ratio,
+                    extrusion_width_mm=width_mm,
                 )
+                region.unsupported_overlap_ratio = float(overlap_ratio_by_island.get(island_index, 0.0))
+                regions.append(region)
         elif support_enabled and density_ratio <= EPSILON and unsupported_indices:
             layer_warnings.append(
                 f"layer_{graph.layer_index}:unsupported_islands_without_density:{len(unsupported_indices)}"
@@ -1384,6 +1839,12 @@ def build_support_plan(
         support_path_count = sum(region.path_count for region in regions)
         support_path_length = float(sum(region.path_length_mm for region in regions))
         interface_path_count = sum(region.interface_path_count for region in regions)
+        unsupported_overlap_ratio_avg = 0.0
+        if unsupported_indices:
+            ratio_sum = 0.0
+            for island_index in unsupported_indices:
+                ratio_sum += float(overlap_ratio_by_island.get(island_index, 0.0))
+            unsupported_overlap_ratio_avg = float(ratio_sum / max(1, len(unsupported_indices)))
 
         return (
             LayerSupportPlan(
@@ -1401,6 +1862,7 @@ def build_support_plan(
                 tree_pruned_branch_count=0,
                 tree_parent_assignment_count=0,
                 tree_trunk_count=0,
+                unsupported_overlap_ratio_avg=unsupported_overlap_ratio_avg,
                 support_regions=regions,
             ),
             layer_warnings,
@@ -1444,7 +1906,8 @@ def build_support_plan(
         tree_branches, tree_warnings = _apply_tree_branch_heuristics(
             layer_plans=layer_plans,
             layer_graphs=graphs,
-            support_spacing_mm=spacing_mm,
+            support_spacing_mm=base_spacing_mm,
+            support_style=normalized_style,
             branch_merge_distance_ratio=branch_merge_ratio,
             branch_growth_ratio=branch_growth_ratio,
             min_branch_radius_mm=min_branch_radius_mm,
@@ -1453,6 +1916,18 @@ def build_support_plan(
             parent_root_bonus=parent_root_bonus,
             trunk_root_bonus=trunk_root_bonus,
             trunk_depth_bonus=trunk_depth_bonus,
+            branch_angle_deg=tree_branch_angle_deg,
+            wall_count=tree_wall_count,
+            branch_diameter_mm=tree_branch_diameter_mm,
+            tip_diameter_mm=tree_tip_diameter_mm,
+            branch_distance_mm=tree_branch_distance_mm,
+            top_rate_percent=tree_top_rate_percent,
+            branch_diameter_angle_deg=tree_branch_diameter_angle_deg,
+            branch_angle_organic_deg=tree_branch_angle_organic_deg,
+            branch_diameter_organic_mm=tree_branch_diameter_organic_mm,
+            branch_distance_organic_mm=tree_branch_distance_organic_mm,
+            auto_brim=tree_auto_brim,
+            brim_width_mm=tree_brim_width_mm,
             strict_parity_mode=bool(tree_support_strict_parity_mode),
         )
         warnings.extend(tree_warnings)
@@ -1486,11 +1961,36 @@ def build_support_plan(
         unsupported_island_count_total=unsupported_island_count_total,
         support_enabled=bool(support_enabled),
         support_type=normalized_type,
+        support_style=normalized_style,
         support_density_percent=float(density_percent),
+        support_build_plate_only=bool(build_plate_only),
         support_spacing_mm=float(spacing_mm),
+        support_base_spacing_mm=float(base_spacing_mm),
+        support_interface_spacing_mm=float(interface_spacing_mm),
+        support_bottom_interface_spacing_mm=float(bottom_interface_spacing_mm),
         support_xy_gap_mm=float(xy_gap_mm),
         support_z_gap_mm=float(z_gap_mm),
+        support_bottom_z_gap_mm=float(bottom_z_gap_mm),
+        support_threshold_angle_deg=float(threshold_angle_deg),
+        support_threshold_overlap_percent=float(overlap_threshold_percent),
+        support_critical_regions_only=bool(critical_regions_only),
+        support_remove_small_overhang=bool(remove_small_overhang),
         support_interface_layers=interface_layers,
+        support_interface_top_layers=int(interface_top_layers),
+        support_interface_bottom_layers=int(interface_bottom_layers_requested),
+        support_interface_bottom_layers_effective=int(interface_bottom_layers),
+        tree_support_branch_angle_deg=float(tree_branch_angle_deg),
+        tree_support_wall_count=int(tree_wall_count),
+        tree_support_branch_diameter_mm=float(tree_branch_diameter_mm),
+        tree_support_tip_diameter_mm=float(tree_tip_diameter_mm),
+        tree_support_branch_distance_mm=float(tree_branch_distance_mm),
+        tree_support_branch_distance_organic_mm=float(tree_branch_distance_organic_mm),
+        tree_support_top_rate_percent=float(tree_top_rate_percent),
+        tree_support_branch_diameter_angle_deg=float(tree_branch_diameter_angle_deg),
+        tree_support_branch_angle_organic_deg=float(tree_branch_angle_organic_deg),
+        tree_support_branch_diameter_organic_mm=float(tree_branch_diameter_organic_mm),
+        tree_support_auto_brim=bool(tree_auto_brim),
+        tree_support_brim_width_mm=float(tree_brim_width_mm),
         support_region_count_total=support_region_count_total,
         support_path_count_total=support_path_count_total,
         support_path_length_mm_total=float(support_path_length_mm_total),

@@ -98,6 +98,8 @@ class SliceSettings:
     filament_color: str = "#42d94a"
     filament_density: float = 1.24
     infill_percent: float = 15.0
+    infill_wall_overlap_percent: float = 15.0
+    top_bottom_infill_wall_overlap_percent: float = 15.0
     infill_density: Optional[float] = None
     infill_angle: float = 45.0
     infill_pattern: str = "rectilinear"
@@ -151,6 +153,16 @@ class SliceSettings:
     support_z_gap: float = 0.2
     support_xy_gap: float = 0.3
     interface_layers: int = 2
+    support_bottom_z_gap_mm: float = 0.2
+    support_threshold_angle_deg: float = 45.0
+    support_critical_regions_only: bool = False
+    support_remove_small_overhang: bool = False
+    support_interface_top_layers: int = 2
+    support_interface_bottom_layers: int = 0
+    support_base_spacing_mm: float = 2.0
+    support_interface_spacing_mm: float = 2.0
+    support_bottom_interface_spacing_mm: float = 2.0
+    support_threshold_overlap_percent: float = 0.0
     interface_density: float = 0.9
     support_spacing: float = 2.0
     support_speed: float = 60.0
@@ -161,6 +173,18 @@ class SliceSettings:
     support_filament_base: str = "default"
     support_filament_interface: str = "default"
     tree_branch_angle: float = 45.0
+    tree_support_branch_angle_deg: float = 45.0
+    tree_support_wall_count: int = 1
+    tree_support_branch_diameter_mm: float = 0.6
+    tree_support_tip_diameter_mm: float = 0.3
+    tree_support_branch_distance_mm: float = 2.0
+    tree_support_branch_distance_organic_mm: float = 2.5
+    tree_support_top_rate_percent: float = 30.0
+    tree_support_branch_diameter_angle_deg: float = 5.0
+    tree_support_branch_angle_organic_deg: float = 35.0
+    tree_support_branch_diameter_organic_mm: float = 0.7
+    tree_support_auto_brim: bool = False
+    tree_support_brim_width_mm: float = 0.0
     tree_merge_distance: float = 2.0
     retract_distance: float = 1.0
     retract_speed: float = 25.0
@@ -260,6 +284,11 @@ class SliceSettings:
             self.end_gcode = list(profile.end_gcode)
         self.end_gcode = _normalize_gcode_lines(self.end_gcode)
         self.filament_density = max(0.1, float(self.filament_density))
+        self.infill_wall_overlap_percent = max(0.0, min(100.0, float(self.infill_wall_overlap_percent)))
+        self.top_bottom_infill_wall_overlap_percent = max(
+            0.0,
+            min(100.0, float(self.top_bottom_infill_wall_overlap_percent)),
+        )
         if self.infill_density is None:
             self.infill_density = self.infill_percent / 100.0
         self.infill_density = max(0.0, min(1.0, float(self.infill_density)))
@@ -325,9 +354,37 @@ class SliceSettings:
         self.support_enabled = bool(self.support_enabled)
         self.support_type = str(self.support_type).strip().lower() or "normal"
         self.support_build_plate_only = bool(self.support_build_plate_only)
+        self.support_z_gap = max(0.0, float(self.support_z_gap))
+        self.support_xy_gap = max(0.0, float(self.support_xy_gap))
+        self.support_bottom_z_gap_mm = max(0.0, float(self.support_bottom_z_gap_mm))
+        if abs(self.support_bottom_z_gap_mm - 0.2) <= 1e-9 and abs(self.support_z_gap - 0.2) > 1e-9:
+            self.support_bottom_z_gap_mm = float(self.support_z_gap)
+        self.support_threshold_angle_deg = max(1.0, min(89.0, float(self.support_threshold_angle_deg)))
+        self.support_critical_regions_only = bool(self.support_critical_regions_only)
+        self.support_remove_small_overhang = bool(self.support_remove_small_overhang)
         self.interface_layers = max(0, int(self.interface_layers))
+        self.support_interface_top_layers = max(0, int(self.support_interface_top_layers))
+        self.support_interface_bottom_layers = max(-1, min(20, int(self.support_interface_bottom_layers)))
+        if self.support_interface_top_layers == 2 and self.interface_layers != 2:
+            self.support_interface_top_layers = int(self.interface_layers)
+        elif self.support_interface_top_layers != 2 and self.interface_layers == 2:
+            self.interface_layers = int(self.support_interface_top_layers)
+        elif self.support_interface_top_layers != self.interface_layers:
+            self.interface_layers = int(self.support_interface_top_layers)
+        self.support_threshold_overlap_percent = max(0.0, min(100.0, float(self.support_threshold_overlap_percent)))
         self.interface_density = max(0.0, min(1.0, float(self.interface_density)))
         self.support_spacing = max(0.1, float(self.support_spacing))
+        self.support_base_spacing_mm = max(0.1, float(self.support_base_spacing_mm))
+        self.support_interface_spacing_mm = max(0.1, float(self.support_interface_spacing_mm))
+        self.support_bottom_interface_spacing_mm = max(0.1, float(self.support_bottom_interface_spacing_mm))
+        if abs(self.support_base_spacing_mm - 2.0) <= 1e-9 and abs(self.support_spacing - 2.0) > 1e-9:
+            self.support_base_spacing_mm = float(self.support_spacing)
+        elif abs(self.support_base_spacing_mm - 2.0) > 1e-9 and abs(self.support_spacing - 2.0) <= 1e-9:
+            self.support_spacing = float(self.support_base_spacing_mm)
+        if abs(self.support_interface_spacing_mm - 2.0) <= 1e-9 and abs(self.support_spacing - 2.0) > 1e-9:
+            self.support_interface_spacing_mm = float(self.support_spacing)
+        if abs(self.support_bottom_interface_spacing_mm - 2.0) <= 1e-9 and abs(self.support_interface_spacing_mm - 2.0) > 1e-9:
+            self.support_bottom_interface_spacing_mm = float(self.support_interface_spacing_mm)
         self.support_speed = max(1.0, float(self.support_speed))
         self.support_interface_speed = max(1.0, float(self.support_interface_speed))
         self.support_pattern = str(self.support_pattern).strip().lower() or "rectilinear"
@@ -339,9 +396,31 @@ class SliceSettings:
         if self.support_interface_pattern not in ("rectilinear", "grid", "triangle"):
             self.support_interface_pattern = self.support_pattern
         self.support_style = str(self.support_style).strip().lower() or "pillars"
+        if self.support_style not in ("pillars", "tree", "organic"):
+            self.support_style = "pillars"
         self.support_filament_base = str(self.support_filament_base).strip().lower() or "default"
         self.support_filament_interface = str(self.support_filament_interface).strip().lower() or "default"
         self.tree_branch_angle = max(0.0, min(85.0, float(self.tree_branch_angle)))
+        self.tree_support_branch_angle_deg = max(0.0, min(85.0, float(self.tree_support_branch_angle_deg)))
+        if abs(self.tree_support_branch_angle_deg - 45.0) <= 1e-9 and abs(self.tree_branch_angle - 45.0) > 1e-9:
+            self.tree_support_branch_angle_deg = float(self.tree_branch_angle)
+        elif abs(self.tree_support_branch_angle_deg - 45.0) > 1e-9 and abs(self.tree_branch_angle - 45.0) <= 1e-9:
+            self.tree_branch_angle = float(self.tree_support_branch_angle_deg)
+        elif abs(self.tree_support_branch_angle_deg - self.tree_branch_angle) > 1e-9:
+            self.tree_branch_angle = float(self.tree_support_branch_angle_deg)
+        self.tree_support_wall_count = max(0, int(self.tree_support_wall_count))
+        self.tree_support_branch_diameter_mm = max(0.05, float(self.tree_support_branch_diameter_mm))
+        self.tree_support_tip_diameter_mm = max(0.05, float(self.tree_support_tip_diameter_mm))
+        if self.tree_support_tip_diameter_mm > self.tree_support_branch_diameter_mm:
+            self.tree_support_tip_diameter_mm = self.tree_support_branch_diameter_mm
+        self.tree_support_branch_distance_mm = max(0.05, float(self.tree_support_branch_distance_mm))
+        self.tree_support_branch_distance_organic_mm = max(0.05, float(self.tree_support_branch_distance_organic_mm))
+        self.tree_support_top_rate_percent = max(0.0, min(100.0, float(self.tree_support_top_rate_percent)))
+        self.tree_support_branch_diameter_angle_deg = max(0.0, min(89.0, float(self.tree_support_branch_diameter_angle_deg)))
+        self.tree_support_branch_angle_organic_deg = max(0.0, min(85.0, float(self.tree_support_branch_angle_organic_deg)))
+        self.tree_support_branch_diameter_organic_mm = max(0.05, float(self.tree_support_branch_diameter_organic_mm))
+        self.tree_support_auto_brim = bool(self.tree_support_auto_brim)
+        self.tree_support_brim_width_mm = max(0.0, float(self.tree_support_brim_width_mm))
         self.tree_merge_distance = max(0.1, float(self.tree_merge_distance))
         self.retract_distance = max(0.0, float(self.retract_distance))
         self.retract_speed = max(1.0, float(self.retract_speed))
