@@ -1,0 +1,55 @@
+name: platform-ci
+
+on:
+  push:
+    paths:
+      - 'Website/**'
+      - 'deploy/helm/**'
+      - '.github/workflows/platform-ci.yml'
+  pull_request:
+    paths:
+      - 'Website/**'
+      - 'deploy/helm/**'
+
+jobs:
+  backend-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install backend deps
+        run: pip install -r Website/backend/requirements.txt
+      - name: Import backend app
+        run: |
+          python - << 'PY'
+          import sys
+          from pathlib import Path
+          repo = Path('.').resolve()
+          sys.path.insert(0, str(repo / 'Website' / 'backend'))
+          import printnet_backend.app
+          print('backend app import ok')
+          PY
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build frontend
+        working-directory: Website/frontend
+        run: |
+          rm -rf node_modules
+          npm ci --no-audit --no-fund
+          npm run build
+
+  helm-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Helm lint
+        run: helm lint deploy/helm/printnet

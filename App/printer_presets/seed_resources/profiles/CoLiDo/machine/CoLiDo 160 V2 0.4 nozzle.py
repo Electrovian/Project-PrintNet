@@ -1,0 +1,157 @@
+from __future__ import annotations
+
+# source: profiles/CoLiDo/machine/CoLiDo 160 V2 0.4 nozzle.json
+DATA = {'adaptive_bed_mesh_margin': '0',
+ 'auxiliary_fan': '0',
+ 'bbl_use_printhost': '0',
+ 'bed_custom_model': '',
+ 'bed_custom_texture': '',
+ 'bed_exclude_area': ['0x0'],
+ 'bed_mesh_max': '99999,99999',
+ 'bed_mesh_min': '-99999,-99999',
+ 'bed_mesh_probe_distance': '50,50',
+ 'before_layer_change_gcode': ';BEFORE_LAYER_CHANGE\n;[layer_z]\nG92 E0\n',
+ 'best_object_pos': '0.5,0.5',
+ 'change_extrusion_role_gcode': '',
+ 'change_filament_gcode': '',
+ 'cooling_tube_length': '5',
+ 'cooling_tube_retraction': '91.5',
+ 'default_filament_profile': ['CoLiDo Generic PLA @CoLiDo X16'],
+ 'default_print_profile': '0.20mm Standard @CoLiDo X16',
+ 'deretraction_speed': ['30'],
+ 'disable_m73': '1',
+ 'emit_machine_limits_to_gcode': '1',
+ 'enable_filament_ramming': '1',
+ 'enable_long_retraction_when_cut': '0',
+ 'extra_loading_move': '-2',
+ 'extruder_clearance_height_to_lid': '88',
+ 'extruder_clearance_height_to_rod': '27',
+ 'extruder_clearance_radius': '65',
+ 'extruder_colour': ['#FCE94F'],
+ 'extruder_offset': ['-5x0'],
+ 'fan_kickstart': '0',
+ 'fan_speedup_overhangs': '1',
+ 'fan_speedup_time': '0',
+ 'from': 'system',
+ 'gcode_flavor': 'marlin2',
+ 'head_wrap_detect_zone': [],
+ 'high_current_on_filament_swap': '0',
+ 'host_type': 'mks',
+ 'instantiation': 'true',
+ 'layer_change_gcode': ';AFTER_LAYER_CHANGE\n;[layer_z]',
+ 'long_retractions_when_cut': ['0'],
+ 'machine_end_gcode': 'G1 E-1.0 F2100 ; retract\n'
+                      'G92 E0.0\n'
+                      'G1{if max_layer_z < max_print_height} Z{z_offset+min(max_layer_z+30, max_print_height)}{endif} '
+                      'E-3.0 F720 ; move print head up & retract filament\n'
+                      'G4 ; wait\n'
+                      'M104 S0 ; turn off temperature\n'
+                      'M140 S0 ; turn off heatbed\n'
+                      'M107 ; turn off fan\n'
+                      'G1 X0 Y0 F3000 ; park print head\n'
+                      'M84 ; disable motors',
+ 'machine_load_filament_time': '0',
+ 'machine_max_acceleration_e': ['5000'],
+ 'machine_max_acceleration_extruding': ['1000'],
+ 'machine_max_acceleration_retracting': ['1000'],
+ 'machine_max_acceleration_travel': ['0', '0'],
+ 'machine_max_acceleration_x': ['1000'],
+ 'machine_max_acceleration_y': ['1000'],
+ 'machine_max_acceleration_z': ['500'],
+ 'machine_max_jerk_e': ['5'],
+ 'machine_max_jerk_x': ['8'],
+ 'machine_max_jerk_y': ['8'],
+ 'machine_max_jerk_z': ['0.4'],
+ 'machine_max_speed_e': ['60'],
+ 'machine_max_speed_x': ['300'],
+ 'machine_max_speed_y': ['300'],
+ 'machine_max_speed_z': ['10'],
+ 'machine_min_extruding_rate': ['0'],
+ 'machine_min_travel_rate': ['0'],
+ 'machine_pause_gcode': '',
+ 'machine_start_gcode': 'G90 ; use absolute coordinates\n'
+                        'M83 ; extruder relative mode\n'
+                        'M204 S[machine_max_acceleration_extruding] T[machine_max_acceleration_retracting]\n'
+                        'M104 S[first_layer_temperature] ; set extruder temp\n'
+                        'M140 S[first_layer_bed_temperature] ; set bed temp\n'
+                        'G28 ; home all\n'
+                        'G1 X3.0 Y3.0 Z0.3 F1000 ; move print head up\n'
+                        'M190 S[first_layer_bed_temperature] ; wait for bed temp\n'
+                        'M109 S[first_layer_temperature] ; wait for extruder temp\n'
+                        'G92 E0.0\n'
+                        '; initial load\n'
+                        'G1 E2 F300\n'
+                        'G1 Y153.0 E10.2 F1000\n'
+                        'G1 X4 E0.05 F1000\n'
+                        'G0 Y152.5\n'
+                        'G1 E0.2\n'
+                        'G1 X3.5 E0.05\n'
+                        'G1 Y3 E10.2 F1000\n'
+                        'G92 E0.0',
+ 'machine_tool_change_time': '0',
+ 'machine_unload_filament_time': '0',
+ 'manual_filament_change': '0',
+ 'max_layer_height': ['0.32'],
+ 'min_layer_height': ['0.08'],
+ 'name': 'CoLiDo 160 V2 0.4 nozzle',
+ 'nozzle_diameter': ['0.4'],
+ 'nozzle_height': '4',
+ 'nozzle_hrc': '0',
+ 'nozzle_type': 'brass',
+ 'nozzle_volume': '0',
+ 'parking_pos_retraction': '92',
+ 'pellet_modded_printer': '0',
+ 'preferred_orientation': '0',
+ 'print_host': '',
+ 'print_host_webui': '',
+ 'printable_area': ['0x0', '160x0', '160x160', '0x160'],
+ 'printable_height': '180',
+ 'printer_model': 'CoLiDo 160 V2',
+ 'printer_notes': '',
+ 'printer_settings_id': 'CoLiDo X16 0.4 nozzle',
+ 'printer_structure': 'undefine',
+ 'printer_technology': 'FFF',
+ 'printer_variant': '0.4',
+ 'printhost_apikey': '',
+ 'printhost_authorization_type': 'key',
+ 'printhost_cafile': '',
+ 'printhost_password': '',
+ 'printhost_port': '',
+ 'printhost_ssl_ignore_revoke': '0',
+ 'printhost_user': '',
+ 'printing_by_object_gcode': '',
+ 'purge_in_prime_tower': '1',
+ 'retract_before_wipe': ['70%'],
+ 'retract_length_toolchange': ['1'],
+ 'retract_lift_above': ['0'],
+ 'retract_lift_below': ['0'],
+ 'retract_lift_enforce': ['All Surfaces'],
+ 'retract_restart_extra': ['0'],
+ 'retract_restart_extra_toolchange': ['0'],
+ 'retract_when_changing_layer': ['0'],
+ 'retraction_distances_when_cut': ['18'],
+ 'retraction_length': ['1.2'],
+ 'retraction_minimum_travel': ['0.4'],
+ 'retraction_speed': ['30'],
+ 'scan_first_layer': '0',
+ 'setting_id': 'GM001',
+ 'silent_mode': '0',
+ 'single_extruder_multi_material': '1',
+ 'support_air_filtration': '1',
+ 'support_chamber_temp_control': '1',
+ 'support_multi_bed_types': '0',
+ 'template_custom_gcode': '',
+ 'thumbnails': '',
+ 'thumbnails_format': 'PNG',
+ 'time_cost': '0',
+ 'time_lapse_gcode': '',
+ 'travel_slope': ['3'],
+ 'type': 'machine',
+ 'upward_compatible_machine': [],
+ 'use_firmware_retraction': '0',
+ 'use_relative_e_distances': '1',
+ 'wipe': ['0'],
+ 'wipe_distance': ['1'],
+ 'z_hop': ['0.4'],
+ 'z_hop_types': ['Auto Lift'],
+ 'z_offset': '0'}

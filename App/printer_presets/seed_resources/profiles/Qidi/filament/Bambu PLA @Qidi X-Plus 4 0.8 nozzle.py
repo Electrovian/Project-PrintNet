@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/filament/Bambu PLA @Qidi X-Plus 4 0.8 nozzle.json
+DATA = {'activate_air_filtration': ['1'],
+ 'close_fan_the_first_x_layers': ['1'],
+ 'compatible_printers': ['Qidi X-Plus 4 0.8 nozzle'],
+ 'during_print_exhaust_fan_speed': ['100'],
+ 'fan_cooling_layer_time': ['60'],
+ 'filament_id': 'GFB99',
+ 'filament_max_volumetric_speed': ['24.5'],
+ 'filament_settings_id': ['Bambu PLA @Qidi X-Plus 4 0.8 nozzle'],
+ 'from': 'system',
+ 'full_fan_speed_layer': ['3'],
+ 'hot_plate_temp': ['60'],
+ 'hot_plate_temp_initial_layer': ['60'],
+ 'inherits': 'Bambu PLA',
+ 'instantiation': 'true',
+ 'name': 'Bambu PLA @Qidi X-Plus 4 0.8 nozzle',
+ 'nozzle_temperature': ['210'],
+ 'pressure_advance': ['0.008'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_min_speed': ['20'],
+ 'type': 'filament'}

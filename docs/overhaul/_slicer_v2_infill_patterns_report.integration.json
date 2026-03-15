@@ -1,0 +1,24 @@
+{
+  "stage_count": 10,
+  "infill_pattern": "grid",
+  "infill_percent": 20.0,
+  "infill_density_ratio": 0.2,
+  "infill_path_count": 10,
+  "infill_path_length_mm_total": 10.0,
+  "layer_infill_counts": [
+    2,
+    2,
+    2,
+    2,
+    2
+  ],
+  "layer_infill_angles_deg": [
+    30.0,
+    120.0,
+    210.0,
+    300.0,
+    30.0
+  ],
+  "warning_count": 0,
+  "validation_ok": true
+}

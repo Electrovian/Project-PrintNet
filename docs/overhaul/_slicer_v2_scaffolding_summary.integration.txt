@@ -1,0 +1,6 @@
+job_id: slicer-v2-smoke
+mesh_path: C:\Users\Elect\AppData\Local\Temp\eon_slicer_v2_smoke_v4b8w3k9\smoke.stl
+stage_count: 10
+expected_stage_count: 10
+gcode_line_count: 8
+validation_ok: True

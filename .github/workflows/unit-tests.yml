@@ -1,0 +1,163 @@
+name: unit-tests
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "App/**"
+      - "Website/**"
+      - "deploy/**"
+      - "scripts/**"
+      - ".github/workflows/unit-tests.yml"
+  pull_request:
+    paths:
+      - "App/**"
+      - "Website/**"
+      - "deploy/**"
+      - "scripts/**"
+      - ".github/workflows/unit-tests.yml"
+
+jobs:
+  app-smoke:
+    name: app-smoke
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "App/requirements.txt"
+
+      - name: Install App dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r App/requirements.txt
+
+      - name: Run App smoke tests
+        run: python App/Tests/run_tests.py --scope smoke
+
+  app-full:
+    name: app-full
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "App/requirements.txt"
+
+      - name: Install App dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r App/requirements.txt
+
+      - name: Run App full tests with coverage gate (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          coverage erase
+          coverage run --source=App/slicer_v2,App/connectors,App/profiles_import --omit="App/slicer_v2/legacy_*.py,App/slicer_v2/legacy_slicer/*.py" -m App.Tests.run_tests --scope full
+          coverage report --fail-under=80 -m
+
+      - name: Run App full tests (Windows)
+        if: runner.os == 'Windows'
+        run: python App/Tests/run_tests.py --scope full
+
+  website-backend-tests:
+    name: website-backend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "Website/backend/requirements.txt"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r Website/backend/requirements.txt
+          python -m pip install coverage
+
+      - name: Run backend tests with coverage gate
+        run: |
+          coverage erase
+          coverage run --source=Website/backend/printnet_backend -m unittest discover -s Website/backend/tests -p "test_*.py"
+          coverage report --fail-under=85 -m
+
+  website-frontend-tests:
+    name: website-frontend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: "Website/frontend/package-lock.json"
+
+      - name: Install frontend dependencies
+        working-directory: Website/frontend
+        run: npm ci
+
+      - name: Install c8 coverage tool
+        working-directory: Website/frontend
+        run: npm install --no-save c8
+
+      - name: Run frontend tests with coverage gate
+        working-directory: Website/frontend
+        run: npx c8 --check-coverage --lines 75 --functions 75 --statements 75 node --test tests/*.test.mjs
+
+  deploy-tests:
+    name: deploy-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install coverage
+
+      - name: Run deploy tests with coverage gate
+        run: |
+          coverage erase
+          coverage run --source=deploy -m unittest discover -s deploy/tests -p "test_*.py"
+          coverage report --fail-under=80 -m

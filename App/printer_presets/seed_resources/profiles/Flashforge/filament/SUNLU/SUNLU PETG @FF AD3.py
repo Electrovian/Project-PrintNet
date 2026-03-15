@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/SUNLU/SUNLU PETG @FF AD3.json
+DATA = {'additional_cooling_fan_speed': ['50'],
+ 'close_fan_the_first_x_layers': ['1'],
+ 'compatible_printers': ['Flashforge Adventurer 3 Series 0.4 Nozzle', 'Flashforge Adventurer 3 Series 0.6 Nozzle'],
+ 'enable_pressure_advance': ['0'],
+ 'fan_cooling_layer_time': ['30'],
+ 'fan_max_speed': ['90'],
+ 'fan_min_speed': ['40'],
+ 'filament_flow_ratio': ['0.96'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'from': 'system',
+ 'inherits': 'SUNLU PETG @base',
+ 'instantiation': 'true',
+ 'name': 'SUNLU PETG @FF AD3',
+ 'nozzle_temperature': ['240'],
+ 'nozzle_temperature_initial_layer': ['245'],
+ 'overhang_fan_speed': ['80'],
+ 'overhang_fan_threshold': ['25%'],
+ 'setting_id': 'GFSNLS08_03',
+ 'slow_down_layer_time': ['8'],
+ 'slow_down_min_speed': ['30'],
+ 'support_material_interface_fan_speed': ['90'],
+ 'type': 'filament'}

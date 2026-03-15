@@ -1,4 +1,4 @@
-import math
+﻿import math
 import os
 import sys
 import unittest
@@ -7,8 +7,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from slicer.gcode.stats import estimate_gcode_stats
-from slicer.gcode.writer import GCodeWriter, SliceSettings
+from slicer_v2.legacy_gcode_stats import estimate_gcode_stats
+from slicer_v2.legacy_gcode_writer import GCodeWriter, SliceSettings
 
 class GCodeExtrusionTests(unittest.TestCase):
     def test_extrusion_for_length(self):
@@ -68,3 +68,4 @@ class GCodeExtrusionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

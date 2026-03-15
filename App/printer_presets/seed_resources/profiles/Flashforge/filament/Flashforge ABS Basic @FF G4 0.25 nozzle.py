@@ -1,0 +1,20 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge ABS Basic @FF G4 0.25 nozzle.json
+DATA = {'compatible_printers': ['Flashforge Guider4 0.25 nozzle'],
+ 'complete_print_exhaust_fan_speed': ['50'],
+ 'during_print_exhaust_fan_speed': ['40'],
+ 'fan_max_speed': ['20'],
+ 'filament_cost': ['20'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'filament_settings_id': ['Flashforge ABS Basic @FF G4 0.25 nozzle'],
+ 'from': 'system',
+ 'hot_plate_temp': ['100'],
+ 'hot_plate_temp_initial_layer': ['100'],
+ 'inherits': 'Flashforge ABS @FF AD5M 0.25 Nozzle',
+ 'instantiation': 'true',
+ 'name': 'Flashforge ABS Basic @FF G4 0.25 nozzle',
+ 'pressure_advance': ['0.04'],
+ 'slow_down_layer_time': ['4'],
+ 'type': 'filament'}

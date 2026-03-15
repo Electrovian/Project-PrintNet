@@ -1,0 +1,12 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/filament/Prusa Generic ABS @CORE One 0.8.json
+DATA = {'compatible_printers': ['Prusa CORE One 0.8 nozzle'],
+ 'fan_cooling_layer_time': ['40'],
+ 'filament_id': 'Prusa Generic ABS @CORE One 0.8',
+ 'from': 'system',
+ 'inherits': 'Prusa Generic ABS @CORE One',
+ 'instantiation': 'true',
+ 'name': 'Prusa Generic ABS @CORE One 0.8',
+ 'setting_id': 'GFSA04',
+ 'type': 'filament'}

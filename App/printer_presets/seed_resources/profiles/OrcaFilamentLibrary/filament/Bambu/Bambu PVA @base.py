@@ -1,0 +1,20 @@
+from __future__ import annotations
+
+# source: profiles/OrcaFilamentLibrary/filament/Bambu/Bambu PVA @base.json
+DATA = {'description': 'This is a water-soluble support filament, and usually it is only for the support structure and not '
+                'for the model body. Printing this filament is of many requirements, and to get better printing '
+                'quality, please refer to this wiki: PVA Printing Guide.',
+ 'filament_cost': ['79.98'],
+ 'filament_density': ['1.27'],
+ 'filament_id': 'OGFS04',
+ 'filament_max_volumetric_speed': ['6'],
+ 'filament_vendor': ['Bambu Lab'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pva',
+ 'instantiation': 'false',
+ 'name': 'Bambu PVA @base',
+ 'nozzle_temperature_range_high': ['250'],
+ 'nozzle_temperature_range_low': ['210'],
+ 'slow_down_layer_time': ['7'],
+ 'slow_down_min_speed': ['20'],
+ 'type': 'filament'}

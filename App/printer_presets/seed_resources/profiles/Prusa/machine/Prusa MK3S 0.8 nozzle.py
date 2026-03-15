@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/machine/Prusa MK3S 0.8 nozzle.json
+DATA = {'auxiliary_fan': '0',
+ 'bed_exclude_area': ['0x0'],
+ 'before_layer_change_gcode': ';BEFORE_LAYER_CHANGE\n;[layer_z]\nG92 E0\n',
+ 'default_filament_profile': ['Prusa Generic PLA'],
+ 'default_print_profile': '0.15mm Detail @MK3S 0.8',
+ 'from': 'system',
+ 'host_type': 'prusalink',
+ 'inherits': 'fdm_machine_common',
+ 'instantiation': 'true',
+ 'layer_change_gcode': ';AFTER_LAYER_CHANGE\n;[layer_z]',
+ 'machine_end_gcode': '{if max_layer_z < max_print_height}G1 Z{z_offset+min(max_layer_z+1, max_print_height)} F720 ; '
+                      'Move print head up{endif}\n'
+                      'G1 X0 Y200 F3600 ; park\n'
+                      '{if max_layer_z < max_print_height}G1 Z{z_offset+min(max_layer_z+49, max_print_height)} F720 ; '
+                      'Move print head further up{endif}\n'
+                      'G4 ; wait\n'
+                      'M221 S100 ; reset flow\n'
+                      'M900 K0 ; reset LA\n'
+                      '{if print_settings_id=~/.*(DETAIL @MK3S|QUALITY @MK3S|@0.25 nozzle MK3).*/}M907 E538 ; reset '
+                      'extruder motor current{endif}\n'
+                      'M104 S0 ; turn off temperature\n'
+                      'M140 S0 ; turn off heatbed\n'
+                      'M107 ; turn off fan\n'
+                      'M84 ; disable motors\n'
+                      '; max_layer_z = [max_layer_z]',
+ 'machine_load_filament_time': '17',
+ 'machine_max_acceleration_retracting': ['2500', '2500'],
+ 'machine_max_speed_e': ['120', '120'],
+ 'machine_max_speed_x': ['200', '200'],
+ 'machine_max_speed_y': ['200', '200'],
+ 'machine_pause_gcode': 'M601',
+ 'machine_start_gcode': 'M862.3 P "MK3S" ; printer model check\n'
+                        'M862.1 P[nozzle_diameter] ; nozzle diameter check\n'
+                        'M115 U3.13.0 ; tell printer latest fw version\n'
+                        'G90 ; use absolute coordinates\n'
+                        'M83 ; extruder relative mode\n'
+                        'M104 S[first_layer_temperature] ; set extruder temp\n'
+                        'M140 S[first_layer_bed_temperature] ; set bed temp\n'
+                        'M190 S[first_layer_bed_temperature] ; wait for bed temp\n'
+                        'M109 S[first_layer_temperature] ; wait for extruder temp\n'
+                        'G28 W ; home all without mesh bed level\n'
+                        'G80 ; mesh bed leveling\n'
+                        '{if filament_settings_id[initial_tool]=~/.*Prusament PA11.*/}\n'
+                        'G1 Z0.3 F720\n'
+                        'G1 Y-3 F1000 ; go outside print area\n'
+                        'G92 E0\n'
+                        'G1 X60 E9 F1000 ; intro line\n'
+                        'G1 X100 E9 F1000 ; intro line\n'
+                        '{else}\n'
+                        'G1 Z0.2 F720\n'
+                        'G1 Y-3 F1000 ; go outside print area\n'
+                        'G92 E0\n'
+                        'G1 X60 E9 F1000 ; intro line\n'
+                        'G1 X100 E12.5 F1000 ; intro line\n'
+                        '{endif}\n'
+                        'G92 E0\n'
+                        'M221 S{if layer_height<0.075}100{else}95{endif}',
+ 'machine_unload_filament_time': '16',
+ 'max_layer_height': ['0.6'],
+ 'min_layer_height': ['0.2'],
+ 'name': 'Prusa MK3S 0.8 nozzle',
+ 'nozzle_diameter': ['0.8'],
+ 'nozzle_type': 'hardened_steel',
+ 'printable_area': ['0x0', '250x0', '250x210', '0x210'],
+ 'printable_height': '210',
+ 'printer_model': 'Prusa MK3S',
+ 'printer_notes': 'Don\'t remove the following keywords! These keywords are used in the "compatible printer" condition '
+                  'of the print and filament profiles to link the particular print and filament profiles to this '
+                  'printer profile.\n'
+                  'PRINTER_VENDOR_PRUSA3D\n'
+                  'PRINTER_MODEL_MK3\n',
+ 'printer_variant': '0.8',
+ 'scan_first_layer': '0',
+ 'setting_id': 'GM003',
+ 'thumbnails': ['160x120'],
+ 'type': 'machine'}

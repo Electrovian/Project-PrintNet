@@ -1,0 +1,9 @@
+source_path: C:\Users\Elect\OneDrive\Documents\GitHub\Project-PrintNet\overhaul\eon_engine_mirror\resources\profiles
+mapped_at_utc: 2026-02-13T04:42:50.760639+00:00
+profile_count: 2391
+mapped_profile_count: 2373
+machine_mapped_count: 122
+process_mapped_count: 390
+filament_mapped_count: 1861
+unknown_key_count: 223273
+warning_count: 6093

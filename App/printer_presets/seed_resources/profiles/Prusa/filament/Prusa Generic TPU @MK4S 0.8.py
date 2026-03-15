@@ -1,0 +1,12 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/filament/Prusa Generic TPU @MK4S 0.8.json
+DATA = {'compatible_printers': ['Prusa MK4S 0.8 nozzle', 'Prusa MK4S HF0.8 nozzle'],
+ 'filament_id': 'Generic FLEX @MK4S 0.8',
+ 'filament_max_volumetric_speed': ['9'],
+ 'from': 'system',
+ 'inherits': 'Prusa Generic TPU @MK4S',
+ 'instantiation': 'true',
+ 'name': 'Prusa Generic TPU @MK4S 0.8',
+ 'setting_id': 'GFSA04',
+ 'type': 'filament'}

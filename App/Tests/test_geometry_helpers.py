@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 
@@ -9,7 +9,7 @@ TESTS = os.path.abspath(os.path.dirname(__file__))
 if TESTS not in sys.path:
     sys.path.insert(0, TESTS)
 
-from slicer import geometry
+from slicer_v2 import legacy_geometry as geometry
 from harness import BaseTestCase, circle_points, square_points
 
 
@@ -71,3 +71,4 @@ class GeometryHelperTests(BaseTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -1,0 +1,11 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/process/0.32mm STRUCTURAL @MK4S HF0.5.json
+DATA = {'compatible_printers_condition': 'printer_notes=~/.*MK4S.*/ and nozzle_diameter[0]==0.5 and '
+                                  'printer_notes=~/.*HF_NOZZLE.*/',
+ 'from': 'system',
+ 'inherits': '0.25mm STRUCTURAL @MK4S 0.5',
+ 'instantiation': 'true',
+ 'layer_height': '0.32',
+ 'name': '0.32mm STRUCTURAL @MK4S HF0.5',
+ 'type': 'process'}

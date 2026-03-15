@@ -1,0 +1,6 @@
+outer_area: 800.0
+hole_area: 200.0
+island_area: 600.0
+contains_outer_probe: True
+contains_hole_probe: False
+polyline_length: 10.0

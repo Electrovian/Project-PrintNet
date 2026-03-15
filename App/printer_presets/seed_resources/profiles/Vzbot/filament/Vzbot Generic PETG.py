@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Vzbot/filament/Vzbot Generic PETG.json
+DATA = {'compatible_printers': ['Vzbot 235 AWD 0.4 nozzle',
+                         'Vzbot 330 AWD 0.4 nozzle',
+                         'Vzbot 235 AWD 0.5 nozzle',
+                         'Vzbot 235 AWD 0.6 nozzle',
+                         'Vzbot 330 AWD 0.5 nozzle',
+                         'Vzbot 330 AWD 0.6 nozzle'],
+ 'fan_cooling_layer_time': ['30'],
+ 'fan_max_speed': ['80'],
+ 'fan_min_speed': ['20'],
+ 'filament_flow_ratio': ['0.95'],
+ 'filament_id': 'GFG99',
+ 'filament_max_volumetric_speed': ['50'],
+ 'filament_start_gcode': ['; filament start gcode\n'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pet',
+ 'instantiation': 'true',
+ 'name': 'Vzbot Generic PETG',
+ 'overhang_fan_speed': ['70'],
+ 'overhang_fan_threshold': ['25%'],
+ 'reduce_fan_stop_start_freq': ['1'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_for_layer_cooling': ['1'],
+ 'slow_down_layer_time': ['5'],
+ 'slow_down_min_speed': ['30'],
+ 'type': 'filament'}

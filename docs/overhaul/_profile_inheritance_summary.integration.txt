@@ -1,0 +1,11 @@
+source_path: C:\Users\Elect\OneDrive\Documents\GitHub\Project-PrintNet\overhaul\eon_engine_mirror\resources\profiles
+resolved_at_utc: 2026-02-13T04:17:40.669813+00:00
+vendor_count: 5
+profile_count: 2391
+resolved_profile_count: 2391
+duplicate_name_count: 0
+missing_parent_count: 156
+cycle_count: 0
+max_depth_exceeded_count: 0
+type_mismatch_count: 102
+warning_count: 258

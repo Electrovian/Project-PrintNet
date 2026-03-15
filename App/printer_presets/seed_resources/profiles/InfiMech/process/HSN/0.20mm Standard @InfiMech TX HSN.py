@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/InfiMech/process/HSN/0.20mm Standard @InfiMech TX HSN.json
+DATA = {'bottom_shell_layers': '3',
+ 'brim_width': '5',
+ 'compatible_printers': ['InfiMech TX HSN 0.4 nozzle'],
+ 'exclude_object': '1',
+ 'from': 'system',
+ 'gap_infill_speed': '250',
+ 'inherits': 'fdm_process_common_HSN',
+ 'inner_wall_speed': '300',
+ 'instantiation': 'true',
+ 'internal_bridge_speed': '50',
+ 'internal_solid_infill_speed': '250',
+ 'layer_height': '0.2',
+ 'name': '0.20mm Standard @InfiMech TX HSN',
+ 'overhang_1_4_speed': '50',
+ 'overhang_2_4_speed': '50',
+ 'overhang_3_4_speed': '30',
+ 'print_settings_id': '0.20mm Standard @InfiMech TX HSN',
+ 'setting_id': 'GP004',
+ 'sparse_infill_speed': '270',
+ 'top_shell_layers': '5',
+ 'top_shell_thickness': '1',
+ 'top_solid_infill_flow_ratio': '0.97',
+ 'tree_support_wall_count': '1',
+ 'type': 'process'}

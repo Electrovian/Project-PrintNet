@@ -8,7 +8,8 @@ import pyqtgraph.opengl as gl
 from PyQt5 import QtCore, QtGui, QtWidgets
 import trimesh
 
-from slicer.geometry import arrange_rectangles, lowest_planar_face
+from slicer_v2.legacy_geometry import arrange_rectangles, lowest_planar_face
+from slicer_v2.legacy_mesh_opt import simplify_mesh, wireframe_target_faces
 
 from ..auto_orient import (
     face_normals_and_areas,
@@ -33,6 +34,11 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
     modelRotated = QtCore.pyqtSignal(int, float, float, float)
     selectionChanged = QtCore.pyqtSignal(list)
     simplifyRequested = QtCore.pyqtSignal(int)
+    plateRemoveRequested = QtCore.pyqtSignal()
+    plateAutoOrientRequested = QtCore.pyqtSignal()
+    plateArrangeRequested = QtCore.pyqtSignal()
+    plateLockChanged = QtCore.pyqtSignal(bool)
+    plateNameChanged = QtCore.pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -59,6 +65,10 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._labels_enabled = False
         self._selection_info = None
         self._interaction_enabled = True
+        self._interaction_requested = True
+        self._plate_locked = False
+        self._current_plate_name = "01"
+        self._plate_overlay_visible = True
         self._print_stats_panel = None
         self._print_stats_data = None
         self._print_stats_visible = True
@@ -83,7 +93,9 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._gizmo_move_lines = {}
         self._gizmo_move_cones = {}
         self._gizmo_rotate_rings = {}
-        self._gizmo_rotate_ticks = {}
+        self._gizmo_rotate_rings_outer = {}
+        self._gizmo_rotate_ticks_major = {}
+        self._gizmo_rotate_ticks_minor = {}
         self._gizmo_rotate_arrows = {}
         self._gizmo_origin = None
         self._gizmo_size = 20.0
@@ -112,6 +124,9 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         printer_defaults = DEFAULTS.get("printer", {})
         self._bed_size = tuple(printer_defaults.get("bed_size", (200, 200)))
         self._bed_height = float(printer_defaults.get("max_height", 200))
+        self._bed_texture_path = ""
+        self._bed_model_path = ""
+        self._bed_texture_item = None
         self._sync_bed_grid()
 
         self._build_gizmo()
@@ -128,7 +143,8 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._preview_items: Dict[str, Optional[gl.GLLinePlotItem]] = {
             "travel": None,
         }
-        self._preview_extrude_items: List[gl.GLMeshItem] = []
+        self._preview_extrude_items_static: List[gl.GLMeshItem] = []
+        self._preview_extrude_items_dynamic: List[gl.GLMeshItem] = []
         self._preview_extrude_bins: List[Tuple[float, float, float]] = []
         self._preview_step_offsets: List[int] = []
         self._preview_total_steps = 0
@@ -141,9 +157,34 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._preview_feature_filter: Optional[set[str]] = None
         self._preview_step_index = None
         self._preview_step_layer = None
+        self._preview_geometry_key = None
+        self._preview_geometry_segments = None
+        self._preview_geometry_widths = None
+        self._preview_geometry_travel = None
+        self._preview_geometry_meshes = None
+        self._preview_cached_mode = None
+        self._preview_color_cache = None
+        self._preview_color_cache_static = None
+        self._preview_color_cache_dynamic = None
+        self._preview_empty_mesh = None
+        self._preview_static_key = None
+        self._preview_static_segments = None
+        self._preview_static_widths = None
+        self._preview_static_travel = None
+        self._preview_static_meshes = None
+        self._preview_dynamic_key = None
+        self._preview_dynamic_segments = None
+        self._preview_dynamic_widths = None
+        self._preview_dynamic_travel = None
+        self._preview_dynamic_meshes = None
+        self._preview_filament_color = None
         self._preview_visible = False
         self._models_visible = True
+        self._model_preview_alpha = 1.0
         self._wireframe_default = False
+        self._solid_mesh_edges = True
+        self._overhang_visible = False
+        self._overhang_angle = 45.0
         self._platform_visible = True
         self._nozzle_visible = False
         self._nozzle = None
@@ -219,13 +260,76 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._update_gizmo()
 
     def set_interaction_enabled(self, enabled: bool):
-        self._interaction_enabled = bool(enabled)
+        self._interaction_requested = bool(enabled)
+        self._interaction_enabled = bool(enabled) and not bool(self._plate_locked)
         if not self._interaction_enabled:
             self._dragging = False
             self._gizmo_drag_axis = None
             self._gizmo_rotate_axis = None
             self._hide_rotate_hud()
         self._update_gizmo()
+
+    def is_plate_locked(self) -> bool:
+        return bool(self._plate_locked)
+
+    def set_plate_locked(self, locked: bool):
+        self._plate_locked = bool(locked)
+        if hasattr(self, "_plate_lock_btn") and self._plate_lock_btn is not None:
+            prev = self._plate_lock_btn.blockSignals(True)
+            self._plate_lock_btn.setChecked(self._plate_locked)
+            self._plate_lock_btn.blockSignals(prev)
+        self.set_interaction_enabled(bool(self._interaction_requested))
+
+    def get_current_plate_name(self) -> str:
+        text = str(self._current_plate_name or "").strip()
+        return text or "01"
+
+    def set_current_plate_name(self, value: str):
+        text = str(value or "").strip()
+        if not text:
+            text = "01"
+        text = text[:64]
+        if text == self._current_plate_name:
+            return
+        self._current_plate_name = text
+        self.plateNameChanged.emit(text)
+
+    def fit_camera_to_scene_or_selection(self):
+        target_ids = self.get_selected_model_ids()
+        if not target_ids:
+            target_ids = self.get_model_ids()
+        if not target_ids:
+            self.reset_view()
+            return
+
+        bounds_list = []
+        for mid in target_ids:
+            model = self.models.get(mid)
+            bounds = model.get("bounds") if model is not None else None
+            if bounds is None:
+                bounds = self.get_model_bounds(mid)
+            if bounds is not None:
+                bounds_list.append(bounds)
+
+        if not bounds_list:
+            self.reset_view()
+            return
+
+        mins = np.array([b[0] for b in bounds_list], dtype=float)
+        maxs = np.array([b[1] for b in bounds_list], dtype=float)
+        mn = np.min(mins, axis=0)
+        mx = np.max(maxs, axis=0)
+        center = (mn + mx) / 2.0
+        span_vec = np.maximum(mx - mn, np.array([1.0, 1.0, 1.0], dtype=float))
+        span = float(np.linalg.norm(span_vec))
+        bed_span = max(float(self._bed_size[0]), float(self._bed_size[1]), 1.0)
+        distance = float(max(120.0, min(span * 2.4, bed_span * 4.0)))
+
+        self.opts["center"] = pg.Vector(float(center[0]), float(center[1]), float(center[2])) # pyright: ignore[reportArgumentType]
+        self.opts["distance"] = distance # pyright: ignore[reportArgumentType]
+        self._coerce_distance()
+        self._sync_view_cube()
+        self.update()
 
     def apply_theme(self):
         self.setBackgroundColor(theme_value("view_bg", (20, 22, 26)))
@@ -243,9 +347,15 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
             ring = self._gizmo_rotate_rings.get(axis)
             if ring is not None:
                 self._safe_gl_update(self._update_gl_line, ring, theme_value(key))
-            ticks = self._gizmo_rotate_ticks.get(axis)
-            if ticks is not None:
-                self._safe_gl_update(self._update_gl_line, ticks, theme_value("gizmo_tick"))
+            ring_outer = self._gizmo_rotate_rings_outer.get(axis)
+            if ring_outer is not None:
+                self._safe_gl_update(self._update_gl_line, ring_outer, theme_value(key))
+            ticks_major = self._gizmo_rotate_ticks_major.get(axis)
+            if ticks_major is not None:
+                self._safe_gl_update(self._update_gl_line, ticks_major, theme_value("gizmo_tick"))
+            ticks_minor = self._gizmo_rotate_ticks_minor.get(axis)
+            if ticks_minor is not None:
+                self._safe_gl_update(self._update_gl_line, ticks_minor, theme_value("gizmo_tick"))
             arrows = self._gizmo_rotate_arrows.get(axis)
             if arrows is not None:
                 self._safe_gl_update(arrows.setColor, theme_value(key))
@@ -255,6 +365,8 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
 
         if hasattr(self, "_view_cube") and self._view_cube is not None:
             self._view_cube.apply_theme()
+        if hasattr(self, "_apply_plate_overlay_theme"):
+            self._apply_plate_overlay_theme()
         self._update_rotate_hud_style()
         self._update_selection_info_style()
         self._update_print_stats_style()
@@ -304,7 +416,11 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         bed_span = max(float(self._bed_size[0]), float(self._bed_size[1]), size)
 
         self.opts["center"] = pg.Vector(0.0, 0.0, 0.0) # pyright: ignore[reportArgumentType]
-        self.opts["distance"] = float(max(bed_span * 2.0, 200.0)) # pyright: ignore[reportArgumentType]
+        if len(self.models) <= 1:
+            focus_span = max(size * 4.0, 60.0)
+            self.opts["distance"] = float(max(120.0, min(focus_span, bed_span * 2.0))) # pyright: ignore[reportArgumentType]
+        else:
+            self.opts["distance"] = float(max(bed_span * 2.0, 200.0)) # pyright: ignore[reportArgumentType]
         self._coerce_distance()
         self.update()
         return model_id
@@ -329,6 +445,8 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         m = self.models.get(model_id)
         if not m:
             return
+        if m.get("overhang_item") is not None:
+            self.removeItem(m["overhang_item"])
         if m.get("item") is not None:
             self.removeItem(m["item"])
         del self.models[model_id]
@@ -390,6 +508,75 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         m["bounds"] = (mn, mx)
         self._update_bed_state(model_id)
         return v, m.get("faces")
+
+    def set_overhang_visible(self, visible: bool, angle: float | None = None):
+        self._overhang_visible = bool(visible)
+        if angle is not None:
+            try:
+                self._overhang_angle = float(angle)
+            except (TypeError, ValueError):
+                self._overhang_angle = 45.0
+        for model_id in list(self.models.keys()):
+            self._update_overhang_item(model_id)
+        self.update()
+
+    def _update_overhang_item(self, model_id: int, vertices=None, faces=None):
+        m = self.models.get(model_id)
+        if not m:
+            return
+        item = m.get("overhang_item")
+        if not self._overhang_visible:
+            if item is not None:
+                item.setVisible(False)
+            return
+        if vertices is None or faces is None:
+            result = self._compute_transformed_vertices(m)
+            if result is None:
+                return
+            vertices, _off, _mn, _mx = result
+            faces = m.get("faces")
+        if faces is None:
+            return
+        faces = np.asarray(faces, dtype=int)
+        if faces.size == 0:
+            return
+        mask = self._overhang_face_mask(vertices, faces, self._overhang_angle)
+        if mask is None or not mask.any():
+            if item is not None:
+                item.setVisible(False)
+            return
+        overhang_faces = faces[mask]
+        mesh = gl.MeshData(vertexes=np.array(vertices, dtype=float), faces=overhang_faces)
+        color = theme_value("mesh_warning", (1.0, 0.25, 0.2, 0.6))
+        if item is None:
+            item = gl.GLMeshItem(meshdata=mesh, smooth=False, color=color, shader="shaded")
+            item.setGLOptions("translucent")
+            self.addItem(item)
+            m["overhang_item"] = item
+        else:
+            item.setMeshData(meshdata=mesh)
+            item.setColor(color)
+            item.setGLOptions("translucent")
+        item.setVisible(True)
+
+    def _overhang_face_mask(self, vertices, faces, angle: float):
+        if vertices is None or faces is None:
+            return None
+        v = np.asarray(vertices, dtype=float)
+        f = np.asarray(faces, dtype=int)
+        if v.size == 0 or f.size == 0:
+            return None
+        tri = v[f]
+        v0 = tri[:, 0, :]
+        v1 = tri[:, 1, :]
+        v2 = tri[:, 2, :]
+        normals = np.cross(v1 - v0, v2 - v0)
+        norm = np.linalg.norm(normals, axis=1)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            normals = normals / norm[:, None]
+        cos_limit = math.cos(math.radians(float(angle)))
+        mask = (normals[:, 2] < cos_limit) & (normals[:, 2] < 0.0)
+        return mask
 
     # -------------------- transforms --------------------
 
@@ -535,7 +722,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
                         self.set_selected_models([picked])
                 self.modelPicked.emit(picked)
 
-            # 2) Allow drag of selected model even if pick missed (Bambu-like)
+            # 2) Allow drag of selected model even if pick missed (slicer-like behavior)
             if self._selected_model_id is not None:
                 plane_z = 0.0
                 bounds_list = [self.models[mid].get("bounds") for mid in self._selected_model_ids if mid in self.models]
@@ -724,6 +911,49 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
 
     # -------------------- mesh rebuild + bounds --------------------
 
+    def _sanitize_faces_for_render(self, vertices: np.ndarray, faces: np.ndarray):
+        v = np.asarray(vertices, dtype=float)
+        f = np.asarray(faces, dtype=int)
+        if v.ndim != 2 or v.shape[1] != 3:
+            return None
+        if f.ndim != 2 or f.shape[1] != 3:
+            return None
+        if v.size == 0 or f.size == 0:
+            return None
+
+        max_index = len(v)
+        valid = (f >= 0).all(axis=1) & (f < max_index).all(axis=1)
+        f = f[valid]
+        if f.size == 0:
+            return None
+
+        non_degenerate = (f[:, 0] != f[:, 1]) & (f[:, 0] != f[:, 2]) & (f[:, 1] != f[:, 2])
+        f = f[non_degenerate]
+        if f.size == 0:
+            return None
+
+        p0 = v[f[:, 0]]
+        p1 = v[f[:, 1]]
+        p2 = v[f[:, 2]]
+        area = np.linalg.norm(np.cross(p1 - p0, p2 - p0), axis=1)
+        finite = np.isfinite(area)
+        f = f[finite & (area > 1e-14)]
+        if f.size == 0:
+            return None
+        return f
+
+    def _placeholder_meshdata(self):
+        verts = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [0.001, 0.0, 0.0],
+                [0.0, 0.001, 0.0],
+            ],
+            dtype=float,
+        )
+        faces = np.array([[0, 1, 2]], dtype=int)
+        return gl.MeshData(vertexes=verts, faces=faces)
+
     def _create_or_update_mesh_item(self, model_id: int):
         m = self.models[model_id]
         result = self._compute_transformed_vertices(m)
@@ -735,22 +965,81 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         m["bounds"] = (mn, mx)
         self._update_bed_state(model_id)
 
-        md = gl.MeshData(vertexes=v, faces=m["faces"])
+        render_faces = self._sanitize_faces_for_render(v, m["faces"])
+        if render_faces is None:
+            md = self._placeholder_meshdata()
+        else:
+            md = gl.MeshData(vertexes=v, faces=render_faces)
+        m["meshdata_full"] = md
+        if bool(m.get("wireframe")):
+            m["meshdata_wireframe"] = self._build_wireframe_meshdata(v, render_faces if render_faces is not None else m["faces"])
+        else:
+            m["meshdata_wireframe"] = None
         base_color = theme_value("mesh_color", (0.0, 0.9, 0.4, 0.9))
         warn_color = theme_value("mesh_warning", (1.0, 0.25, 0.2, 0.95))
         color = warn_color if m.get("out_of_bounds") else base_color
 
+        use_wireframe_mesh = bool(m.get("wireframe")) and m.get("meshdata_wireframe") is not None
+        meshdata = m["meshdata_wireframe"] if use_wireframe_mesh else md
         item = m.get("item")
         if item is None:
-            item = gl.GLMeshItem(meshdata=md, smooth=True, color=color, shader="shaded")
+            item = gl.GLMeshItem(meshdata=meshdata, smooth=True, color=color, shader="shaded")
+            gl_mode = "translucent" if getattr(self, "_model_preview_alpha", 1.0) < 0.999 else "opaque"
+            item.setGLOptions(gl_mode)
             self.addItem(item)
             item.setVisible(self._models_visible)
             m["item"] = item
         else:
-            item.setMeshData(meshdata=md)
+            item.setMeshData(meshdata=meshdata)
             self._apply_model_color(m)
             item.setVisible(self._models_visible)
         self._apply_wireframe_to_item(item, bool(m.get("wireframe")), draw_faces=True)
+        if not self._models_visible:
+            if bool(m.get("wireframe")):
+                item.setVisible(True)
+                self._apply_wireframe_to_item(item, True, draw_faces=False)
+            else:
+                item.setVisible(False)
+        if self._overhang_visible:
+            self._update_overhang_item(model_id, vertices=v, faces=m.get("faces"))
+
+    def _build_wireframe_meshdata(self, vertices: np.ndarray, faces: np.ndarray):
+        safe_faces = self._sanitize_faces_for_render(vertices, faces)
+        if safe_faces is None:
+            return self._placeholder_meshdata()
+        faces = safe_faces
+        face_count = int(faces.shape[0]) if faces is not None else 0
+        target_faces = wireframe_target_faces(face_count)
+        if target_faces and target_faces < face_count:
+            simplified = simplify_mesh(vertices, faces, target_faces)
+            if simplified is not None:
+                wire_v, wire_f = simplified
+                if wire_v is not None and wire_f is not None and wire_f.shape[0] > 0:
+                    safe_wire_faces = self._sanitize_faces_for_render(wire_v, wire_f)
+                    if safe_wire_faces is not None:
+                        return gl.MeshData(vertexes=wire_v, faces=safe_wire_faces)
+        return gl.MeshData(vertexes=vertices, faces=faces)
+
+    def _ensure_model_wireframe_meshdata(self, model_id: int):
+        model = self.models.get(model_id)
+        if model is None:
+            return
+        if model.get("meshdata_wireframe") is not None:
+            return
+        result = self._compute_transformed_vertices(model)
+        if result is None:
+            return
+        vertices, offset, mn, mx = result
+        model["offset"] = offset
+        model["bounds"] = (mn, mx)
+        self._update_bed_state(model_id)
+        faces = model.get("faces")
+        if faces is None:
+            return
+        render_faces = self._sanitize_faces_for_render(vertices, faces)
+        if render_faces is None:
+            return
+        model["meshdata_wireframe"] = self._build_wireframe_meshdata(vertices, render_faces)
 
     def _compute_transformed_vertices(self, model: dict):
         v0 = model.get("base_vertices")
@@ -1017,11 +1306,16 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
     def _position_view_cube(self):
         if not hasattr(self, "_view_cube") or self._view_cube is None:
             return
-        margin = 12
+        margin = 16
         size = self._view_cube.sizeHint()
-        x = max(0, self.width() - size.width() - margin)
-        y = margin
+        x = margin
+        y = max(0, self.height() - size.height() - margin)
         self._view_cube.setGeometry(x, y, size.width(), size.height())
+        self._view_cube.raise_()
+        if hasattr(self, "_position_fit_camera_button"):
+            self._position_fit_camera_button()
+        if hasattr(self, "_position_plate_action_strip"):
+            self._position_plate_action_strip()
 
     def _sync_view_cube(self):
         if not hasattr(self, "_view_cube") or self._view_cube is None:
@@ -1029,6 +1323,10 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         az = self._coerce_float(self.opts.get("azimuth"), float(self._default_view["azimuth"]))
         el = self._coerce_float(self.opts.get("elevation"), float(self._default_view["elevation"]))
         self._view_cube.set_camera(az, el)
+        if hasattr(self, "_position_fit_camera_button"):
+            self._position_fit_camera_button()
+        if hasattr(self, "_position_plate_action_strip"):
+            self._position_plate_action_strip()
 
     def _set_view_from_cube(self, face: str):
         invert_x = getattr(self._view_cube, "invert_x", False)
@@ -1107,7 +1405,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
 
     def resizeEvent(self, e: QtGui.QResizeEvent):
         super().resizeEvent(e)
-        self._position_bottom_left_panels()
         self._position_view_cube()
+        self._position_bottom_left_panels()
 
     

@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Z-Bolt/machine/Z-Bolt S1000 Dual 0.4 nozzle.json
+DATA = {'change_filament_gcode': 'G91\nG1 Z{z_hop[0]} F1000\nG90',
+ 'default_print_profile': '0.20mm Standard @Z-Bolt S1000',
+ 'from': 'system',
+ 'inherits': 'Z-Bolt S1000 0.4 nozzle',
+ 'instantiation': 'true',
+ 'machine_start_gcode': 'START_PRINT TOOL_NR=[initial_tool] T_BED=[bed_temperature_initial_layer] '
+                        'T_EXTRUDER=[first_layer_temperature[initial_tool]] T_CHAMBER=[chamber_temperature] {if '
+                        'is_extruder_used[0]}T0_TEMP={first_layer_temperature[0]}{endif} {if '
+                        'is_extruder_used[1]}T1_TEMP={first_layer_temperature[1]}{endif}',
+ 'manual_filament_change': '0',
+ 'max_layer_height': ['0.28'],
+ 'min_layer_height': ['0.08'],
+ 'name': 'Z-Bolt S1000 Dual 0.4 nozzle',
+ 'nozzle_diameter': ['0.4', '0.4'],
+ 'printer_model': 'Z-Bolt S1000 Dual',
+ 'printer_settings_id': 'Z-Bolt',
+ 'printer_variant': '0.4',
+ 'retraction_length': ['0.8'],
+ 'retraction_minimum_travel': ['1'],
+ 'setting_id': 'GM033',
+ 'single_extruder_multi_material': '0',
+ 'type': 'machine'}

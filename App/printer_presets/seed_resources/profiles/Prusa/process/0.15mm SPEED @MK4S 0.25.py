@@ -1,0 +1,11 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/process/0.15mm SPEED @MK4S 0.25.json
+DATA = {'bottom_shell_layers': '7',
+ 'from': 'system',
+ 'inherits': '0.12mm SPEED @MK4S 0.25',
+ 'instantiation': 'true',
+ 'layer_height': '0.15',
+ 'name': '0.15mm SPEED @MK4S 0.25',
+ 'top_shell_layers': '6',
+ 'type': 'process'}

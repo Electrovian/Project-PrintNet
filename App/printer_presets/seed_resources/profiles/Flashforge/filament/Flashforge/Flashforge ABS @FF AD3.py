@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge/Flashforge ABS @FF AD3.json
+DATA = {'compatible_printers': ['Flashforge Adventurer 3 Series 0.4 Nozzle', 'Flashforge Adventurer 3 Series 0.6 Nozzle'],
+ 'enable_pressure_advance': ['0'],
+ 'filament_density': ['1.04'],
+ 'filament_diameter': ['1.75'],
+ 'filament_end_gcode': ['; filament end gcode\n'],
+ 'filament_flow_ratio': ['1.09'],
+ 'filament_id': 'FFF02',
+ 'filament_max_volumetric_speed': ['12'],
+ 'filament_start_gcode': ['; filament start gcode\n;right_extruder_material: ABS\n'],
+ 'filament_vendor': ['Flashforge'],
+ 'from': 'system',
+ 'hot_plate_temp': ['100'],
+ 'hot_plate_temp_initial_layer': ['100'],
+ 'inherits': 'fdm_filament_abs',
+ 'instantiation': 'true',
+ 'name': 'Flashforge ABS',
+ 'nozzle_temperature': ['230'],
+ 'nozzle_temperature_initial_layer': ['230'],
+ 'pressure_advance': ['0.00'],
+ 'setting_id': 'FFFA01',
+ 'slow_down_layer_time': ['8'],
+ 'slow_down_min_speed': ['20'],
+ 'support_material_interface_fan_speed': ['80'],
+ 'temperature_vitrification': ['100'],
+ 'type': 'filament'}

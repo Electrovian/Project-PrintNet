@@ -1,0 +1,31 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/filament/Prusa Generic PLA-CF.json
+DATA = {'compatible_printers': ['Prusa MK3S 0.25 nozzle',
+                         'Prusa MK3S 0.4 nozzle',
+                         'Prusa MK3S 0.6 nozzle',
+                         'Prusa MK3S 0.8 nozzle',
+                         'Prusa MINI 0.25 nozzle',
+                         'Prusa MINI 0.4 nozzle',
+                         'Prusa MINI 0.6 nozzle',
+                         'Prusa MINI 0.8 nozzle',
+                         'Prusa MK4 0.25 nozzle',
+                         'Prusa MK4 0.4 nozzle',
+                         'Prusa MK4 0.6 nozzle',
+                         'Prusa MK4 0.8 nozzle',
+                         'Prusa MINIIS 0.4 nozzle',
+                         'Prusa MINIIS 0.25 nozzle',
+                         'Prusa MINIIS 0.6 nozzle',
+                         'Prusa MINIIS 0.8 nozzle'],
+ 'filament_flow_ratio': ['0.95'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'filament_ramming_parameters': ['250 100 40 40 40 40 40 | 0.05 40 0.45 40 0.95 40 1.45 40 1.95 40 2.45 40 2.95 40 '
+                                 '3.45 40 3.95 40 4.45 40 4.95 40'],
+ 'filament_type': ['PLA-CF'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'true',
+ 'name': 'Prusa Generic PLA-CF',
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['7'],
+ 'type': 'filament'}

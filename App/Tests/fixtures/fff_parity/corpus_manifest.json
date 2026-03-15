@@ -1,0 +1,54 @@
+{
+  "name": "fff_core_12",
+  "description": "Starter corpus from eon_engine_mirror tests/data for FFF parity checks.",
+  "models": [
+    {
+      "id": "bridge_obj",
+      "path": "overhaul/eon_engine_mirror/tests/data/bridge.obj"
+    },
+    {
+      "id": "cube_hole_obj",
+      "path": "overhaul/eon_engine_mirror/tests/data/cube_with_hole.obj"
+    },
+    {
+      "id": "concave_hole_obj",
+      "path": "overhaul/eon_engine_mirror/tests/data/cube_with_concave_hole.obj"
+    },
+    {
+      "id": "concave_hole_enlarged_obj",
+      "path": "overhaul/eon_engine_mirror/tests/data/cube_with_concave_hole_enlarged.obj"
+    },
+    {
+      "id": "concave_hole_enlarged_standing_obj",
+      "path": "overhaul/eon_engine_mirror/tests/data/cube_with_concave_hole_enlarged_standing.obj"
+    },
+    {
+      "id": "overhang_obj",
+      "path": "overhaul/eon_engine_mirror/tests/data/overhang.obj"
+    },
+    {
+      "id": "pyramid_obj",
+      "path": "overhaul/eon_engine_mirror/tests/data/pyramid.obj"
+    },
+    {
+      "id": "sloping_hole_obj",
+      "path": "overhaul/eon_engine_mirror/tests/data/sloping_hole.obj"
+    },
+    {
+      "id": "two_hollow_squares_obj",
+      "path": "overhaul/eon_engine_mirror/tests/data/two_hollow_squares.obj"
+    },
+    {
+      "id": "small_dorito_obj",
+      "path": "overhaul/eon_engine_mirror/tests/data/small_dorito.obj"
+    },
+    {
+      "id": "20mmbox_lf_stl",
+      "path": "overhaul/eon_engine_mirror/tests/data/test_stl/ASCII/20mmbox-LF.stl"
+    },
+    {
+      "id": "20mmbox_cr_stl",
+      "path": "overhaul/eon_engine_mirror/tests/data/test_stl/ASCII/20mmbox-CR.stl"
+    }
+  ]
+}

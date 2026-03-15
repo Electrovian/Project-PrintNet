@@ -1,0 +1,21 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge ASA Basic @FF AD5X 0.6 nozzle.json
+DATA = {'compatible_printers': ['Flashforge AD5X 0.6 nozzle'],
+ 'cool_plate_temp': ['0'],
+ 'cool_plate_temp_initial_layer': ['0'],
+ 'eng_plate_temp': ['105'],
+ 'eng_plate_temp_initial_layer': ['105'],
+ 'filament_flow_ratio': ['0.96'],
+ 'filament_max_volumetric_speed': ['18'],
+ 'filament_settings_id': ['Flashforge ASA Basic @FF AD5X 0.6 nozzle'],
+ 'from': 'system',
+ 'inherits': 'Flashforge Generic ABS',
+ 'instantiation': 'true',
+ 'name': 'Flashforge ASA Basic @FF AD5X 0.6 nozzle',
+ 'setting_id': 'GFSA04',
+ 'textured_cool_plate_temp': ['0'],
+ 'textured_cool_plate_temp_initial_layer': ['0'],
+ 'textured_plate_temp': ['105'],
+ 'textured_plate_temp_initial_layer': ['105'],
+ 'type': 'filament'}

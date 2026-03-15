@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Snapmaker/filament/Snapmaker Dual PETG @base.json
+DATA = {'fan_max_speed': ['20'],
+ 'fan_min_speed': ['0'],
+ 'filament_cooling_final_speed': ['60'],
+ 'filament_cooling_initial_speed': ['35'],
+ 'filament_cooling_moves': ['2'],
+ 'filament_density': ['1.25'],
+ 'filament_id': '2209001062',
+ 'filament_load_time': ['2'],
+ 'filament_loading_speed': ['35'],
+ 'filament_loading_speed_start': ['35'],
+ 'filament_retraction_speed': ['35'],
+ 'filament_unload_time': ['2'],
+ 'filament_unloading_speed': ['35'],
+ 'filament_unloading_speed_start': ['35'],
+ 'filament_z_hop_types': ['Spiral Lift'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_petg',
+ 'instantiation': 'false',
+ 'name': 'Snapmaker Dual PETG @base',
+ 'nozzle_temperature_initial_layer': ['250'],
+ 'nozzle_temperature_range_low': ['240'],
+ 'overhang_fan_speed': ['25'],
+ 'temperature_vitrification': ['178'],
+ 'type': 'filament'}

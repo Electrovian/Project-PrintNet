@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/DeltaMaker/filament/fdm_filament_pla.json
+DATA = {'close_fan_the_first_x_layers': ['1'],
+ 'fan_cooling_layer_time': '100',
+ 'fan_max_speed': ['100'],
+ 'fan_min_speed': ['100'],
+ 'filament_cost': ['29'],
+ 'filament_density': ['1.24'],
+ 'filament_max_volumetric_speed': ['0'],
+ 'filament_start_gcode': ['; filament start gcode\n'],
+ 'filament_type': ['PLA'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_common',
+ 'instantiation': 'false',
+ 'name': 'fdm_filament_pla',
+ 'nozzle_temperature': ['210'],
+ 'nozzle_temperature_initial_layer': ['205'],
+ 'nozzle_temperature_range_high': ['210'],
+ 'nozzle_temperature_range_low': ['190'],
+ 'overhang_fan_speed': ['100'],
+ 'overhang_fan_threshold': ['50%'],
+ 'reduce_fan_stop_start_freq': ['1'],
+ 'slow_down_for_layer_cooling': ['1'],
+ 'slow_down_layer_time': ['4'],
+ 'slow_down_min_speed': ['10'],
+ 'temperature_vitrification': ['60'],
+ 'type': 'filament'}

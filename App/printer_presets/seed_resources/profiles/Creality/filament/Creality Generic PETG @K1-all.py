@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Creality/filament/Creality Generic PETG @K1-all.json
+DATA = {'compatible_printers': ['Creality K1C 0.4 nozzle',
+                         'Creality K1C 0.6 nozzle',
+                         'Creality K1C 0.8 nozzle',
+                         'Creality K1 SE 0.4 nozzle'],
+ 'cool_plate_temp': ['70'],
+ 'cool_plate_temp_initial_layer': ['70'],
+ 'eng_plate_temp': ['70'],
+ 'eng_plate_temp_initial_layer': ['70'],
+ 'filament_max_volumetric_speed': ['9'],
+ 'from': 'system',
+ 'hot_plate_temp': ['70'],
+ 'hot_plate_temp_initial_layer': ['70'],
+ 'inherits': 'Creality Generic PETG',
+ 'instantiation': 'true',
+ 'name': 'Creality Generic PETG @K1-all',
+ 'nozzle_temperature': ['250'],
+ 'nozzle_temperature_initial_layer': ['250'],
+ 'reduce_fan_stop_start_freq': ['0'],
+ 'setting_id': 'GFSG99_00',
+ 'slow_down_layer_time': ['12'],
+ 'slow_down_min_speed': ['20'],
+ 'textured_plate_temp': ['70'],
+ 'textured_plate_temp_initial_layer': ['70'],
+ 'type': 'filament'}

@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Snapmaker/filament/fdm_filament_pva.json
+DATA = {'additional_cooling_fan_speed': ['50'],
+ 'default_filament_colour': [''],
+ 'fan_cooling_layer_time': ['100'],
+ 'filament_cost': ['120'],
+ 'filament_density': ['1.37'],
+ 'filament_deretraction_speed': ['15'],
+ 'filament_is_support': ['1'],
+ 'filament_max_volumetric_speed': ['6'],
+ 'filament_retraction_length': ['2'],
+ 'filament_retraction_speed': ['28'],
+ 'filament_type': ['PVA'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_common',
+ 'instantiation': 'false',
+ 'name': 'fdm_filament_pva',
+ 'nozzle_temperature': ['215'],
+ 'nozzle_temperature_initial_layer': ['215'],
+ 'nozzle_temperature_range_high': ['225'],
+ 'nozzle_temperature_range_low': ['190'],
+ 'overhang_fan_threshold': ['50%'],
+ 'reduce_fan_stop_start_freq': ['1'],
+ 'slow_down_layer_time': ['7'],
+ 'slow_down_min_speed': ['20'],
+ 'temperature_vitrification': ['150'],
+ 'type': 'filament'}

@@ -1,0 +1,7 @@
+{
+  "default_plate_basename": "demo_a_plate",
+  "reuse_path_resolved": true,
+  "reuse_send_count": 1,
+  "fallback_print_count": 1,
+  "cache_signature_used": "sig-default"
+}

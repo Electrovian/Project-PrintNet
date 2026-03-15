@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Z-Bolt/process/fdm_process_zbolt_0.36_nozzle_0.6.json
+DATA = {'bridge_flow': '1',
+ 'bridge_speed': '30',
+ 'from': 'system',
+ 'inherits': 'fdm_process_zbolt_common',
+ 'initial_layer_infill_speed': '60',
+ 'initial_layer_line_width': '0.62',
+ 'initial_layer_print_height': '0.36',
+ 'initial_layer_speed': '40',
+ 'inner_wall_line_width': '0.62',
+ 'instantiation': 'false',
+ 'internal_solid_infill_line_width': '0.62',
+ 'ironing_inset': '0.31',
+ 'layer_height': '0.36',
+ 'line_width': '0.62',
+ 'name': 'fdm_process_zbolt_0.36_nozzle_0.6',
+ 'outer_wall_line_width': '0.62',
+ 'overhang_3_4_speed': '15',
+ 'sparse_infill_line_width': '0.62',
+ 'sparse_infill_speed': '100',
+ 'support_line_width': '0.62',
+ 'top_surface_line_width': '0.62',
+ 'top_surface_speed': '150',
+ 'type': 'process'}

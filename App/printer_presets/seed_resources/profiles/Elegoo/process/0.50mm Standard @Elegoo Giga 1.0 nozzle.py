@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Elegoo/process/0.50mm Standard @Elegoo Giga 1.0 nozzle.json
+DATA = {'bridge_speed': '20',
+ 'compatible_printers': ['Elegoo OrangeStorm Giga 1.0 nozzle'],
+ 'default_acceleration': '3000',
+ 'detect_thin_wall': '0',
+ 'filename_format': 'EOGiga1_{nozzle_diameter[0]}_{input_filename_base}_{filament_type[0]}{layer_height}_{print_time}.gcode',
+ 'from': 'system',
+ 'inherits': 'fdm_process_elegoo_10050',
+ 'initial_layer_acceleration': '1000',
+ 'inner_wall_acceleration': '3000',
+ 'instantiation': 'true',
+ 'make_overhang_printable_angle': '90',
+ 'name': '0.50mm Standard @Elegoo Giga 1.0 nozzle',
+ 'outer_wall_acceleration': '2000',
+ 'outer_wall_speed': '80',
+ 'print_flow_ratio': '1.0',
+ 'resolution': '0.05',
+ 'setting_id': 'PEOSG10050',
+ 'sparse_infill_speed': '150',
+ 'thick_internal_bridges': '0',
+ 'top_shell_layers': '4',
+ 'travel_acceleration': '3000',
+ 'travel_speed': '300',
+ 'type': 'process'}

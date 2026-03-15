@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge HS PETG @FF AD5X 0.25 nozzle.json
+DATA = {'compatible_printers': ['Flashforge AD5X 0.25 nozzle'],
+ 'cool_plate_temp': ['0'],
+ 'cool_plate_temp_initial_layer': ['0'],
+ 'eng_plate_temp': ['75'],
+ 'eng_plate_temp_initial_layer': ['75'],
+ 'fan_max_speed': ['100'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_max_volumetric_speed': ['8'],
+ 'filament_settings_id': ['Flashforge HS PETG @FF AD5X 0.25 nozzle'],
+ 'from': 'system',
+ 'hot_plate_temp': ['75'],
+ 'hot_plate_temp_initial_layer': ['75'],
+ 'inherits': 'Flashforge PETG @FF AD5M 0.25 Nozzle',
+ 'instantiation': 'true',
+ 'name': 'Flashforge HS PETG @FF AD5X 0.25 nozzle',
+ 'nozzle_temperature': ['235'],
+ 'nozzle_temperature_initial_layer': ['240'],
+ 'pressure_advance': ['0.04'],
+ 'setting_id': 'GFSA04_12',
+ 'slow_down_min_speed': ['30'],
+ 'textured_cool_plate_temp': ['75'],
+ 'textured_cool_plate_temp_initial_layer': ['75'],
+ 'textured_plate_temp': ['75'],
+ 'textured_plate_temp_initial_layer': ['75'],
+ 'type': 'filament'}

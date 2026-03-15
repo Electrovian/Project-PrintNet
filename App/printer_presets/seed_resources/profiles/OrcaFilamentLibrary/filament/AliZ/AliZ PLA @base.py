@@ -1,0 +1,21 @@
+from __future__ import annotations
+
+# source: profiles/OrcaFilamentLibrary/filament/AliZ/AliZ PLA @base.json
+DATA = {'enable_pressure_advance': ['0'],
+ 'fan_cooling_layer_time': ['100'],
+ 'filament_cost': ['69'],
+ 'filament_density': ['1.27'],
+ 'filament_id': 'AliZ002',
+ 'filament_vendor': ['Aliz'],
+ 'filament_wipe_distance': ['0'],
+ 'from': 'system',
+ 'hot_plate_temp': ['55'],
+ 'hot_plate_temp_initial_layer': ['55'],
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'false',
+ 'name': 'AliZ PLA @base',
+ 'pressure_advance': ['0.025'],
+ 'slow_down_layer_time': ['4'],
+ 'textured_plate_temp': ['55'],
+ 'textured_plate_temp_initial_layer': ['55'],
+ 'type': 'filament'}

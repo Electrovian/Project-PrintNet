@@ -6,3 +6,172 @@ logs
 __pycache__/
 *.pyc
 Test Files
+# Briefcase build artifacts
+build/
+dist/
+*.app
+*.apk
+*.aab
+*.ipa
+*.msi
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+.briefcase/
+android/
+iOS/
+
+# Generated bootstrap diagnostic reports
+docs/_dev_bootstrap_report*.json
+
+# Generated source-isolation reports
+docs/_external_source_isolation_report*.json
+
+# Generated printer-profile discovery reports
+docs/_printer_profile_file_discovery_report*.json
+docs/_printer_profile_file_discovery_summary*.txt
+
+# Generated vendor profile parsing reports
+docs/_vendor_profile_parsing_report*.json
+docs/_vendor_profile_parsing_summary*.txt
+
+# Generated profile inheritance reports
+docs/_profile_inheritance_report*.json
+docs/_profile_inheritance_summary*.txt
+
+# Generated profile settings mapping reports
+docs/_profile_settings_mapping_report*.json
+docs/_profile_settings_mapping_summary*.txt
+
+# Generated profile storage/query index artifacts
+docs/_profile_storage_index*.json
+docs/_profile_storage_index_summary*.txt
+
+# Generated slicer_v2 scaffolding smoke artifacts
+docs/_slicer_v2_scaffolding_report*.json
+docs/_slicer_v2_scaffolding_summary*.txt
+
+# Generated slicer_v2 settings normalization artifacts
+docs/_slicer_v2_settings_normalization_report*.json
+docs/_slicer_v2_settings_normalization_summary*.txt
+
+# Generated slicer_v2 geometry artifacts
+docs/_slicer_v2_geometry_report*.json
+docs/_slicer_v2_geometry_summary*.txt
+
+# Generated slicer_v2 polygon offset artifacts
+docs/_slicer_v2_polygon_offset_report*.json
+docs/_slicer_v2_polygon_offset_summary*.txt
+
+# Generated slicer_v2 mesh slicing artifacts
+docs/_slicer_v2_mesh_slicing_report*.json
+docs/_slicer_v2_mesh_slicing_summary*.txt
+
+# Generated slicer_v2 adaptive layer artifacts
+docs/_slicer_v2_adaptive_layer_report*.json
+docs/_slicer_v2_adaptive_layer_summary*.txt
+
+# Generated slicer_v2 island graph artifacts
+docs/_slicer_v2_island_graph_report*.json
+docs/_slicer_v2_island_graph_summary*.txt
+
+# Generated slicer_v2 perimeter classic artifacts
+docs/_slicer_v2_perimeter_classic_report*.json
+docs/_slicer_v2_perimeter_classic_summary*.txt
+
+# Generated slicer_v2 perimeter variable-width artifacts
+docs/_slicer_v2_perimeter_variable_report*.json
+docs/_slicer_v2_perimeter_variable_summary*.txt
+
+# Generated slicer_v2 infill patterns artifacts
+docs/_slicer_v2_infill_patterns_report*.json
+docs/_slicer_v2_infill_patterns_summary*.txt
+
+# Generated slicer_v2 solid bridge artifacts
+docs/_slicer_v2_solid_bridges_report*.json
+docs/_slicer_v2_solid_bridges_summary*.txt
+
+# Generated slicer_v2 support planning artifacts
+docs/_slicer_v2_support_planning_report*.json
+docs/_slicer_v2_support_planning_summary*.txt
+
+# Generated slicer_v2 travel planning artifacts
+docs/_slicer_v2_travel_planning_report*.json
+docs/_slicer_v2_travel_planning_summary*.txt
+
+# Generated slicer_v2 extrusion flow artifacts
+docs/_slicer_v2_extrusion_flow_report*.json
+docs/_slicer_v2_extrusion_flow_summary*.txt
+
+# Generated slicer_v2 gcode emission artifacts
+docs/_slicer_v2_gcode_emission_report*.json
+docs/_slicer_v2_gcode_emission_summary*.txt
+
+# Generated slicer_v2 gcode validation artifacts
+docs/_slicer_v2_gcode_validation_report*.json
+docs/_slicer_v2_gcode_validation_summary*.txt
+
+# Generated desktop plate flow artifacts
+docs/_desktop_plate_flow_report*.json
+docs/_desktop_plate_flow_summary*.txt
+
+# Generated desktop runtime printer state artifacts
+docs/_desktop_runtime_printer_state_report*.json
+docs/_desktop_runtime_printer_state_summary*.txt
+
+# Generated connector registry artifacts
+docs/_connector_registry_report*.json
+docs/_connector_registry_summary*.txt
+
+# Generated OctoPrint connector artifacts
+docs/_octoprint_connector_report*.json
+docs/_octoprint_connector_summary*.txt
+
+# Generated Moonraker connector artifacts
+docs/_moonraker_connector_report*.json
+docs/_moonraker_connector_summary*.txt
+
+# Generated PrusaLink connector artifacts
+docs/_prusalink_connector_report*.json
+docs/_prusalink_connector_summary*.txt
+
+# Generated local Wi-Fi onboarding artifacts
+docs/_local_wifi_onboarding_report*.json
+docs/_local_wifi_onboarding_summary*.txt
+
+# Generated desktop test automation regression artifacts
+docs/_desktop_test_automation_report*.json
+docs/_desktop_test_automation_summary*.txt
+
+# Generated backend fastapi modular monolith artifacts
+docs/_backend_fastapi_monolith_report*.json
+docs/_backend_fastapi_monolith_summary*.txt
+
+# Generated frontend react ux artifacts
+docs/_frontend_react_ux_report*.json
+docs/_frontend_react_ux_summary*.txt
+
+# Generated authentication and role enforcement artifacts
+docs/_auth_role_enforcement_report*.json
+docs/_auth_role_enforcement_summary*.txt
+
+# Generated queue worker orchestration artifacts
+docs/_queue_worker_orchestration_report*.json
+docs/_queue_worker_orchestration_summary*.txt
+
+# Generated kubernetes packaging artifacts
+docs/_kubernetes_packaging_report*.json
+docs/_kubernetes_packaging_summary*.txt
+
+# Generated observability/security/release readiness artifacts
+docs/_observability_security_release_readiness_report*.json
+docs/_observability_security_release_readiness_summary*.txt
+
+# Flutter workspace artifacts
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/ios/Pods/
+**/android/.gradle/

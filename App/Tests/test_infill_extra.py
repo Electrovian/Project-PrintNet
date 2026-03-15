@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 
@@ -9,8 +9,8 @@ TESTS = os.path.abspath(os.path.dirname(__file__))
 if TESTS not in sys.path:
     sys.path.insert(0, TESTS)
 
-from slicer import geometry
-from slicer import infill
+from slicer_v2 import legacy_geometry as geometry
+from slicer_v2 import legacy_infill as infill
 from harness import BaseTestCase, square_points
 
 
@@ -44,3 +44,4 @@ class InfillExtraTests(BaseTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

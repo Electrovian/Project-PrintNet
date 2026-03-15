@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Snapmaker/filament/Snapmaker Dual ABS.json
+DATA = {'compatible_printers': ['Snapmaker A250 Dual (0.4 nozzle)',
+                         'Snapmaker A250 Dual (0.6 nozzle)',
+                         'Snapmaker A250 Dual BKit (0.4 nozzle)',
+                         'Snapmaker A250 Dual BKit (0.6 nozzle)',
+                         'Snapmaker A250 Dual QS+B Kit (0.4 nozzle)',
+                         'Snapmaker A250 Dual QS+B Kit (0.6 nozzle)',
+                         'Snapmaker A250 Dual QSKit (0.4 nozzle)',
+                         'Snapmaker A250 Dual QSKit (0.6 nozzle)',
+                         'Snapmaker A350 Dual (0.4 nozzle)',
+                         'Snapmaker A350 Dual (0.6 nozzle)',
+                         'Snapmaker A350 Dual BKit (0.4 nozzle)',
+                         'Snapmaker A350 Dual BKit (0.6 nozzle)',
+                         'Snapmaker A350 Dual QS+B Kit (0.4 nozzle)',
+                         'Snapmaker A350 Dual QS+B Kit (0.6 nozzle)',
+                         'Snapmaker A350 Dual QSKit (0.4 nozzle)',
+                         'Snapmaker A350 Dual QSKit (0.6 nozzle)',
+                         'Snapmaker Artisan (0.4 nozzle)',
+                         'Snapmaker Artisan (0.6 nozzle)'],
+ 'from': 'system',
+ 'inherits': 'Snapmaker Dual ABS @base',
+ 'instantiation': 'true',
+ 'name': 'Snapmaker Dual ABS',
+ 'setting_id': '937533070',
+ 'type': 'filament'}

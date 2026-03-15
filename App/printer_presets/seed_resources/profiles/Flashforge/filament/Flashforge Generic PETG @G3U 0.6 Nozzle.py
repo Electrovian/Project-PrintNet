@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge Generic PETG @G3U 0.6 Nozzle.json
+DATA = {'compatible_printers': ['Flashforge Guider 3 Ultra 0.6 Nozzle'],
+ 'fan_cooling_layer_time': ['30'],
+ 'fan_max_speed': ['100'],
+ 'fan_min_speed': ['80'],
+ 'filament_flow_ratio': ['1.01'],
+ 'filament_id': 'GFB99',
+ 'filament_minimal_purge_on_wipe_tower': ['5'],
+ 'filament_settings_id': ['Flashforge Generic PETG @G3U 0.6 Nozzle'],
+ 'filament_start_gcode': ['; filament start gcode'],
+ 'filament_unloading_speed': ['35'],
+ 'filament_unloading_speed_start': ['40'],
+ 'from': 'system',
+ 'hot_plate_temp': ['75'],
+ 'hot_plate_temp_initial_layer': ['75'],
+ 'inherits': 'Flashforge Generic PETG',
+ 'instantiation': 'true',
+ 'name': 'Flashforge Generic PETG @G3U 0.6 Nozzle',
+ 'nozzle_temperature': ['250'],
+ 'nozzle_temperature_initial_layer': ['250'],
+ 'nozzle_temperature_range_low': ['230'],
+ 'pressure_advance': ['0.042'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_min_speed': ['12'],
+ 'type': 'filament'}

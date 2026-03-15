@@ -1,0 +1,513 @@
+﻿generated_at: 2026-02-13T03:36:08.9679003Z
+app_root: C:\Users\Elect\OneDrive\Documents\GitHub\Project-PrintNet\App
+generator: scripts/generate-module-inventory.ps1
+
+App\config\defaults.py:14:    "printer": {
+App\config\defaults.py:3:        "title": "EON-OpenSlicer",
+App\config\printer_config.py:10:EXCEL_FILE = "Printer Information.xlsx"
+App\config\printer_config.py:100:    return printers, airtable_cfg
+App\config\printer_config.py:12:def load_printer_config() -> Tuple[List[Dict], Dict]:
+App\config\printer_config.py:13:    """Load printer and Airtable configuration.
+App\config\printer_config.py:16:    - Sheet 0: printer info, columns like:
+App\config\printer_config.py:17:        Name, OctoPrintURL, OctoPrintAPIKey, BedX, BedY, BedZ
+App\config\printer_config.py:22:        (printers, airtable_cfg)
+App\config\printer_config.py:24:    printers = []
+App\config\printer_config.py:25:    printer_defaults = DEFAULTS.get("printer", {})
+App\config\printer_config.py:26:    base_name = str(printer_defaults.get("name", "MakerGear M3-SE")).strip() or "MakerGear M3-SE"
+App\config\printer_config.py:37:            # First sheet -> printers
+App\config\printer_config.py:40:                printers.append({
+App\config\printer_config.py:42:                    "octoprint_url": str(row.get("OctoPrintURL", "http://localhost")),
+App\config\printer_config.py:43:                    "octoprint_api_key": str(row.get("OctoPrintAPIKey", "")),
+App\config\printer_config.py:59:            print(f"[printer_config] Failed to parse Excel config: {exc}")
+App\config\printer_config.py:61:    if PRINTER_CATALOG:
+App\config\printer_config.py:62:        existing = {str(p.get("name", "")).strip().lower() for p in printers}
+App\config\printer_config.py:63:        for entry in PRINTER_CATALOG:
+App\config\printer_config.py:71:            printers.append(catalog_entry)
+App\config\printer_config.py:74:    bed_size = printer_defaults.get("bed_size", (200, 200))
+App\config\printer_config.py:77:    bed_z = float(printer_defaults.get("max_height", 200.0))
+App\config\printer_config.py:78:    base_printer = {
+App\config\printer_config.py:8:from .printers_catalog import PRINTER_CATALOG
+App\config\printer_config.py:80:        "octoprint_url": "http://localhost",
+App\config\printer_config.py:81:        "octoprint_api_key": "",
+App\config\printer_config.py:89:    for printer in printers:
+App\config\printer_config.py:90:        if str(printer.get("name", "")).strip().lower() == base_name.lower():
+App\config\printer_config.py:92:                existing_base = printer
+App\config\printer_config.py:94:                remaining.append(printer)
+App\config\printer_config.py:96:            remaining.append(printer)
+App\config\printer_config.py:97:    printers = remaining
+App\config\printer_config.py:98:    printers.insert(0, existing_base or base_printer)
+App\config\printers_catalog.py:1:PRINTER_CATALOG = [
+App\config\printers_catalog.py:109:        "octoprint_url": "",
+App\config\printers_catalog.py:110:        "octoprint_api_key": "",
+App\config\printers_catalog.py:131:        "octoprint_url": "",
+App\config\printers_catalog.py:132:        "octoprint_api_key": "",
+App\config\printers_catalog.py:153:        "octoprint_url": "",
+App\config\printers_catalog.py:154:        "octoprint_api_key": "",
+App\config\printers_catalog.py:175:        "octoprint_url": "",
+App\config\printers_catalog.py:176:        "octoprint_api_key": "",
+App\config\printers_catalog.py:197:        "octoprint_url": "",
+App\config\printers_catalog.py:198:        "octoprint_api_key": "",
+App\config\printers_catalog.py:205:        "technology": "FFF (Belt printer)",
+App\config\printers_catalog.py:21:        "octoprint_url": "",
+App\config\printers_catalog.py:219:        "octoprint_url": "",
+App\config\printers_catalog.py:22:        "octoprint_api_key": "",
+App\config\printers_catalog.py:220:        "octoprint_api_key": "",
+App\config\printers_catalog.py:241:        "octoprint_url": "",
+App\config\printers_catalog.py:242:        "octoprint_api_key": "",
+App\config\printers_catalog.py:263:        "octoprint_url": "",
+App\config\printers_catalog.py:264:        "octoprint_api_key": "",
+App\config\printers_catalog.py:285:        "octoprint_url": "",
+App\config\printers_catalog.py:286:        "octoprint_api_key": "",
+App\config\printers_catalog.py:307:        "octoprint_url": "",
+App\config\printers_catalog.py:308:        "octoprint_api_key": "",
+App\config\printers_catalog.py:329:        "octoprint_url": "",
+App\config\printers_catalog.py:330:        "octoprint_api_key": "",
+App\config\printers_catalog.py:351:        "octoprint_url": "",
+App\config\printers_catalog.py:352:        "octoprint_api_key": "",
+App\config\printers_catalog.py:373:        "octoprint_url": "",
+App\config\printers_catalog.py:374:        "octoprint_api_key": "",
+App\config\printers_catalog.py:395:        "octoprint_url": "",
+App\config\printers_catalog.py:396:        "octoprint_api_key": "",
+App\config\printers_catalog.py:417:        "octoprint_url": "",
+App\config\printers_catalog.py:418:        "octoprint_api_key": "",
+App\config\printers_catalog.py:43:        "octoprint_url": "",
+App\config\printers_catalog.py:439:        "octoprint_url": "",
+App\config\printers_catalog.py:44:        "octoprint_api_key": "",
+App\config\printers_catalog.py:440:        "octoprint_api_key": "",
+App\config\printers_catalog.py:461:        "octoprint_url": "",
+App\config\printers_catalog.py:462:        "octoprint_api_key": "",
+App\config\printers_catalog.py:483:        "octoprint_url": "",
+App\config\printers_catalog.py:484:        "octoprint_api_key": "",
+App\config\printers_catalog.py:505:        "octoprint_url": "",
+App\config\printers_catalog.py:506:        "octoprint_api_key": "",
+App\config\printers_catalog.py:527:        "octoprint_url": "",
+App\config\printers_catalog.py:528:        "octoprint_api_key": "",
+App\config\printers_catalog.py:549:        "octoprint_url": "",
+App\config\printers_catalog.py:550:        "octoprint_api_key": "",
+App\config\printers_catalog.py:571:        "octoprint_url": "",
+App\config\printers_catalog.py:572:        "octoprint_api_key": "",
+App\config\printers_catalog.py:593:        "octoprint_url": "",
+App\config\printers_catalog.py:594:        "octoprint_api_key": "",
+App\config\printers_catalog.py:615:        "octoprint_url": "",
+App\config\printers_catalog.py:616:        "octoprint_api_key": "",
+App\config\printers_catalog.py:637:        "octoprint_url": "",
+App\config\printers_catalog.py:638:        "octoprint_api_key": "",
+App\config\printers_catalog.py:65:        "octoprint_url": "",
+App\config\printers_catalog.py:659:        "octoprint_url": "",
+App\config\printers_catalog.py:66:        "octoprint_api_key": "",
+App\config\printers_catalog.py:660:        "octoprint_api_key": "",
+App\config\printers_catalog.py:681:        "octoprint_url": "",
+App\config\printers_catalog.py:682:        "octoprint_api_key": "",
+App\config\printers_catalog.py:703:        "octoprint_url": "",
+App\config\printers_catalog.py:704:        "octoprint_api_key": "",
+App\config\printers_catalog.py:725:        "octoprint_url": "",
+App\config\printers_catalog.py:726:        "octoprint_api_key": "",
+App\config\printers_catalog.py:747:        "octoprint_url": "",
+App\config\printers_catalog.py:748:        "octoprint_api_key": "",
+App\config\printers_catalog.py:769:        "octoprint_url": "",
+App\config\printers_catalog.py:770:        "octoprint_api_key": "",
+App\config\printers_catalog.py:791:        "octoprint_url": "",
+App\config\printers_catalog.py:792:        "octoprint_api_key": "",
+App\config\printers_catalog.py:813:        "octoprint_url": "",
+App\config\printers_catalog.py:814:        "octoprint_api_key": "",
+App\config\printers_catalog.py:835:        "octoprint_url": "",
+App\config\printers_catalog.py:836:        "octoprint_api_key": "",
+App\config\printers_catalog.py:857:        "octoprint_url": "",
+App\config\printers_catalog.py:858:        "octoprint_api_key": "",
+App\config\printers_catalog.py:87:        "octoprint_url": "",
+App\config\printers_catalog.py:88:        "octoprint_api_key": "",
+App\gui\__init__.py:1:"""GUI package for EON-OpenSlicer prototype."""
+App\gui\crash_reporter.py:40:            or "https://github.com/Electrovian/Project-EON-OpenSlicer/issues/new"
+App\gui\main_window.py:19:from integrations.printer_manager import PrinterManager
+App\gui\main_window.py:29:    def __init__(self, printers, airtable_cfg, parent=None):
+App\gui\main_window.py:40:        self.printers = printers
+App\gui\main_window.py:41:        self.connected_printers = [
+App\gui\main_window.py:42:            printer for printer in (printers or []) if not printer.get("catalog_only")
+App\gui\main_window.py:45:        self.printer_manager = PrinterManager(printers=self.printers, airtable_cfg=self.airtable_cfg)
+App\gui\main_window.py:67:        self.device_view.set_printers(self.connected_printers)
+App\gui\main_window.py:71:        self.control_view.set_printers(self.connected_printers)
+App\gui\settings_panel\others.py:101:        self._printer_combo.clear()
+App\gui\settings_panel\others.py:102:        if not self._printers:
+App\gui\settings_panel\others.py:103:            self._printer_combo.addItem("No printers configured")
+App\gui\settings_panel\others.py:104:            self._printer_combo.setEnabled(False)
+App\gui\settings_panel\others.py:106:        self._printer_combo.setEnabled(True)
+App\gui\settings_panel\others.py:107:        default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+App\gui\settings_panel\others.py:109:        for idx, printer in enumerate(self._printers):
+App\gui\settings_panel\others.py:110:            name = printer.get("name") if isinstance(printer, dict) else None
+App\gui\settings_panel\others.py:111:            self._printer_combo.addItem(name or "Printer")
+App\gui\settings_panel\others.py:115:            self._printer_combo.setCurrentIndex(default_index)
+App\gui\settings_panel\others.py:116:        self._on_printer_changed(self._printer_combo.currentIndex())
+App\gui\settings_panel\others.py:118:    def current_printer(self):
+App\gui\settings_panel\others.py:119:        if not getattr(self, "_printers", None):
+App\gui\settings_panel\others.py:121:        idx = self._printer_combo.currentIndex()
+App\gui\settings_panel\others.py:122:        if idx < 0 or idx >= len(self._printers):
+App\gui\settings_panel\others.py:124:        return self._printers[idx]
+App\gui\settings_panel\others.py:126:    def select_printer_by_name(self, name: str, emit: bool = True):
+App\gui\settings_panel\others.py:127:        if not hasattr(self, "_printer_combo"):
+App\gui\settings_panel\others.py:133:        for row in range(self._printer_combo.count()):
+App\gui\settings_panel\others.py:134:            if self._printer_combo.itemText(row).strip().lower() == target:
+App\gui\settings_panel\others.py:139:        block = self._printer_combo.blockSignals(True)
+App\gui\settings_panel\others.py:140:        self._printer_combo.setCurrentIndex(idx)
+App\gui\settings_panel\others.py:141:        self._printer_combo.blockSignals(block)
+App\gui\settings_panel\others.py:143:            self._on_printer_changed(idx)
+App\gui\settings_panel\others.py:145:    def _on_printer_changed(self, _index: int):
+App\gui\settings_panel\others.py:146:        printer = self.current_printer()
+App\gui\settings_panel\others.py:147:        if printer is None:
+App\gui\settings_panel\others.py:150:        apply_printer = getattr(main, "_apply_printer_profile", None)
+App\gui\settings_panel\others.py:151:        if callable(apply_printer):
+App\gui\settings_panel\others.py:152:            apply_printer(printer, source="settings")
+App\gui\settings_panel\others.py:327:            "QFrame#ProcessRow, QFrame#ProfileRow, QFrame#PrinterRow {"
+App\gui\settings_panel\others.py:332:            "QLabel#PrinterLabel {"
+App\gui\settings_panel\others.py:369:            "QComboBox#ProfileCombo, QComboBox#PrinterCombo, QLineEdit#SettingsSearch {"
+App\gui\settings_panel\others.py:9:from slicer.gcode.writer import SliceSettings
+App\gui\settings_panel\others.py:97:    def set_printers(self, printers):
+App\gui\settings_panel\others.py:98:        self._printers = list(printers or [])
+App\gui\settings_panel\others.py:99:        if not hasattr(self, "_printer_combo"):
+App\gui\settings_panel\panel.py:269:        self.set_printers(getattr(self.parent(), "printers", []) or [])
+App\gui\settings_panel\panel.py:276:        self._build_printer_row(root)
+App\gui\settings_panel\panel.py:339:    def _build_printer_row(self, root: QtWidgets.QVBoxLayout):
+App\gui\settings_panel\panel.py:341:        row.setObjectName("PrinterRow")
+App\gui\settings_panel\panel.py:346:        label = QtWidgets.QLabel("Printer", row)
+App\gui\settings_panel\panel.py:347:        label.setObjectName("PrinterLabel")
+App\gui\settings_panel\panel.py:350:        self._printer_combo = QtWidgets.QComboBox(row)
+App\gui\settings_panel\panel.py:351:        self._printer_combo.setObjectName("PrinterCombo")
+App\gui\settings_panel\panel.py:352:        self._printer_combo.currentIndexChanged.connect(self._on_printer_changed)
+App\gui\settings_panel\panel.py:353:        layout.addWidget(self._printer_combo, 1)
+App\gui\settings_panel\panel.py:8:from slicer.gcode.writer import SliceSettings
+App\gui\shortcuts.py:33:    ShortcutDef("preferences", "Printer Preferences", "Ctrl+P", "Global"),
+App\gui\viewer\core.py:11:from slicer.geometry import arrange_rectangles, lowest_planar_face
+App\gui\viewer\core.py:115:        printer_defaults = DEFAULTS.get("printer", {})
+App\gui\viewer\core.py:116:        self._bed_size = tuple(printer_defaults.get("bed_size", (200, 200)))
+App\gui\viewer\core.py:117:        self._bed_height = float(printer_defaults.get("max_height", 200))
+App\gui\viewer\core.py:12:from slicer.mesh_opt import simplify_mesh, wireframe_target_faces
+App\gui\viewer\core.py:641:            # 2) Allow drag of selected model even if pick missed (slicer-like behavior)
+App\gui\Windows\activity.py:10:        self._printer_entries = []
+App\gui\Windows\activity.py:105:            table.setItem(row, 5, QtWidgets.QTableWidgetItem(str(entry.get("printer", ""))))
+App\gui\Windows\activity.py:110:        elif button is self._printers_btn:
+App\gui\Windows\activity.py:111:            self._stack.setCurrentWidget(self._printer_table)
+App\gui\Windows\activity.py:28:        self._search_input.setPlaceholderText("Search by printer, user, job")
+App\gui\Windows\activity.py:38:        self._printers_btn = QtWidgets.QToolButton(self)
+App\gui\Windows\activity.py:39:        self._printers_btn.setText("Printers")
+App\gui\Windows\activity.py:40:        self._printers_btn.setCheckable(True)
+App\gui\Windows\activity.py:41:        self._printers_btn.setObjectName("ActivityTab")
+App\gui\Windows\activity.py:45:        tabs_group.addButton(self._printers_btn)
+App\gui\Windows\activity.py:47:        tabs_row.addWidget(self._printers_btn)
+App\gui\Windows\activity.py:53:        self._printer_table = self._build_table(self._stack)
+App\gui\Windows\activity.py:55:        self._stack.addWidget(self._printer_table)
+App\gui\Windows\activity.py:69:        table.setHorizontalHeaderLabels(["Job", "Status", "Duration", "Material", "When", "Printer"])
+App\gui\Windows\activity.py:80:    def set_printer_activity(self, entries):
+App\gui\Windows\activity.py:81:        self._printer_entries = list(entries or [])
+App\gui\Windows\activity.py:87:        self._populate_table(self._printer_table, self._printer_entries, query)
+App\gui\Windows\activity.py:93:            printer = str(entry.get("printer", ""))
+App\gui\Windows\activity.py:95:            if query and query not in job.lower() and query not in printer.lower() and query not in user.lower():
+App\gui\Windows\control.py:12:        self._printers = []
+App\gui\Windows\control.py:162:        self._printer_combo.currentIndexChanged.connect(lambda _idx: self._update_details())
+App\gui\Windows\control.py:213:    def set_printers(self, printers):
+App\gui\Windows\control.py:214:        self._printers = list(printers or [])
+App\gui\Windows\control.py:215:        self._printer_combo.clear()
+App\gui\Windows\control.py:216:        if not self._printers:
+App\gui\Windows\control.py:217:            self._printer_combo.addItem("No printers configured")
+App\gui\Windows\control.py:218:            self._printer_combo.setEnabled(False)
+App\gui\Windows\control.py:220:        self._printer_combo.setEnabled(True)
+App\gui\Windows\control.py:221:        default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+App\gui\Windows\control.py:223:        for idx, printer in enumerate(self._printers):
+App\gui\Windows\control.py:224:            name = printer.get("name") if isinstance(printer, dict) else None
+App\gui\Windows\control.py:225:            self._printer_combo.addItem(name or "Printer")
+App\gui\Windows\control.py:229:            self._printer_combo.setCurrentIndex(default_index)
+App\gui\Windows\control.py:232:    def current_printer(self):
+App\gui\Windows\control.py:233:        if not self._printers:
+App\gui\Windows\control.py:235:        index = self._printer_combo.currentIndex()
+App\gui\Windows\control.py:236:        if index < 0 or index >= len(self._printers):
+App\gui\Windows\control.py:238:        return self._printers[index]
+App\gui\Windows\control.py:240:    def select_printer_by_name(self, name: str, emit: bool = True):
+App\gui\Windows\control.py:245:        for row in range(self._printer_combo.count()):
+App\gui\Windows\control.py:246:            if self._printer_combo.itemText(row).strip().lower() == target:
+App\gui\Windows\control.py:25:        select_label = QtWidgets.QLabel("Select printer:", self)
+App\gui\Windows\control.py:251:        block = self._printer_combo.blockSignals(True)
+App\gui\Windows\control.py:252:        self._printer_combo.setCurrentIndex(idx)
+App\gui\Windows\control.py:253:        self._printer_combo.blockSignals(block)
+App\gui\Windows\control.py:257:        printer = self.current_printer()
+App\gui\Windows\control.py:258:        if not printer:
+App\gui\Windows\control.py:259:            self._printer_details.setText("No printer selected.")
+App\gui\Windows\control.py:262:            f"Name: {printer.get('name', 'Printer')}",
+App\gui\Windows\control.py:263:            f"Bed: {printer.get('bed_x', 'n/a')} x {printer.get('bed_y', 'n/a')} x {printer.get('bed_z', 'n/a')}",
+App\gui\Windows\control.py:265:        url = printer.get("octoprint_url")
+App\gui\Windows\control.py:267:            desc.append(f"OctoPrint: {url}")
+App\gui\Windows\control.py:268:        self._printer_details.setText("\n".join(desc))
+App\gui\Windows\control.py:27:        self._printer_combo = QtWidgets.QComboBox(self)
+App\gui\Windows\control.py:270:            self.printer_changed.emit(printer)
+App\gui\Windows\control.py:28:        select_row.addWidget(self._printer_combo, 1)
+App\gui\Windows\control.py:31:        self._printer_details = QtWidgets.QLabel("", self)
+App\gui\Windows\control.py:32:        self._printer_details.setObjectName("ControlDetails")
+App\gui\Windows\control.py:33:        self._printer_details.setWordWrap(True)
+App\gui\Windows\control.py:34:        layout.addWidget(self._printer_details)
+App\gui\Windows\control.py:55:        hint = QtWidgets.QLabel("Manual controls are enabled when the printer is idle.", self)
+App\gui\Windows\control.py:71:        self._parts_tab = self._make_tab_button("Printer Parts")
+App\gui\Windows\control.py:8:    printer_changed = QtCore.pyqtSignal(object)
+App\gui\Windows\controller\core.py:103:        if hasattr(self, "device_view") and hasattr(self.device_view, "printer_changed"):
+App\gui\Windows\controller\core.py:104:            self.device_view.printer_changed.connect(
+App\gui\Windows\controller\core.py:105:                lambda printer: self._apply_printer_profile(printer, source="device")
+App\gui\Windows\controller\core.py:107:        if hasattr(self, "control_view") and hasattr(self.control_view, "printer_changed"):
+App\gui\Windows\controller\core.py:108:            self.control_view.printer_changed.connect(
+App\gui\Windows\controller\core.py:109:                lambda printer: self._apply_printer_profile(printer, source="control")
+App\gui\Windows\controller\core.py:111:        if hasattr(self, "preview_view") and hasattr(self.preview_view, "printer_changed"):
+App\gui\Windows\controller\core.py:112:            self.preview_view.printer_changed.connect(
+App\gui\Windows\controller\core.py:113:                lambda printer: self._apply_printer_profile(printer, source="preview")
+App\gui\Windows\controller\print.py:13:from slicer.ai_checks import run_ai_checks
+App\gui\Windows\controller\print.py:14:from slicer.gcode.preview import parse_gcode_preview_file
+App\gui\Windows\controller\print.py:15:from slicer.gcode.stats import estimate_gcode_file
+App\gui\Windows\controller\print.py:16:from slicer.gcode.writer import SliceSettings
+App\gui\Windows\controller\print.py:17:from slicer.slicer.emit import slice_trimesh, slice_trimesh_auto
+App\gui\Windows\controller\print.py:220:    def print_current_model(self, printer=None):
+App\gui\Windows\controller\print.py:231:        dlg = self._busy_dialog("Print", "Slicing & sending to printer...\nPlease wait.")
+App\gui\Windows\controller\print.py:235:            if printer is not None and hasattr(self.printer_manager, "set_active_printer"):
+App\gui\Windows\controller\print.py:236:                self.printer_manager.set_active_printer(printer)
+App\gui\Windows\controller\print.py:238:            return self.printer_manager.print_gcode(gcode_path, printer=printer)
+App\gui\Windows\controller\print.py:24:        printer_manager: Any
+App\gui\Windows\controller\print.py:303:    def _on_device_send_requested(self, printer):
+App\gui\Windows\controller\print.py:306:            self._send_existing_gcode(printer, gcode_path)
+App\gui\Windows\controller\print.py:308:        self.print_current_model(printer=printer)
+App\gui\Windows\controller\print.py:313:    def _send_existing_gcode(self, printer, gcode_path: str):
+App\gui\Windows\controller\print.py:314:        dlg = self._busy_dialog("Print", "Sending G-code to printer...\nPlease wait.")
+App\gui\Windows\controller\print.py:318:            if hasattr(self.printer_manager, "set_active_printer"):
+App\gui\Windows\controller\print.py:319:                self.printer_manager.set_active_printer(p)
+App\gui\Windows\controller\print.py:320:            return self.printer_manager.print_gcode(path, printer=p)
+App\gui\Windows\controller\print.py:322:        worker = Worker(do_send, printer, gcode_path)
+App\gui\Windows\controller\project.py:39:        url = "https://github.com/Electrovian/Project-EON-OpenSlicer/issues"
+App\gui\Windows\controller\project.py:66:            "EON-OpenSlicer Project (*.osproj);;All files (*.*)",
+App\gui\Windows\controller\project.py:82:            "EON-OpenSlicer Project (*.osproj);;All files (*.*)",
+App\gui\Windows\controller\ui.py:1264:        url = "https://github.com/Electrovian/Project-EON-OpenSlicer/releases"
+App\gui\Windows\controller\ui.py:1297:            "About EON-OpenSlicer",
+App\gui\Windows\controller\ui.py:1298:            f"EON-OpenSlicer\nVersion {version}\n\n"
+App\gui\Windows\controller\ui.py:1538:            base = os.path.join(os.path.expanduser("~"), ".eon_openslicer")
+App\gui\Windows\controller\ui.py:1539:        return os.path.join(base, "EON-OpenSlicer")
+App\gui\Windows\controller\ui.py:16:from slicer.gcode.writer import (
+App\gui\Windows\controller\ui.py:266:        bed = DEFAULTS.get("printer", {}).get("bed_size", (0, 0))
+App\gui\Windows\controller\ui.py:267:        max_height = DEFAULTS.get("printer", {}).get("max_height", 0)
+App\gui\Windows\controller\ui.py:273:    def _apply_printer_profile(self, printer: dict | None, source: str | None = None):
+App\gui\Windows\controller\ui.py:274:        if printer is None:
+App\gui\Windows\controller\ui.py:276:        if hasattr(self, "printer_manager"):
+App\gui\Windows\controller\ui.py:277:            self.printer_manager.set_active_printer(printer)
+App\gui\Windows\controller\ui.py:279:        defaults = DEFAULTS.get("printer", {})
+App\gui\Windows\controller\ui.py:288:        bed_x = _float_or(printer.get("bed_x"), bed_defaults[0] if bed_defaults else 200)
+App\gui\Windows\controller\ui.py:289:        bed_y = _float_or(printer.get("bed_y"), bed_defaults[1] if len(bed_defaults) > 1 else 200)
+App\gui\Windows\controller\ui.py:290:        bed_z = _float_or(printer.get("bed_z"), defaults.get("max_height", 200))
+App\gui\Windows\controller\ui.py:291:        name = str(printer.get("name", defaults.get("name", ""))).strip()
+App\gui\Windows\controller\ui.py:292:        DEFAULTS.setdefault("printer", {})["bed_size"] = (bed_x, bed_y)
+App\gui\Windows\controller\ui.py:293:        DEFAULTS["printer"]["max_height"] = bed_z
+App\gui\Windows\controller\ui.py:295:            DEFAULTS["printer"]["name"] = name
+App\gui\Windows\controller\ui.py:303:        self._sync_printer_selection(printer, source=source)
+App\gui\Windows\controller\ui.py:305:    def _sync_printer_selection(self, printer: dict, source: str | None = None):
+App\gui\Windows\controller\ui.py:306:        name = str(printer.get("name", "")).strip()
+App\gui\Windows\controller\ui.py:310:            self.settings_panel.select_printer_by_name(name, emit=False)
+App\gui\Windows\controller\ui.py:312:            self.device_view.select_printer_by_name(name, emit=False)
+App\gui\Windows\controller\ui.py:314:            self.control_view.select_printer_by_name(name, emit=False)
+App\gui\Windows\controller\ui.py:316:            self.preview_view.select_printer_by_name(name, emit=False)
+App\gui\Windows\device.py:107:        self._send_btn = QtWidgets.QPushButton("Send to printer")
+App\gui\Windows\device.py:11:    printer_changed = QtCore.pyqtSignal(object)
+App\gui\Windows\device.py:139:        self._connected_title = QtWidgets.QLabel("Connected printers", connected_frame)
+App\gui\Windows\device.py:15:        self._printers = []
+App\gui\Windows\device.py:158:        self._printer_combo.currentIndexChanged.connect(lambda _idx: self._update_details())
+App\gui\Windows\device.py:165:    def set_printers(self, printers):
+App\gui\Windows\device.py:166:        raw_printers = list(printers or [])
+App\gui\Windows\device.py:167:        self._printers = [
+App\gui\Windows\device.py:168:            printer
+App\gui\Windows\device.py:169:            for printer in raw_printers
+App\gui\Windows\device.py:170:            if not (isinstance(printer, dict) and printer.get("catalog_only"))
+App\gui\Windows\device.py:172:        self._printer_combo.clear()
+App\gui\Windows\device.py:173:        if not self._printers:
+App\gui\Windows\device.py:174:            self._printer_combo.addItem("No connected printers")
+App\gui\Windows\device.py:175:            self._printer_combo.setEnabled(False)
+App\gui\Windows\device.py:177:            self._printer_combo.setEnabled(True)
+App\gui\Windows\device.py:178:            default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+App\gui\Windows\device.py:180:            for idx, printer in enumerate(self._printers):
+App\gui\Windows\device.py:181:                name = printer.get("name", "Printer")
+App\gui\Windows\device.py:182:                self._printer_combo.addItem(name)
+App\gui\Windows\device.py:186:                self._printer_combo.setCurrentIndex(default_index)
+App\gui\Windows\device.py:190:    def current_printer(self):
+App\gui\Windows\device.py:191:        if not self._printers:
+App\gui\Windows\device.py:193:        index = self._printer_combo.currentIndex()
+App\gui\Windows\device.py:194:        if index < 0 or index >= len(self._printers):
+App\gui\Windows\device.py:196:        return self._printers[index]
+App\gui\Windows\device.py:198:    def select_printer_by_name(self, name: str, emit: bool = True):
+App\gui\Windows\device.py:203:        for row in range(self._printer_combo.count()):
+App\gui\Windows\device.py:204:            if self._printer_combo.itemText(row).strip().lower() == target:
+App\gui\Windows\device.py:209:        block = self._printer_combo.blockSignals(True)
+App\gui\Windows\device.py:210:        self._printer_combo.setCurrentIndex(idx)
+App\gui\Windows\device.py:211:        self._printer_combo.blockSignals(block)
+App\gui\Windows\device.py:215:        printer = self.current_printer()
+App\gui\Windows\device.py:216:        if not printer:
+App\gui\Windows\device.py:217:            self._printer_details.setText("No printer selected.")
+App\gui\Windows\device.py:221:            f"Name: {printer.get('name', 'Printer')}",
+App\gui\Windows\device.py:222:            f"Bed: {printer.get('bed_x', 'n/a')} x {printer.get('bed_y', 'n/a')} x {printer.get('bed_z', 'n/a')}",
+App\gui\Windows\device.py:224:        url = printer.get("octoprint_url")
+App\gui\Windows\device.py:226:            desc.append(f"OctoPrint: {url}")
+App\gui\Windows\device.py:227:        self._printer_details.setText("\n".join(desc))
+App\gui\Windows\device.py:230:            self.printer_changed.emit(printer)
+App\gui\Windows\device.py:252:            if self._printers:
+App\gui\Windows\device.py:253:                self._connected_title.setText(f"Connected printers ({len(self._printers)})")
+App\gui\Windows\device.py:255:                self._connected_title.setText("Connected printers")
+App\gui\Windows\device.py:257:        if not self._printers:
+App\gui\Windows\device.py:258:            placeholder = QtWidgets.QLabel("No connected printers.")
+App\gui\Windows\device.py:264:        for printer in self._printers:
+App\gui\Windows\device.py:265:            name = printer.get("name", "Printer")
+App\gui\Windows\device.py:266:            bed = f"{printer.get('bed_x', 'n/a')} x {printer.get('bed_y', 'n/a')} x {printer.get('bed_z', 'n/a')}"
+App\gui\Windows\device.py:268:            row.setObjectName("DevicePrinterItem")
+App\gui\Windows\device.py:273:            name_label.setObjectName("DevicePrinterName")
+App\gui\Windows\device.py:275:            bed_label.setObjectName("DevicePrinterMeta")
+App\gui\Windows\device.py:28:        select_label = QtWidgets.QLabel("Search printer:")
+App\gui\Windows\device.py:282:        printer = self.current_printer()
+App\gui\Windows\device.py:283:        if printer is None:
+App\gui\Windows\device.py:285:        self.send_requested.emit(printer)
+App\gui\Windows\device.py:30:        self._printer_combo = QtWidgets.QComboBox(self)
+App\gui\Windows\device.py:31:        self._printer_combo.setObjectName("DeviceCombo")
+App\gui\Windows\device.py:32:        self._printer_combo.setEditable(True)
+App\gui\Windows\device.py:33:        self._printer_combo.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
+App\gui\Windows\device.py:34:        completer = QtWidgets.QCompleter(self._printer_combo.model(), self)
+App\gui\Windows\device.py:37:        self._printer_combo.setCompleter(completer)
+App\gui\Windows\device.py:38:        if self._printer_combo.lineEdit() is not None:
+App\gui\Windows\device.py:380:            "QFrame#DevicePrinterItem {"
+App\gui\Windows\device.py:39:            self._printer_combo.lineEdit().setPlaceholderText("Search connected printers")
+App\gui\Windows\device.py:392:            "QLabel#DevicePrinterName {"
+App\gui\Windows\device.py:395:            "QLabel#DevicePrinterMeta {"
+App\gui\Windows\device.py:40:        select_row.addWidget(self._printer_combo, 1)
+App\gui\Windows\device.py:43:        self._printer_details = QtWidgets.QLabel("")
+App\gui\Windows\device.py:44:        self._printer_details.setObjectName("DeviceDetails")
+App\gui\Windows\device.py:45:        self._printer_details.setWordWrap(True)
+App\gui\Windows\device.py:46:        layout.addWidget(self._printer_details)
+App\gui\Windows\prepare.py:25:        settings_dock = QtWidgets.QDockWidget("Printer", self.main)
+App\gui\Windows\preview.py:11:    printer_changed = QtCore.pyqtSignal(object)
+App\gui\Windows\preview.py:207:        self._populate_printers()
+App\gui\Windows\preview.py:50:        self._printer_row = QtWidgets.QFrame(self._preview_panel)
+App\gui\Windows\preview.py:51:        self._printer_row.setObjectName("PreviewPrinterRow")
+App\gui\Windows\preview.py:52:        printer_row = QtWidgets.QHBoxLayout(self._printer_row)
+App\gui\Windows\preview.py:53:        printer_row.setContentsMargins(0, 0, 0, 0)
+App\gui\Windows\preview.py:54:        printer_row.setSpacing(6)
+App\gui\Windows\preview.py:55:        printer_label = QtWidgets.QLabel("Printer")
+App\gui\Windows\preview.py:56:        printer_label.setObjectName("PreviewHeader")
+App\gui\Windows\preview.py:57:        printer_row.addWidget(printer_label)
+App\gui\Windows\preview.py:58:        printer_row.addStretch(1)
+App\gui\Windows\preview.py:580:    def _populate_printers(self):
+App\gui\Windows\preview.py:581:        self._printer_combo.clear()
+App\gui\Windows\preview.py:582:        printers = getattr(self.main, "printers", []) or []
+App\gui\Windows\preview.py:583:        if not printers:
+App\gui\Windows\preview.py:584:            self._printer_combo.addItem("No printers configured")
+App\gui\Windows\preview.py:585:            self._printer_combo.setEnabled(False)
+App\gui\Windows\preview.py:587:        self._printer_combo.setEnabled(True)
+App\gui\Windows\preview.py:588:        default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+App\gui\Windows\preview.py:59:        self._printer_combo = QtWidgets.QComboBox(self._preview_panel)
+App\gui\Windows\preview.py:590:        for idx, printer in enumerate(printers):
+App\gui\Windows\preview.py:591:            name = printer.get("name") if isinstance(printer, dict) else None
+App\gui\Windows\preview.py:592:            self._printer_combo.addItem(name or "Printer")
+App\gui\Windows\preview.py:596:            self._printer_combo.setCurrentIndex(default_index)
+App\gui\Windows\preview.py:597:        self._printer_combo.currentIndexChanged.connect(self._emit_printer_changed)
+App\gui\Windows\preview.py:60:        self._printer_combo.setObjectName("PreviewCombo")
+App\gui\Windows\preview.py:61:        printer_row.addWidget(self._printer_combo)
+App\gui\Windows\preview.py:62:        self._printer_row.setVisible(False)
+App\gui\Windows\preview.py:63:        panel_layout.addWidget(self._printer_row)
+App\gui\Windows\preview.py:648:    def select_printer_by_name(self, name: str, emit: bool = True):
+App\gui\Windows\preview.py:653:        for row in range(self._printer_combo.count()):
+App\gui\Windows\preview.py:654:            if self._printer_combo.itemText(row).strip().lower() == target:
+App\gui\Windows\preview.py:659:        block = self._printer_combo.blockSignals(True)
+App\gui\Windows\preview.py:660:        self._printer_combo.setCurrentIndex(idx)
+App\gui\Windows\preview.py:661:        self._printer_combo.blockSignals(block)
+App\gui\Windows\preview.py:663:            self._emit_printer_changed(idx)
+App\gui\Windows\preview.py:665:    def _emit_printer_changed(self, _index: int):
+App\gui\Windows\preview.py:666:        printers = getattr(self.main, "printers", []) or []
+App\gui\Windows\preview.py:667:        if not printers:
+App\gui\Windows\preview.py:669:        idx = self._printer_combo.currentIndex()
+App\gui\Windows\preview.py:670:        if idx < 0 or idx >= len(printers):
+App\gui\Windows\preview.py:672:        printer = printers[idx]
+App\gui\Windows\preview.py:673:        if isinstance(printer, dict):
+App\gui\Windows\preview.py:674:            self.printer_changed.emit(printer)
+App\gui\Windows\splash.py:5:    def __init__(self, title: str = "EON-OpenSlicer", message: str = "Loading configuration...", parent=None):
+App\integrations\__init__.py:1:"""External integrations: Airtable, OctoPrint, printer manager."""
+App\integrations\octoprint_api.py:12:    if not octoprint_url or not api_key:
+App\integrations\octoprint_api.py:13:        return ("OctoPrint URL or API key not configured. "
+App\integrations\octoprint_api.py:17:    url = octoprint_url.rstrip("/") + "/api/files/local"
+App\integrations\octoprint_api.py:27:    return f"Uploaded {filename} to OctoPrint and started print."
+App\integrations\octoprint_api.py:6:def upload_and_print(octoprint_url: str, api_key: str, gcode_path: str) -> str:
+App\integrations\octoprint_api.py:7:    """Upload a G-code file to OctoPrint and start printing.
+App\integrations\printer_manager.py:10:        self.printers = printers
+App\integrations\printer_manager.py:12:        # For now we just use the first printer.
+App\integrations\printer_manager.py:13:        self.active_printer = printers[0] if printers else None
+App\integrations\printer_manager.py:15:    def set_active_printer(self, printer: Dict | None):
+App\integrations\printer_manager.py:16:        self.active_printer = printer
+App\integrations\printer_manager.py:20:        if not self.active_printer:
+App\integrations\printer_manager.py:21:            return (f"No printer configured. G-code generated at "
+App\integrations\printer_manager.py:23:        url = self.active_printer.get("octoprint_url", "")
+App\integrations\printer_manager.py:24:        api_key = self.active_printer.get("octoprint_api_key", "")
+App\integrations\printer_manager.py:27:    def print_gcode(self, gcode_path: str, printer: Dict | None = None) -> str:
+App\integrations\printer_manager.py:28:        active = printer or self.active_printer
+App\integrations\printer_manager.py:3:from slicer.slicer.emit import slice_file
+App\integrations\printer_manager.py:30:            return (f"No printer configured. G-code generated at "
+App\integrations\printer_manager.py:32:        url = active.get("octoprint_url", "")
+App\integrations\printer_manager.py:33:        api_key = active.get("octoprint_api_key", "")
+App\integrations\printer_manager.py:4:from slicer.gcode.writer import SliceSettings
+App\integrations\printer_manager.py:5:from .octoprint_api import upload_and_print
+App\integrations\printer_manager.py:7:class PrinterManager:
+App\integrations\printer_manager.py:8:    """High-level helper to slice and send to printer."""
+App\integrations\printer_manager.py:9:    def __init__(self, printers: List[Dict], airtable_cfg: Dict):
+App\main.py:11:    app.setApplicationName("EON-OpenSlicer")
+App\main.py:34:    printers, airtable_cfg = load_printer_config()
+App\main.py:35:    window = MainWindow(printers=printers, airtable_cfg=airtable_cfg)
+App\main.py:5:from config.printer_config import load_printer_config
+App\slicer\__init__.py:3:This prototype implements a very small demo slicer. The architecture is
+App\slicer\__init__.py:9:- slicer: high-level slice function.
+App\slicer\gcode\writer.py:530:        self.add("; EON-OpenSlicer demo G-code")
+App\slicer\gcode\writer.py:545:        self.add("; End of EON-OpenSlicer demo")
+App\slicer\geometry.py:3:For now this is intentionally tiny. As you extend the slicer, this is
+App\Tests\run_tests.py:23:            "test_slicer_helpers.py",
+App\Tests\test_ai_checks.py:11:from slicer.ai_checks import run_ai_checks
+App\Tests\test_ai_checks.py:12:from slicer.gcode.writer import SliceSettings
+App\Tests\test_ai_checks_more.py:4:from slicer.ai_checks import _check_mesh, _check_settings, _merge_reports, run_ai_checks, AiCheckReport
+App\Tests\test_ai_checks_more.py:5:from slicer.gcode.writer import SliceSettings
+App\Tests\test_bridge.py:10:from slicer.geometry import polygons_with_holes
+App\Tests\test_bridge.py:9:from slicer import path_planner
+App\Tests\test_calibration_gcode.py:9:from slicer.gcode.writer import (
+App\Tests\test_gcode.py:10:from slicer.gcode.stats import estimate_gcode_stats
+App\Tests\test_gcode.py:11:from slicer.gcode.writer import GCodeWriter, SliceSettings
+App\Tests\test_gcode_extra.py:12:from slicer.gcode.preview import parse_gcode_preview
+App\Tests\test_gcode_extra.py:13:from slicer.gcode.stats import estimate_gcode_stats
+App\Tests\test_gcode_extra.py:63:    from slicer.gcode.writer import SliceSettings
+App\Tests\test_gcode_preview.py:9:from slicer.gcode.preview import parse_gcode_preview
+App\Tests\test_gcode_preview_features.py:3:from slicer.gcode.preview import parse_gcode_preview
+App\Tests\test_gcode_writer_moves.py:1:from slicer.gcode.writer import GCodeWriter, SliceSettings, _normalize_gcode_lines
+App\Tests\test_geometry.py:13:from slicer import geometry
+App\Tests\test_geometry_clip.py:12:from slicer import geometry
+App\Tests\test_geometry_helpers.py:12:from slicer import geometry
+App\Tests\test_gui_preview.py:65:        printers: list[dict]
+App\Tests\test_gui_preview.py:88:            self.printers = [{"name": "Demo"}]
+App\Tests\test_infill.py:10:from slicer.geometry import polygons_with_holes
+App\Tests\test_infill.py:9:from slicer import infill
+App\Tests\test_infill_extra.py:12:from slicer import geometry
+App\Tests\test_infill_extra.py:13:from slicer import infill
+App\Tests\test_mesh_model.py:13:from slicer.mesh import MeshModel
+App\Tests\test_mesh_opt.py:11:from slicer.mesh_opt import simplify_mesh, wireframe_target_faces
+App\Tests\test_path_planner.py:10:from slicer import path_planner
+App\Tests\test_path_planner.py:11:from slicer.geometry import polygons_with_holes, point_in_island
+App\Tests\test_path_planner_extra.py:13:from slicer import path_planner
+App\Tests\test_settings_panel.py:22:        panel.set_printers([{"name": "Test Printer", "bed_x": 1, "bed_y": 2, "bed_z": 3}])
+App\Tests\test_settings_panel.py:23:        self.assertEqual(panel._printer_combo.count(), 1)
+App\Tests\test_settings_panel.py:24:        current_printer = panel.current_printer()
+App\Tests\test_settings_panel.py:25:        self.assertIsNotNone(current_printer)
+App\Tests\test_settings_panel.py:26:        assert current_printer is not None
+App\Tests\test_settings_panel.py:27:        self.assertEqual(current_printer.get("name"), "Test Printer")
+App\Tests\test_settings_panel.py:4:from slicer.gcode.writer import SliceSettings
+App\Tests\test_slice_settings_normalization.py:3:from slicer.gcode.writer import SliceSettings
+App\Tests\test_slicer.py:12:from slicer.mesh import MeshModel
+App\Tests\test_slicer.py:13:from slicer.gcode.writer import SliceSettings
+App\Tests\test_slicer.py:14:from slicer.slicer.plan import build_z_heights, generate_layer_perimeters, generate_layer_plans
+App\Tests\test_slicer_helpers.py:14:from slicer import slicer as slicer_module
+App\Tests\test_slicer_helpers.py:15:from slicer.gcode.writer import SliceSettings
+App\Tests\test_slicer_helpers.py:16:from slicer.mesh import MeshModel
+App\Tests\test_slicer_helpers.py:20:class SlicerHelperTests(BaseTestCase):
+App\Tests\test_slicer_helpers.py:29:        cleaned = slicer_module._normalize_height_ranges(ranges)
+App\Tests\test_slicer_helpers.py:37:        heights = slicer_module.build_z_heights(model, settings)
+App\Tests\test_slicer_helpers.py:42:        wrapped = slicer_module._wrap_islands(islands)
+App\Tests\test_support.py:12:from slicer.gcode.writer import SliceSettings
+App\Tests\test_support.py:13:from slicer.mesh import MeshModel
+App\Tests\test_support.py:14:from slicer import support
+App\Tests\test_support_extra.py:13:from slicer import geometry
+App\Tests\test_support_extra.py:14:from slicer import support
+App\Tests\test_support_extra.py:15:from slicer.gcode.writer import SliceSettings

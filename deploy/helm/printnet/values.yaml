@@ -1,0 +1,105 @@
+namespace:
+  create: true
+  name: printnet
+
+nameOverride: ""
+fullnameOverride: ""
+
+global:
+  imagePullSecrets: []
+
+backend:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/eon-openslicer/printnet-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    appName: EON-OpenSlicer Backend
+    appVersion: 0.1.0
+    apiPrefix: /api/v1
+    queueName: default
+    queueWorkerMaxJobsPerTick: 1
+    queueWorkerHeartbeatTtlSeconds: 60
+  secretEnv:
+    mongoUri: mongodb://mongo:27017/printnet
+    redisUri: redis://redis:6379/0
+
+worker:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/eon-openslicer/printnet-worker
+    tag: latest
+    pullPolicy: IfNotPresent
+  command:
+    - sh
+    - -c
+    - "while true; do sleep 30; done"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/eon-openslicer/printnet-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "8.2-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    port: 6379
+  persistence:
+    enabled: false
+    size: 1Gi
+
+mongo:
+  enabled: true
+  image:
+    repository: mongo
+    tag: "8.2"
+    pullPolicy: IfNotPresent
+  service:
+    port: 27017
+  persistence:
+    enabled: false
+    size: 5Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  host: printnet.local
+  tls:
+    enabled: false
+    secretName: printnet-tls

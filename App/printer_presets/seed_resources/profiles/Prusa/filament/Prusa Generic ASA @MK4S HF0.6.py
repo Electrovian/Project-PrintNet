@@ -1,0 +1,14 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/filament/Prusa Generic ASA @MK4S HF0.6.json
+DATA = {'compatible_printers': ['Prusa MK4S HF0.6 nozzle'],
+ 'fan_max_speed': '15',
+ 'fan_min_speed': '15',
+ 'filament_id': 'Prusament ASA @MK4S HF0.6',
+ 'filament_max_volumetric_speed': ['34'],
+ 'from': 'system',
+ 'inherits': 'Prusa Generic ASA @MK4S HF0.4',
+ 'instantiation': 'true',
+ 'name': 'Prusa Generic ASA @MK4S HF0.6',
+ 'setting_id': 'GFSA04',
+ 'type': 'filament'}

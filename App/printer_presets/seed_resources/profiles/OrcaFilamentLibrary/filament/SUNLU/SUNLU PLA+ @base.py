@@ -1,0 +1,21 @@
+from __future__ import annotations
+
+# source: profiles/OrcaFilamentLibrary/filament/SUNLU/SUNLU PLA+ @base.json
+DATA = {'filament_cost': ['18.99'],
+ 'filament_density': ['1.23'],
+ 'filament_flow_ratio': ['1.0'],
+ 'filament_id': 'OGFSNL03',
+ 'filament_long_retractions_when_cut': ['1'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'filament_retraction_distances_when_cut': ['18'],
+ 'filament_scarf_gap': ['0%'],
+ 'filament_scarf_height': ['5%'],
+ 'filament_scarf_length': ['10'],
+ 'filament_scarf_seam_type': ['none'],
+ 'filament_vendor': ['SUNLU'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'false',
+ 'name': 'SUNLU PLA+ @base',
+ 'temperature_vitrification': ['54'],
+ 'type': 'filament'}

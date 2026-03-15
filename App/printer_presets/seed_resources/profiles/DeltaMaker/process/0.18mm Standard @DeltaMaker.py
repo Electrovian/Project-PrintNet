@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/DeltaMaker/process/0.18mm Standard @DeltaMaker.json
+DATA = {'detect_thin_wall': '1',
+ 'from': 'system',
+ 'infill_wall_overlap': '35%',
+ 'inherits': 'fdm_process_common',
+ 'initial_layer_print_height': '0.25',
+ 'inner_wall_speed': '40',
+ 'instantiation': 'true',
+ 'ironing_flow': '15%',
+ 'ironing_spacing': '0.1',
+ 'ironing_speed': '15',
+ 'layer_height': '0.18',
+ 'name': '0.18mm Standard @DeltaMaker',
+ 'overhang_2_4_speed': '20',
+ 'overhang_3_4_speed': '15',
+ 'setting_id': 'GP004',
+ 'skirt_distance': '3',
+ 'skirt_height': '1',
+ 'skirt_loops': '2',
+ 'sparse_infill_density': '15%',
+ 'sparse_infill_speed': '40',
+ 'top_surface_speed': '15',
+ 'type': 'process',
+ 'wall_loops': '3'}

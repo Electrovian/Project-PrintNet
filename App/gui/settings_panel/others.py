@@ -1,18 +1,29 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import asdict
 from typing import Any, Dict, TYPE_CHECKING, cast
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from config.defaults import DEFAULTS
-from slicer.gcode.writer import SliceSettings
+from slicer_v2.legacy_gcode_writer import SliceSettings
 from ..theme import theme_css
+from .profile_catalog import (
+    ProcessPreset,
+    coerce_process_presets,
+    display_label_for_preset,
+    find_preset_id_by_name,
+    load_process_presets,
+    order_process_presets,
+)
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow
 else:
     MainWindow = QtWidgets.QWidget
+
+_SLICE_SETTING_FIELDS = frozenset(SliceSettings.__dataclass_fields__.keys())
 
 
 class OtherSectionMixin:
@@ -94,6 +105,106 @@ class OtherSectionMixin:
             self._filament_color = color
             self._update_filament_button_style()
 
+    def _ensure_profile_catalog(self):
+        if hasattr(self, "_process_presets_all"):
+            return
+        try:
+            presets = load_process_presets()
+        except Exception:
+            presets = []
+        self._process_presets_all = list(presets)
+        self._process_preset_map = {entry.preset_id: entry for entry in self._process_presets_all}
+        self._process_presets_visible = list(self._process_presets_all)
+
+    def set_profile_presets(self, presets: list[ProcessPreset | dict], apply_default: bool = False):
+        entries = coerce_process_presets(presets or [])
+        self._process_presets_all = list(entries)
+        self._process_preset_map = {entry.preset_id: entry for entry in self._process_presets_all}
+        self._process_presets_visible = list(self._process_presets_all)
+        self._refresh_profile_presets(self.current_printer(), apply_default=apply_default)
+
+    def _resolve_default_profile_id(
+        self,
+        printer: dict | None,
+        ordered_presets: list[ProcessPreset],
+        current_id: str,
+    ) -> str | None:
+        if current_id and any(entry.preset_id == current_id for entry in ordered_presets):
+            return current_id
+        default_name = ""
+        if isinstance(printer, dict):
+            default_name = str(printer.get("default_print_profile") or "").strip()
+        if default_name:
+            resolved = find_preset_id_by_name(ordered_presets, default_name)
+            if resolved:
+                return resolved
+        if ordered_presets:
+            return ordered_presets[0].preset_id
+        return None
+
+    def _refresh_profile_presets(self, printer: dict | None, apply_default: bool = False):
+        if not hasattr(self, "_profile_combo"):
+            return
+        self._ensure_profile_catalog()
+        presets = order_process_presets(self._process_presets_all, printer)
+        self._process_presets_visible = list(presets)
+        self._process_preset_map = {entry.preset_id: entry for entry in self._process_presets_all}
+
+        current_id = str(self._profile_combo.currentData() or "").strip()
+        default_id = self._resolve_default_profile_id(printer, presets, current_id)
+
+        block = self._profile_combo.blockSignals(True)
+        self._profile_combo.clear()
+
+        if not presets:
+            self._profile_combo.addItem("No process presets", "")
+            self._profile_combo.setEnabled(False)
+            if hasattr(self, "_fit_combo_popup_width"):
+                self._fit_combo_popup_width(self._profile_combo, min_width=280)
+            self._profile_combo.blockSignals(block)
+            return
+
+        self._profile_combo.setEnabled(True)
+        duplicate_counts = Counter(entry.name.casefold() for entry in presets)
+        for entry in presets:
+            label = display_label_for_preset(entry, duplicate_counts[entry.name.casefold()])
+            self._profile_combo.addItem(label, entry.preset_id)
+
+        target_id = default_id
+        if target_id:
+            target_index = self._profile_combo.findData(target_id)
+            if target_index >= 0:
+                self._profile_combo.setCurrentIndex(target_index)
+        if self._profile_combo.currentIndex() < 0:
+            self._profile_combo.setCurrentIndex(0)
+        selected_id = str(self._profile_combo.currentData() or "").strip()
+        if hasattr(self, "_fit_combo_popup_width"):
+            self._fit_combo_popup_width(self._profile_combo, min_width=280)
+        self._profile_combo.blockSignals(block)
+
+        if apply_default and selected_id:
+            self._apply_profile_preset(selected_id)
+
+    def _apply_profile_preset(self, preset_id: str):
+        self._ensure_profile_catalog()
+        target = str(preset_id or "").strip()
+        if not target:
+            return
+        preset = self._process_preset_map.get(target)
+        if preset is None:
+            return
+        if not preset.mapped_settings:
+            return
+        self.apply_settings(preset.mapped_settings)
+
+    def _on_profile_preset_changed(self, _index: int):
+        if not hasattr(self, "_profile_combo"):
+            return
+        preset_id = str(self._profile_combo.currentData() or "").strip()
+        if not preset_id:
+            return
+        self._apply_profile_preset(preset_id)
+
     def set_printers(self, printers):
         self._printers = list(printers or [])
         if not hasattr(self, "_printer_combo"):
@@ -102,9 +213,17 @@ class OtherSectionMixin:
         if not self._printers:
             self._printer_combo.addItem("No printers configured")
             self._printer_combo.setEnabled(False)
+            if hasattr(self, "_fit_combo_popup_width"):
+                self._fit_combo_popup_width(self._printer_combo, min_width=260)
             return
         self._printer_combo.setEnabled(True)
-        default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+        default_name = ""
+        main = cast(MainWindow, self.parent())
+        runtime_state = getattr(main, "runtime_printer_state", None) if main is not None else None
+        if runtime_state is not None:
+            default_name = str(getattr(runtime_state, "name", "")).strip().lower()
+        if not default_name:
+            default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
         default_index = None
         for idx, printer in enumerate(self._printers):
             name = printer.get("name") if isinstance(printer, dict) else None
@@ -113,6 +232,8 @@ class OtherSectionMixin:
                 default_index = idx
         if default_index is not None:
             self._printer_combo.setCurrentIndex(default_index)
+        if hasattr(self, "_fit_combo_popup_width"):
+            self._fit_combo_popup_width(self._printer_combo, min_width=260)
         self._on_printer_changed(self._printer_combo.currentIndex())
 
     def current_printer(self):
@@ -145,7 +266,9 @@ class OtherSectionMixin:
     def _on_printer_changed(self, _index: int):
         printer = self.current_printer()
         if printer is None:
+            self._refresh_profile_presets(None, apply_default=False)
             return
+        self._refresh_profile_presets(printer, apply_default=True)
         main = cast(MainWindow, self.parent())
         apply_printer = getattr(main, "_apply_printer_profile", None)
         if callable(apply_printer):
@@ -176,15 +299,59 @@ class OtherSectionMixin:
             )
 
     def _update_support_controls(self, enabled: bool):
+        enabled = bool(enabled)
+        support_type = ""
+        support_style = ""
+        if hasattr(self, "support_type_combo"):
+            support_type = str(self.support_type_combo.currentData() or "").strip().lower()
+        if hasattr(self, "support_style_combo"):
+            support_style = str(self.support_style_combo.currentData() or "").strip().lower()
+        tree_mode = enabled and (support_type == "tree" or support_style in {"tree", "organic"})
+
         for control in (
             self.support_type_combo,
             self.support_style_combo,
             self.support_angle_spin,
+            self.support_threshold_angle_deg_spin,
             self.support_build_plate_check,
+            self.support_z_gap_spin,
+            self.support_bottom_z_gap_spin,
+            self.support_xy_gap_spin,
+            self.support_spacing_spin,
+            self.support_interface_spacing_spin,
+            self.support_bottom_interface_spacing_spin,
+            self.support_threshold_overlap_spin,
+            self.support_critical_regions_only_check,
+            self.support_remove_small_overhang_check,
+            self.support_interface_layers_spin,
+            self.support_interface_bottom_layers_spin,
+            self.support_interface_density_spin,
+            self.support_pattern_combo,
+            self.support_interface_pattern_combo,
+            self.support_speed_spin,
+            self.support_interface_speed_spin,
             self.support_base_combo,
             self.support_interface_combo,
         ):
-            control.setEnabled(bool(enabled))
+            control.setEnabled(enabled)
+
+        self.support_style_combo.setEnabled(enabled and support_type == "tree")
+        for control in (
+            self.tree_branch_angle_spin,
+            self.tree_support_wall_count_spin,
+            self.tree_support_branch_diameter_spin,
+            self.tree_support_tip_diameter_spin,
+            self.tree_support_branch_distance_spin,
+            self.tree_support_top_rate_spin,
+            self.tree_support_branch_diameter_angle_spin,
+            self.tree_support_branch_angle_organic_spin,
+            self.tree_support_branch_diameter_organic_spin,
+            self.tree_support_branch_distance_organic_spin,
+            self.tree_support_auto_brim_check,
+            self.tree_support_brim_width_spin,
+            self.tree_merge_distance_spin,
+        ):
+            control.setEnabled(tree_mode)
 
     def _update_prime_controls(self, enabled: bool):
         for control in (
@@ -260,6 +427,19 @@ class OtherSectionMixin:
 
         self.setStyleSheet(
             "QWidget#SettingsPanel {"
+            f"  background: {panel_bg};"
+            "}"
+            "QStackedWidget#SettingsPages {"
+            f"  background: {panel_bg};"
+            "}"
+            "QScrollArea#SettingsScroll {"
+            f"  background: {panel_bg};"
+            "  border: none;"
+            "}"
+            "QScrollArea#SettingsScroll QWidget#qt_scrollarea_viewport {"
+            f"  background: {panel_bg};"
+            "}"
+            "QWidget#SettingsPage {"
             f"  background: {panel_bg};"
             "}"
             "QFrame#SettingsHeader {"
@@ -419,8 +599,8 @@ class OtherSectionMixin:
         self._update_filament_button_style()
         self._tooltip.apply_theme(panel_bg, panel_border, panel_text, muted_text)
 
-    def to_settings(self) -> SliceSettings:
-        return SliceSettings(
+    def _ui_settings_payload(self) -> Dict[str, Any]:
+        return dict(
             layer_height=float(self.layer_height_spin.value()),
             first_layer_height=float(self.first_layer_height_spin.value()),
             seam_position=self._combo_value(self.seam_position_combo, "aligned"),
@@ -486,14 +666,50 @@ class OtherSectionMixin:
             top_layers=int(self.top_shell_layers_spin.value()),
             bottom_layers=int(self.bottom_shell_layers_spin.value()),
             infill_percent=float(self.infill_density_spin.value()),
+            infill_wall_overlap_percent=float(self.infill_wall_overlap_spin.value()),
+            top_bottom_infill_wall_overlap_percent=float(self.top_bottom_infill_wall_overlap_spin.value()),
             infill_pattern=self._combo_value(self.infill_pattern_combo, "rectilinear"),
             support_enabled=bool(self.support_enable_check.isChecked()),
             support_type=self._combo_value(self.support_type_combo, "normal"),
             support_style=self._combo_value(self.support_style_combo, "pillars"),
             overhang_angle=float(self.support_angle_spin.value()),
+            support_threshold_angle_deg=float(self.support_threshold_angle_deg_spin.value()),
             support_build_plate_only=bool(self.support_build_plate_check.isChecked()),
+            support_z_gap=float(self.support_z_gap_spin.value()),
+            support_bottom_z_gap_mm=float(self.support_bottom_z_gap_spin.value()),
+            support_xy_gap=float(self.support_xy_gap_spin.value()),
+            support_critical_regions_only=bool(self.support_critical_regions_only_check.isChecked()),
+            support_remove_small_overhang=bool(self.support_remove_small_overhang_check.isChecked()),
+            interface_layers=int(self.support_interface_layers_spin.value()),
+            support_interface_top_layers=int(self.support_interface_layers_spin.value()),
+            support_interface_bottom_layers=int(self.support_interface_bottom_layers_spin.value()),
+            interface_density=float(self.support_interface_density_spin.value()) / 100.0,
+            support_spacing=float(self.support_spacing_spin.value()),
+            support_base_spacing_mm=float(self.support_spacing_spin.value()),
+            support_interface_spacing_mm=float(self.support_interface_spacing_spin.value()),
+            support_bottom_interface_spacing_mm=float(self.support_bottom_interface_spacing_spin.value()),
+            support_threshold_overlap_percent=float(self.support_threshold_overlap_spin.value()),
+            support_speed=float(self.support_speed_spin.value()),
+            support_interface_speed=float(self.support_interface_speed_spin.value()),
+            support_pattern=self._combo_value(self.support_pattern_combo, "rectilinear"),
+            support_interface_pattern=self._combo_value(self.support_interface_pattern_combo,
+                                                       "rectilinear"),
             support_filament_base=self._combo_value(self.support_base_combo, "default"),
             support_filament_interface=self._combo_value(self.support_interface_combo, "default"),
+            tree_branch_angle=float(self.tree_branch_angle_spin.value()),
+            tree_support_branch_angle_deg=float(self.tree_branch_angle_spin.value()),
+            tree_support_wall_count=int(self.tree_support_wall_count_spin.value()),
+            tree_support_branch_diameter_mm=float(self.tree_support_branch_diameter_spin.value()),
+            tree_support_tip_diameter_mm=float(self.tree_support_tip_diameter_spin.value()),
+            tree_support_branch_distance_mm=float(self.tree_support_branch_distance_spin.value()),
+            tree_support_top_rate_percent=float(self.tree_support_top_rate_spin.value()),
+            tree_support_branch_diameter_angle_deg=float(self.tree_support_branch_diameter_angle_spin.value()),
+            tree_support_branch_angle_organic_deg=float(self.tree_support_branch_angle_organic_spin.value()),
+            tree_support_branch_diameter_organic_mm=float(self.tree_support_branch_diameter_organic_spin.value()),
+            tree_support_branch_distance_organic_mm=float(self.tree_support_branch_distance_organic_spin.value()),
+            tree_support_auto_brim=bool(self.tree_support_auto_brim_check.isChecked()),
+            tree_support_brim_width_mm=float(self.tree_support_brim_width_spin.value()),
+            tree_merge_distance=float(self.tree_merge_distance_spin.value()),
             prime_tower_enabled=bool(self.prime_tower_enable_check.isChecked()),
             prime_tower_width=float(self.prime_tower_width_spin.value()),
             prime_tower_square=bool(self.prime_tower_square_check.isChecked()),
@@ -513,12 +729,39 @@ class OtherSectionMixin:
             filament_color=self._filament_color.name(),
         )
 
+    def _passthrough_settings_payload(self) -> Dict[str, Any]:
+        raw = getattr(self, "_slice_settings_passthrough", None)
+        if not isinstance(raw, dict):
+            return {}
+        return {key: raw[key] for key in raw.keys() if key in _SLICE_SETTING_FIELDS}
+
+    def _update_passthrough_settings(self, data: Dict[str, Any]) -> None:
+        if not isinstance(data, dict) or not data:
+            return
+        passthrough = self._passthrough_settings_payload()
+        ui_setting_keys = set(self._ui_settings_payload().keys())
+        for key, value in data.items():
+            if key not in _SLICE_SETTING_FIELDS:
+                continue
+            if key in ui_setting_keys:
+                passthrough.pop(key, None)
+            else:
+                passthrough[key] = value
+        self._slice_settings_passthrough = passthrough
+
+    def to_settings(self) -> SliceSettings:
+        payload = self._passthrough_settings_payload()
+        payload.update(self._ui_settings_payload())
+        return SliceSettings(**payload)
+
     def apply_settings(self, settings):
         data = {}
         if isinstance(settings, SliceSettings):
             data = asdict(settings)
         elif isinstance(settings, dict):
             data = settings
+        if data:
+            self._update_passthrough_settings(data)
 
         if "layer_height" in data:
             self.layer_height_spin.setValue(float(data["layer_height"]))
@@ -652,6 +895,10 @@ class OtherSectionMixin:
             self.bottom_shell_layers_spin.setValue(int(data["bottom_layers"]))
         if "infill_percent" in data:
             self.infill_density_spin.setValue(int(float(data["infill_percent"])))
+        if "infill_wall_overlap_percent" in data:
+            self.infill_wall_overlap_spin.setValue(float(data["infill_wall_overlap_percent"]))
+        if "top_bottom_infill_wall_overlap_percent" in data:
+            self.top_bottom_infill_wall_overlap_spin.setValue(float(data["top_bottom_infill_wall_overlap_percent"]))
         if "infill_pattern" in data:
             self._set_combo_value(self.infill_pattern_combo, data["infill_pattern"])
         if "support_enabled" in data:
@@ -662,12 +909,88 @@ class OtherSectionMixin:
             self._set_combo_value(self.support_style_combo, data["support_style"])
         if "overhang_angle" in data:
             self.support_angle_spin.setValue(float(data["overhang_angle"]))
+        if "support_threshold_angle_deg" in data:
+            self.support_threshold_angle_deg_spin.setValue(float(data["support_threshold_angle_deg"]))
         if "support_build_plate_only" in data:
             self.support_build_plate_check.setChecked(bool(data["support_build_plate_only"]))
+        if "support_z_gap" in data:
+            self.support_z_gap_spin.setValue(float(data["support_z_gap"]))
+        if "support_z_gap_mm" in data:
+            self.support_z_gap_spin.setValue(float(data["support_z_gap_mm"]))
+        if "support_bottom_z_gap_mm" in data:
+            self.support_bottom_z_gap_spin.setValue(float(data["support_bottom_z_gap_mm"]))
+        if "support_xy_gap" in data:
+            self.support_xy_gap_spin.setValue(float(data["support_xy_gap"]))
+        if "support_xy_gap_mm" in data:
+            self.support_xy_gap_spin.setValue(float(data["support_xy_gap_mm"]))
+        if "support_critical_regions_only" in data:
+            self.support_critical_regions_only_check.setChecked(bool(data["support_critical_regions_only"]))
+        if "support_remove_small_overhang" in data:
+            self.support_remove_small_overhang_check.setChecked(bool(data["support_remove_small_overhang"]))
+        if "interface_layers" in data:
+            self.support_interface_layers_spin.setValue(int(data["interface_layers"]))
+        if "support_interface_layers" in data:
+            self.support_interface_layers_spin.setValue(int(data["support_interface_layers"]))
+        if "support_interface_top_layers" in data:
+            self.support_interface_layers_spin.setValue(int(data["support_interface_top_layers"]))
+        if "support_interface_bottom_layers" in data:
+            self.support_interface_bottom_layers_spin.setValue(int(data["support_interface_bottom_layers"]))
+        if "interface_density" in data:
+            density = max(0.0, min(1.0, float(data["interface_density"]))) * 100.0
+            self.support_interface_density_spin.setValue(density)
+        if "support_spacing" in data:
+            self.support_spacing_spin.setValue(float(data["support_spacing"]))
+        if "support_spacing_mm" in data:
+            self.support_spacing_spin.setValue(float(data["support_spacing_mm"]))
+        if "support_base_spacing_mm" in data:
+            self.support_spacing_spin.setValue(float(data["support_base_spacing_mm"]))
+        if "support_interface_spacing_mm" in data:
+            self.support_interface_spacing_spin.setValue(float(data["support_interface_spacing_mm"]))
+        if "support_bottom_interface_spacing_mm" in data:
+            self.support_bottom_interface_spacing_spin.setValue(float(data["support_bottom_interface_spacing_mm"]))
+        if "support_threshold_overlap_percent" in data:
+            self.support_threshold_overlap_spin.setValue(float(data["support_threshold_overlap_percent"]))
+        if "support_speed" in data:
+            self.support_speed_spin.setValue(float(data["support_speed"]))
+        if "support_interface_speed" in data:
+            self.support_interface_speed_spin.setValue(float(data["support_interface_speed"]))
+        if "support_pattern" in data:
+            self._set_combo_value(self.support_pattern_combo, data["support_pattern"])
+        if "support_interface_pattern" in data:
+            self._set_combo_value(self.support_interface_pattern_combo,
+                                  data["support_interface_pattern"])
         if "support_filament_base" in data:
             self._set_combo_value(self.support_base_combo, data["support_filament_base"])
         if "support_filament_interface" in data:
             self._set_combo_value(self.support_interface_combo, data["support_filament_interface"])
+        if "tree_branch_angle" in data:
+            self.tree_branch_angle_spin.setValue(float(data["tree_branch_angle"]))
+        if "tree_support_branch_angle_deg" in data:
+            self.tree_branch_angle_spin.setValue(float(data["tree_support_branch_angle_deg"]))
+        if "tree_support_wall_count" in data:
+            self.tree_support_wall_count_spin.setValue(int(data["tree_support_wall_count"]))
+        if "tree_support_branch_diameter_mm" in data:
+            self.tree_support_branch_diameter_spin.setValue(float(data["tree_support_branch_diameter_mm"]))
+        if "tree_support_tip_diameter_mm" in data:
+            self.tree_support_tip_diameter_spin.setValue(float(data["tree_support_tip_diameter_mm"]))
+        if "tree_support_branch_distance_mm" in data:
+            self.tree_support_branch_distance_spin.setValue(float(data["tree_support_branch_distance_mm"]))
+        if "tree_support_top_rate_percent" in data:
+            self.tree_support_top_rate_spin.setValue(float(data["tree_support_top_rate_percent"]))
+        if "tree_support_branch_diameter_angle_deg" in data:
+            self.tree_support_branch_diameter_angle_spin.setValue(float(data["tree_support_branch_diameter_angle_deg"]))
+        if "tree_support_branch_angle_organic_deg" in data:
+            self.tree_support_branch_angle_organic_spin.setValue(float(data["tree_support_branch_angle_organic_deg"]))
+        if "tree_support_branch_diameter_organic_mm" in data:
+            self.tree_support_branch_diameter_organic_spin.setValue(float(data["tree_support_branch_diameter_organic_mm"]))
+        if "tree_support_branch_distance_organic_mm" in data:
+            self.tree_support_branch_distance_organic_spin.setValue(float(data["tree_support_branch_distance_organic_mm"]))
+        if "tree_support_auto_brim" in data:
+            self.tree_support_auto_brim_check.setChecked(bool(data["tree_support_auto_brim"]))
+        if "tree_support_brim_width_mm" in data:
+            self.tree_support_brim_width_spin.setValue(float(data["tree_support_brim_width_mm"]))
+        if "tree_merge_distance" in data:
+            self.tree_merge_distance_spin.setValue(float(data["tree_merge_distance"]))
         if "prime_tower_enabled" in data:
             self.prime_tower_enable_check.setChecked(bool(data["prime_tower_enabled"]))
         if "prime_tower_width" in data:

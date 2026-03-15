@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/process/0.05mm Detail @MINIIS.json
+DATA = {'bottom_shell_layers': '10',
+ 'bottom_shell_thickness': '0.5',
+ 'compatible_printers': ['Prusa MINIIS 0.25 nozzle'],
+ 'from': 'system',
+ 'inherits': 'process_detail_miniis',
+ 'initial_layer_line_width': '0.32',
+ 'initial_layer_print_height': '0.15',
+ 'inner_wall_line_width': '0.25',
+ 'instantiation': 'true',
+ 'internal_solid_infill_line_width': '0.25',
+ 'layer_height': '0.05',
+ 'line_width': '0.27',
+ 'name': '0.05mm Detail @MINIIS',
+ 'outer_wall_line_width': '0.25',
+ 'setting_id': 'GP004',
+ 'sparse_infill_line_width': '0.25',
+ 'support_base_pattern_spacing': '1',
+ 'support_bottom_z_distance': '0.09',
+ 'support_line_width': '0.25',
+ 'support_top_z_distance': '0.09',
+ 'top_shell_layers': '13',
+ 'top_shell_thickness': '0.7',
+ 'top_surface_line_width': '0.27',
+ 'type': 'process'}

@@ -1,0 +1,33 @@
+{
+  "job_id": "slicer-v2-smoke",
+  "mesh_path": "C:\\Users\\Elect\\AppData\\Local\\Temp\\eon_slicer_v2_smoke_v4b8w3k9\\smoke.stl",
+  "stage_count": 10,
+  "expected_stage_count": 10,
+  "stages_executed": [
+    "mesh",
+    "slice_grid",
+    "regions",
+    "islands",
+    "perimeters",
+    "infill",
+    "supports",
+    "bridges",
+    "travel",
+    "gcode"
+  ],
+  "artifact_keys": [
+    "bridges",
+    "gcode",
+    "infill",
+    "islands",
+    "mesh",
+    "perimeters",
+    "regions",
+    "slice_grid",
+    "supports",
+    "travel"
+  ],
+  "gcode_line_count": 8,
+  "validation_ok": true,
+  "mesh_created_for_smoke": "C:\\Users\\Elect\\AppData\\Local\\Temp\\eon_slicer_v2_smoke_v4b8w3k9\\smoke.stl"
+}

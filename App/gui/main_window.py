@@ -11,6 +11,7 @@ from .Windows.control import ControlView
 from .Windows.files import FilesView
 from .Windows.activity import ActivityView
 from .Windows.shared_view import SharedView
+from .i18n import set_language, tr
 from .resource_paths import assets_dir
 from .Windows.controller import MainController
 from config.defaults import DEFAULTS
@@ -28,7 +29,10 @@ ASSETS_DIR = assets_dir()
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, printers, airtable_cfg, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(DEFAULTS["app"]["title"])
+        default_language = str(DEFAULTS.get("app", {}).get("language", "en")).strip() or "en"
+        requested_language = os.environ.get("EON_UI_LANG", default_language)
+        set_language(requested_language)
+        self.setWindowTitle(tr("app.title", DEFAULTS["app"]["title"]))
         size = DEFAULTS["app"]["size"]
         self.resize(size[0], size[1])
         self.setAcceptDrops(True)

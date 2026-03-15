@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Snapmaker/filament/Snapmaker ABS Benchy @U1.json
+DATA = {'compatible_printers': ['Snapmaker U1 (0.4 nozzle)'],
+ 'compatible_prints': ['0.25 Benchy @Snapmaker U1 (0.4 nozzle)'],
+ 'default_filament_colour': [''],
+ 'fan_cooling_layer_time': ['2'],
+ 'fan_max_speed': ['50'],
+ 'fan_min_speed': ['35'],
+ 'filament_deretraction_speed': ['55'],
+ 'filament_max_volumetric_speed': ['31'],
+ 'filament_retract_when_changing_layer': ['0'],
+ 'filament_retraction_length': ['0.5'],
+ 'filament_retraction_speed': ['55'],
+ 'filament_wipe': ['0'],
+ 'filament_z_hop': ['0'],
+ 'from': 'system',
+ 'inherits': 'Snapmaker ABS @U1 base',
+ 'instantiation': 'true',
+ 'name': 'Snapmaker ABS Benchy @U1',
+ 'nozzle_temperature': ['250'],
+ 'overhang_fan_speed': ['35'],
+ 'setting_id': '35407544770',
+ 'slow_down_for_layer_cooling': ['0'],
+ 'slow_down_layer_time': ['0'],
+ 'slow_down_min_speed': ['0'],
+ 'type': 'filament'}

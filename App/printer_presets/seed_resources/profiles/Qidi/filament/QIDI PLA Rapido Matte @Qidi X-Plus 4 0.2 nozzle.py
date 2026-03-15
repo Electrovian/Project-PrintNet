@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/filament/QIDI PLA Rapido Matte @Qidi X-Plus 4 0.2 nozzle.json
+DATA = {'activate_air_filtration': ['1'],
+ 'additional_cooling_fan_speed': ['0'],
+ 'close_fan_the_first_x_layers': ['1'],
+ 'compatible_printers': ['Qidi X-Plus 4 0.2 nozzle'],
+ 'during_print_exhaust_fan_speed': ['100'],
+ 'fan_cooling_layer_time': ['60'],
+ 'filament_id': 'QD_0_1_2',
+ 'filament_max_volumetric_speed': ['2'],
+ 'filament_settings_id': ['QIDI PLA Rapido Matte @Qidi X-Plus 4 0.2 nozzle'],
+ 'from': 'system',
+ 'full_fan_speed_layer': ['3'],
+ 'hot_plate_temp': ['60'],
+ 'hot_plate_temp_initial_layer': ['60'],
+ 'inherits': 'QIDI PLA Rapido Matte',
+ 'instantiation': 'true',
+ 'name': 'QIDI PLA Rapido Matte @Qidi X-Plus 4 0.2 nozzle',
+ 'nozzle_temperature': ['200'],
+ 'nozzle_temperature_initial_layer': ['200'],
+ 'pressure_advance': ['0.034'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_min_speed': ['20'],
+ 'type': 'filament'}

@@ -1,0 +1,17 @@
+{
+  "plate_index": 1,
+  "return_code": 0,
+  "error_string": "Success.",
+  "prepare_time": 0.0002199000009568408,
+  "export_time": 2.545910200002254,
+  "sliced_plates": [
+    {
+      "id": 1,
+      "sliced_time": 2.5419146999993245,
+      "sliced_time_with_cache": 2.5419146999993245,
+      "triangle_count": 108,
+      "warning_message": ""
+    }
+  ],
+  "downward_compatible_machine": []
+}

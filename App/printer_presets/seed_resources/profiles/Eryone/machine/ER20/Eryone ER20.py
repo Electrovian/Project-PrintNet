@@ -1,0 +1,12 @@
+from __future__ import annotations
+
+# source: profiles/Eryone/machine/ER20/Eryone ER20.json
+DATA = {'bed_model': 'eryone_er20_buildplate_model.stl',
+ 'bed_texture': 'Eryone ER20_texture.png',
+ 'family': 'Eryone',
+ 'hotend_model': '',
+ 'machine_tech': 'FFF',
+ 'model_id': 'Eryone ER20',
+ 'name': 'Eryone ER20',
+ 'nozzle_diameter': '0.4;0.2;0.5;0.6;0.8',
+ 'type': 'machine_model'}

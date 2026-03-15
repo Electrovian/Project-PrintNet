@@ -1,0 +1,12 @@
+from __future__ import annotations
+
+# source: profiles/Artillery/process/0.42mm Standard @Artillery M1 Pro 0.6 nozzle.json
+DATA = {'from': 'system',
+ 'inherits': '0.24mm Draft @Artillery M1 Pro 0.6 nozzle',
+ 'instantiation': 'true',
+ 'is_custom_defined': '0',
+ 'layer_height': '0.42',
+ 'name': '0.42mm Standard @Artillery M1 Pro 0.6 nozzle',
+ 'print_settings_id': '0.42mm Standard @Artillery M1 Pro 0.6 nozzle',
+ 'type': 'process',
+ 'version': '2.1.1.0'}

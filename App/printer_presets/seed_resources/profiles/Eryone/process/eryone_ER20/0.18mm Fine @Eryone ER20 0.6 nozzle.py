@@ -1,0 +1,9 @@
+from __future__ import annotations
+
+# source: profiles/Eryone/process/eryone_ER20/0.18mm Fine @Eryone ER20 0.6 nozzle.json
+DATA = {'compatible_printers': ['Eryone ER20 0.6 nozzle'],
+ 'from': 'system',
+ 'inherits': 'fdm_process_ER20_0.18_nozzle_0.6',
+ 'instantiation': 'true',
+ 'name': '0.18mm Fine @Eryone ER20 0.6 nozzle',
+ 'type': 'process'}

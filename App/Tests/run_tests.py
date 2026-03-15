@@ -40,7 +40,8 @@ def main() -> int:
     args = parser.parse_args()
 
     suite = _build_suite(args.scope)
-    runner = unittest.TextTestRunner(verbosity=2)
+    verbosity = int(os.environ.get("TEST_VERBOSITY", "1") or "1")
+    runner = unittest.TextTestRunner(verbosity=verbosity, buffer=True)
     result = runner.run(suite)
     return 0 if result.wasSuccessful() else 1
 

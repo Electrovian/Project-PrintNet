@@ -1,0 +1,15 @@
+from __future__ import annotations
+
+# source: profiles/Z-Bolt/process/0.24mm Standard @Z-Bolt S300 0.6 nozzle.json
+DATA = {'compatible_printers': ['Z-Bolt S300 0.6 nozzle', 'Z-Bolt S300 Dual 0.6 nozzle'],
+ 'description': 'Compared with the default profile of a 0.6 mm nozzle, it has a smaller layer height, and results in '
+                'less apparent layer lines and slight higher printing quality, but longer printing time.',
+ 'elefant_foot_compensation': '0.15',
+ 'from': 'system',
+ 'inherits': 'fdm_process_zbolt_0.24_nozzle_0.6',
+ 'instantiation': 'true',
+ 'name': '0.24mm Standard @Z-Bolt S300 0.6 nozzle',
+ 'overhang_totally_speed': '50',
+ 'setting_id': 'GP014',
+ 'smooth_coefficient': '150',
+ 'type': 'process'}

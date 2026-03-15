@@ -57,6 +57,73 @@ class PreviewViewTests(QtTestCase):
         assert preview_feature_filter is not None
         self.assertGreater(len(preview_feature_filter), 0)
 
+    def test_preview_features_expand_line_type_table(self):
+        from slicer_v2.legacy_gcode_preview import parse_gcode_preview
+
+        view, _main, viewer = self._build()
+        preview = parse_gcode_preview(
+            [
+                ";LAYER:0",
+                ";TYPE:INFILL",
+                "G1 X0 Y0 Z0.2 F1200",
+                "G1 X10 Y0 E0.6 F1200",
+            ]
+        )
+        preview.layers[0].segments[-1].feature = "custom_feature"
+        view.set_preview_data(preview)
+
+        keys = []
+        for row in range(view._line_table.rowCount()):
+            item = view._line_table.item(row, 0)
+            if item is None:
+                continue
+            keys.append(str(item.data(QtCore.Qt.UserRole)))
+        self.assertIn("custom_feature", keys)
+
+        outer_row = None
+        for row in range(view._line_table.rowCount()):
+            item = view._line_table.item(row, 0)
+            if item is not None and item.data(QtCore.Qt.UserRole) == "outer_wall":
+                outer_row = row
+                break
+        self.assertIsNotNone(outer_row)
+        assert outer_row is not None
+        display_item = view._line_table.item(outer_row, 4)
+        self.assertIsNotNone(display_item)
+        assert display_item is not None
+        display_item.setCheckState(QtCore.Qt.Unchecked)
+
+        view._sync_feature_filter()
+        self.assertIsInstance(viewer.preview_feature_filter, list)
+        assert viewer.preview_feature_filter is not None
+        self.assertIn("custom_feature", viewer.preview_feature_filter)
+
+    def test_display_cell_click_toggles_feature_checkbox(self):
+        view, _main, _viewer = self._build()
+        display_item = view._line_table.item(0, 4)
+        self.assertIsNotNone(display_item)
+        assert display_item is not None
+        display_item.setCheckState(QtCore.Qt.Checked)
+
+        view._on_display_item_pressed(display_item)
+        view._on_line_table_cell_clicked(0, 4)
+
+        self.assertEqual(display_item.checkState(), QtCore.Qt.Unchecked)
+
+    def test_display_indicator_click_does_not_double_toggle(self):
+        view, _main, _viewer = self._build()
+        display_item = view._line_table.item(0, 4)
+        self.assertIsNotNone(display_item)
+        assert display_item is not None
+        display_item.setCheckState(QtCore.Qt.Checked)
+
+        view._on_display_item_pressed(display_item)
+        # Simulate Qt toggling when clicking directly on the checkbox indicator.
+        display_item.setCheckState(QtCore.Qt.Unchecked)
+        view._on_line_table_cell_clicked(0, 4)
+
+        self.assertEqual(display_item.checkState(), QtCore.Qt.Unchecked)
+
 
 if TYPE_CHECKING:
     from PyQt5 import QtWidgets as _QtWidgets

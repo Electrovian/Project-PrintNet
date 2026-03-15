@@ -1,0 +1,17 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/machine/Flashforge Guider 2s.json
+DATA = {'bed_model': 'flashforge_g2s_buildplate_model.stl',
+ 'bed_texture': 'flashforge_g2s_buildplate_texture.png',
+ 'default_materials': 'Flashforge Generic PVA;Flashforge Generic HIPS;Flashforge Generic PETG-CF @G3U;Flashforge '
+                      'Generic PETG @G3U;Flashforge Generic PLA-CF @G3U;Flashforge Generic PLA @G3U;Flashforge Generic '
+                      'ASA @G3U;Flashforge Generic ABS @G3U;FusRock Generic PET-CF;FusRock Generic PAHT-CF;FusRock '
+                      'Generic NexPA-CF25;FusRock Generic S-Multi;FusRock Generic S-PAHT;Polymaker Generic '
+                      'CoPA;Polymaker Generic S1',
+ 'family': 'Flashforge',
+ 'hotend_model': '',
+ 'machine_tech': 'FFF',
+ 'model_id': 'Flashforge-Guider-2s',
+ 'name': 'Flashforge Guider 2s',
+ 'nozzle_diameter': '0.4',
+ 'type': 'machine_model'}

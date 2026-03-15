@@ -1,0 +1,5 @@
+apiVersion: v2
+name: printnet
+version: 0.1.0
+appVersion: "0.1.0"
+description: PrintNet API + worker + frontend stack

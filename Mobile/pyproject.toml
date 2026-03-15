@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=67.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.briefcase]
+project_name = "EON-OpenSlicer"
+bundle = "edu.uc.eon"
+version = "0.1.0"
+url = "https://github.com/Electrovian/Project-EON-OpenSlicer"
+license = "Apache-2.0"
+author = "EON-OpenSlicer Team"
+author_email = "openslicer@example.edu"
+
+[tool.briefcase.app.eonopenslicer]
+formal_name = "EON-OpenSlicer"
+description = "3D print lab management and slicer"
+sources = ["."]
+app_start_module = "app_mobile"
+app_start_callable = "main"
+requires = [
+    "toga>=0.4.7",
+    "requests>=2.31",
+]
+
+[tool.briefcase.app.eonopenslicer.android]
+min_sdk_version = 21
+target_sdk_version = 34
+
+[tool.briefcase.app.eonopenslicer.iOS]
+deployment_target = "13.0"

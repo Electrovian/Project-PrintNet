@@ -1,14 +1,88 @@
 import sys
+import os
+from pathlib import Path
 from PyQt5 import QtWidgets, QtCore
 from gui.main_window import MainWindow
+from gui.bootstrap_wizard import BootstrapSetupDialog
 from gui.Windows.splash import SplashScreen
+from config.bootstrap import load_bootstrap_config, mark_setup_completed, save_bootstrap_config, setup_completed
 from config.printer_config import load_printer_config
 from gui.activity_logger import ActivityLogger
 from gui.crash_reporter import CrashReporter
+from printer_presets import PresetValidationError, validate_preset_python_files
 
-def main():
+
+def _run_preset_startup_validation(app: QtWidgets.QApplication, splash: SplashScreen) -> None:
+    splash.set_message("Validating preset modules...")
+    splash.set_progress(0)
+    app.processEvents()
+
+    last_percent = -1
+    update_every: int | None = None
+
+    def _on_progress(index: int, total: int, path: str) -> None:
+        nonlocal last_percent, update_every
+        if total <= 0:
+            return
+        if update_every is None:
+            # Limit expensive UI refreshes while still showing actively checked files.
+            update_every = max(1, total // 120)
+
+        should_refresh = index == 1 or index == total or index % update_every == 0
+        if not should_refresh:
+            return
+
+        percent = int((index * 100) / total)
+        if percent != last_percent:
+            last_percent = percent
+            splash.set_progress(percent)
+        file_name = Path(path).name if path else "unknown"
+        if len(file_name) > 72:
+            file_name = f"{file_name[:69]}..."
+        splash.set_message(f"Validating preset modules... ({index}/{total}) {file_name}")
+        app.processEvents()
+
+    report = validate_preset_python_files(on_progress=_on_progress)
+    splash.set_progress(100)
+    splash.set_message(f"Validated {report.checked_count} preset modules.")
+    app.processEvents()
+
+
+def _ensure_bootstrap_configuration(app: QtWidgets.QApplication) -> dict:
+    config = load_bootstrap_config()
+    if not setup_completed(config):
+        dialog = BootstrapSetupDialog(initial=config)
+        result = dialog.exec_()
+        if result != QtWidgets.QDialog.Accepted:
+            raise RuntimeError("SETUP_ABORTED")
+        merged = dict(config)
+        merged.update(dialog.result_config())
+        config = mark_setup_completed(merged)
+        save_bootstrap_config(config)
+    language = str(config.get("ui_language", "en")).strip() or "en"
+    region = str(config.get("region_code", "")).strip()
+    app.setProperty("bootstrap_config", dict(config))
+    app.setProperty("bootstrap_language", language)
+    app.setProperty("bootstrap_region", region)
+    return dict(config)
+
+
+def main() -> int:
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("EON-OpenSlicer")
+    try:
+        bootstrap_config = _ensure_bootstrap_configuration(app)
+    except RuntimeError as exc:
+        if str(exc) == "SETUP_ABORTED":
+            return 1
+        raise
+    ui_language = str(bootstrap_config.get("ui_language", "en")).strip() or "en"
+    region_code = str(bootstrap_config.get("region_code", "")).strip().upper()
+    if ui_language:
+        # Main window reads this at construction time.
+        os.environ["EON_UI_LANG"] = ui_language
+    if region_code:
+        os.environ["EON_REGION_CODE"] = region_code
 
     activity_logger = ActivityLogger()
     activity_logger.install(app)
@@ -28,6 +102,18 @@ def main():
     splash.show()
     splash.start_progress(3000)
     app.processEvents()
+    try:
+        _run_preset_startup_validation(app, splash)
+    except PresetValidationError as exc:
+        details = "\n".join(f"{item.path} -> {item.reason}" for item in exc.failures[:20])
+        if len(exc.failures) > 20:
+            details += f"\n... {len(exc.failures) - 20} more failures"
+        QtWidgets.QMessageBox.critical(
+            None,
+            "Preset Validation Failed",
+            f"Startup validation failed.\n\n{exc}\n\n{details}",
+        )
+        return 1
 
     timer = QtCore.QElapsedTimer()
     timer.start()
@@ -47,7 +133,7 @@ def main():
     window.showMaximized()
     if hasattr(window, "apply_titlebar_theme"):
         window.apply_titlebar_theme()
-    sys.exit(app.exec_())
+    return app.exec_()
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

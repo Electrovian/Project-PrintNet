@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 import trimesh
@@ -10,7 +10,7 @@ TESTS = os.path.abspath(os.path.dirname(__file__))
 if TESTS not in sys.path:
     sys.path.insert(0, TESTS)
 
-from slicer.mesh import MeshModel
+from slicer_v2.legacy_mesh import MeshModel
 from harness import BaseTestCase
 
 
@@ -64,3 +64,4 @@ class MeshModelTests(BaseTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

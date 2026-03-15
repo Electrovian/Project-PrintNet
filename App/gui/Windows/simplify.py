@@ -99,7 +99,7 @@ class SimplifyDialog(QtWidgets.QDialog):
         layout.addWidget(self._ratio_target)
 
         self._wireframe_check = QtWidgets.QCheckBox("Show wireframe", self)
-        self._wireframe_check.setChecked(True)
+        self._wireframe_check.setChecked(False)
         layout.addWidget(self._wireframe_check)
 
         btn_row = QtWidgets.QHBoxLayout()

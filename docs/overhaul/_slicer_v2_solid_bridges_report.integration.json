@@ -1,0 +1,17 @@
+{
+  "stage_count": 10,
+  "layer_count": 12,
+  "island_count_total": 10,
+  "solid_layer_count": 4,
+  "top_solid_layer_count": 2,
+  "bottom_solid_layer_count": 2,
+  "solid_path_count_total": 12,
+  "solid_path_length_mm_total": 12.0,
+  "bridge_region_count": 1,
+  "bridge_path_count": 3,
+  "bridge_path_length_mm_total": 3.3000000000000003,
+  "bridge_flow_ratio": 1.0,
+  "bridge_speed_ratio": 0.8,
+  "warning_count": 0,
+  "validation_ok": true
+}

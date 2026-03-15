@@ -1,0 +1,12 @@
+{
+  "stage_count": 10,
+  "validation_ok": true,
+  "line_count": 30,
+  "gcode_validation_ok": true,
+  "gcode_validation_error_count": 0,
+  "gcode_validation_warning_count": 0,
+  "gcode_validation_bounds_violation_count": 0,
+  "gcode_validation_z_monotonicity_violation_count": 0,
+  "gcode_validation_extrusion_monotonicity_violation_count": 0,
+  "gcode_validation_parse_error_count": 0
+}

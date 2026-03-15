@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Peopoly/process/0.20mm PET-CF 0.4 Nozzle Standard @MagnetoX.json
+DATA = {'bottom_shell_layers': '5',
+ 'bridge_flow': '1',
+ 'brim_type': 'no_brim',
+ 'compatible_printers': ['Peopoly Magneto X 0.4 nozzle'],
+ 'from': 'system',
+ 'gap_infill_speed': '200',
+ 'inherits': 'fdm_process_pply_0.20',
+ 'initial_layer_infill_speed': '140',
+ 'initial_layer_speed': '100',
+ 'inner_wall_speed': '200',
+ 'instantiation': 'true',
+ 'internal_solid_infill_speed': '200',
+ 'name': '0.20mm PET-CF 0.4 Nozzle Standard @MagnetoX',
+ 'outer_wall_speed': '160',
+ 'setting_id': 'GP016',
+ 'skirt_distance': '2',
+ 'skirt_loops': '2',
+ 'sparse_infill_density': '20',
+ 'sparse_infill_speed': '200',
+ 'top_shell_layers': '5',
+ 'top_shell_thickness': '0.6',
+ 'top_surface_speed': '140',
+ 'type': 'process',
+ 'wall_loops': '3'}

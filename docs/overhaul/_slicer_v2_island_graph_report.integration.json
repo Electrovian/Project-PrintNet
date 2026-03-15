@@ -1,0 +1,24 @@
+{
+  "generated_at_utc": "2026-02-13T14:58:38.042918+00:00",
+  "layer_count": 2,
+  "contour_count_input": 4,
+  "island_count_total": 2,
+  "hole_count_total": 2,
+  "intra_layer_edge_count": 0,
+  "vertical_edge_count": 1,
+  "nesting_max_depth": 1,
+  "warning_count": 0,
+  "warnings": [],
+  "layer_island_counts": [
+    1,
+    1
+  ],
+  "layer_hole_counts": [
+    1,
+    1
+  ],
+  "layer_adjacency_counts": [
+    0,
+    0
+  ]
+}

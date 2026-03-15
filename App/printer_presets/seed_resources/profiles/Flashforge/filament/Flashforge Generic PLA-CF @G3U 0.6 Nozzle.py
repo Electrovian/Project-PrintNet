@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge Generic PLA-CF @G3U 0.6 Nozzle.json
+DATA = {'compatible_printers': ['Flashforge Guider 3 Ultra 0.6 Nozzle'],
+ 'fan_cooling_layer_time': ['50'],
+ 'fan_min_speed': ['70'],
+ 'filament_density': ['1.28'],
+ 'filament_flow_ratio': ['1'],
+ 'filament_id': 'GFB99',
+ 'filament_max_volumetric_speed': ['20'],
+ 'filament_minimal_purge_on_wipe_tower': ['5'],
+ 'filament_settings_id': ['Flashforge Generic PLA-CF @G3U 0.6 Nozzle'],
+ 'filament_start_gcode': ['; filament start gcode\n'],
+ 'filament_type': ['PLA-CF'],
+ 'filament_unloading_speed': ['40'],
+ 'filament_unloading_speed_start': ['40'],
+ 'from': 'system',
+ 'inherits': 'Flashforge Generic PLA',
+ 'instantiation': 'true',
+ 'name': 'Flashforge Generic PLA-CF @G3U 0.6 Nozzle',
+ 'nozzle_temperature': ['210'],
+ 'nozzle_temperature_initial_layer': ['215'],
+ 'nozzle_temperature_range_low': ['200'],
+ 'pressure_advance': ['0.044'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['15'],
+ 'slow_down_min_speed': ['15'],
+ 'type': 'filament'}

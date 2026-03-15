@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple, TYPE_CHECKING, cast
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from slicer.gcode.writer import SliceSettings
+from slicer_v2.legacy_gcode_writer import SliceSettings
 from config.defaults import DEFAULTS
 from ..theme import theme_css
 from ..model_panel import ModelPanel
@@ -270,8 +270,8 @@ class SettingsPanel(
 
     def _build_ui(self):
         root = QtWidgets.QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(6)
 
         self._build_printer_row(root)
         self._build_header(root)
@@ -349,6 +349,7 @@ class SettingsPanel(
 
         self._printer_combo = QtWidgets.QComboBox(row)
         self._printer_combo.setObjectName("PrinterCombo")
+        self._configure_combo_popup(self._printer_combo, min_width=260)
         self._printer_combo.currentIndexChanged.connect(self._on_printer_changed)
         layout.addWidget(self._printer_combo, 1)
 
@@ -405,7 +406,8 @@ class SettingsPanel(
 
         self._profile_combo = QtWidgets.QComboBox(row)
         self._profile_combo.setObjectName("ProfileCombo")
-        self._profile_combo.addItem("0.20mm Standard @K1 Max 0.4 nozzle")
+        self._configure_combo_popup(self._profile_combo, min_width=280)
+        self._profile_combo.currentIndexChanged.connect(self._on_profile_preset_changed)
         layout.addWidget(self._profile_combo, 1)
 
         for label in ("Save", "Search"):
@@ -422,6 +424,7 @@ class SettingsPanel(
         layout.addWidget(self._search_input, 1)
 
         root.addWidget(row)
+        self._refresh_profile_presets(self.current_printer(), apply_default=False)
 
     def _build_content(self, root: QtWidgets.QVBoxLayout):
         nav = QtWidgets.QFrame(self)
@@ -1049,5 +1052,34 @@ class SettingsPanel(
         for label, value in items:
             combo.addItem(label, value)
         combo.setFixedWidth(150)
+        self._configure_combo_popup(combo)
         return combo
+
+    def _configure_combo_popup(self, combo: QtWidgets.QComboBox, min_width: int = 220):
+        combo.setMaxVisibleItems(12)
+        view = combo.view()
+        if view is None:
+            return
+        view.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
+        view.setTextElideMode(QtCore.Qt.ElideRight)
+        view.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self._fit_combo_popup_width(combo, min_width=min_width)
+
+    def _fit_combo_popup_width(
+        self,
+        combo: QtWidgets.QComboBox,
+        min_width: int = 220,
+        max_width: int = 520,
+    ):
+        view = combo.view()
+        if view is None:
+            return
+        font_metrics = combo.fontMetrics()
+        longest = 0
+        for idx in range(combo.count()):
+            longest = max(longest, font_metrics.horizontalAdvance(combo.itemText(idx)))
+        width = max(int(min_width), int(combo.width()), int(longest) + 44)
+        width = min(int(max_width), width)
+        view.setMinimumWidth(width)
+        view.setMaximumWidth(width)
 

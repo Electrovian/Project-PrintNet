@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Elegoo/process/fdm_process_elegoo_06030.json
+DATA = {'bridge_flow': '1',
+ 'bridge_speed': '30',
+ 'elefant_foot_compensation': '0.15',
+ 'from': 'system',
+ 'gap_infill_speed': '80',
+ 'inherits': 'fdm_process_elegoo_common',
+ 'initial_layer_infill_speed': '55',
+ 'initial_layer_line_width': '0.80',
+ 'initial_layer_print_height': '0.3',
+ 'initial_layer_speed': '35',
+ 'inner_wall_line_width': '0.62',
+ 'instantiation': 'false',
+ 'internal_solid_infill_line_width': '0.62',
+ 'layer_height': '0.3',
+ 'line_width': '0.62',
+ 'name': 'fdm_process_elegoo_06030',
+ 'outer_wall_line_width': '0.62',
+ 'overhang_3_4_speed': '25',
+ 'sparse_infill_line_width': '0.62',
+ 'sparse_infill_speed': '200',
+ 'support_line_width': '0.62',
+ 'top_surface_line_width': '0.62',
+ 'top_surface_speed': '150',
+ 'type': 'process'}

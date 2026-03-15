@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import bisect
-import math
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
 import numpy as np
@@ -19,6 +19,25 @@ class PreviewMixin:
 
     def set_gcode_preview(self, preview):
         self._preview_data = preview
+        self._preview_geometry_key = None
+        self._preview_geometry_segments = None
+        self._preview_geometry_widths = None
+        self._preview_geometry_travel = None
+        self._preview_geometry_meshes = None
+        self._preview_cached_mode = None
+        self._preview_color_cache = OrderedDict()
+        self._preview_static_key = None
+        self._preview_static_segments = None
+        self._preview_static_widths = None
+        self._preview_static_travel = None
+        self._preview_static_meshes = None
+        self._preview_dynamic_key = None
+        self._preview_dynamic_segments = None
+        self._preview_dynamic_widths = None
+        self._preview_dynamic_travel = None
+        self._preview_dynamic_meshes = None
+        self._preview_color_cache_static = OrderedDict()
+        self._preview_color_cache_dynamic = OrderedDict()
         if preview is None or not getattr(preview, "layers", None):
             self._preview_layer_index = None
             self._preview_step_index = None
@@ -57,9 +76,28 @@ class PreviewMixin:
             layer_height = self._preview_layer_height
         if abs(base_width - self._preview_base_width) < 1e-6 and \
                 abs(layer_height - self._preview_layer_height) < 1e-6:
+            updated = False
+            try:
+                filament_color = getattr(settings, "filament_color", None)
+                if filament_color:
+                    new_color = self._normalize_gl_color(filament_color)
+                    if new_color != self._preview_filament_color:
+                        self._preview_filament_color = new_color
+                        updated = True
+            except Exception:
+                updated = False
+            if updated and self._preview_color_mode == "filament":
+                self._preview_cached_mode = None
+                self._update_preview_lines()
             return
         self._preview_base_width = base_width
         self._preview_layer_height = layer_height
+        try:
+            filament_color = getattr(settings, "filament_color", None)
+            if filament_color:
+                self._preview_filament_color = self._normalize_gl_color(filament_color)
+        except Exception:
+            pass
         self._preview_extrude_bins = []
         self._clear_preview_extrude_items()
         self._ensure_preview_items()
@@ -102,8 +140,26 @@ class PreviewMixin:
         for item in self._preview_items.values():
             if item is not None:
                 item.setVisible(self._preview_visible)
-        for item in self._preview_extrude_items:
+        for item in self._all_preview_extrude_items():
             item.setVisible(self._preview_visible)
+
+    def set_models_preview_alpha(self, alpha: float):
+        try:
+            alpha_val = float(alpha)
+        except (TypeError, ValueError):
+            alpha_val = 1.0
+        alpha_val = max(0.05, min(alpha_val, 1.0))
+        self._model_preview_alpha = alpha_val
+        gl_mode = "translucent" if alpha_val < 0.999 else "opaque"
+        if hasattr(self, "_apply_model_color"):
+            for model in self.models.values():
+                item = model.get("item")
+                if item is not None:
+                    try:
+                        item.setGLOptions(gl_mode)
+                    except Exception:
+                        pass
+                self._apply_model_color(model)
 
     def get_preview_nozzle_state(self):
         seg = self._preview_segment_for_nozzle()
@@ -160,6 +216,25 @@ class PreviewMixin:
 
     def clear_gcode_preview(self):
         self._preview_data = None
+        self._preview_geometry_key = None
+        self._preview_geometry_segments = None
+        self._preview_geometry_widths = None
+        self._preview_geometry_travel = None
+        self._preview_geometry_meshes = None
+        self._preview_cached_mode = None
+        self._preview_color_cache = OrderedDict()
+        self._preview_static_key = None
+        self._preview_static_segments = None
+        self._preview_static_widths = None
+        self._preview_static_travel = None
+        self._preview_static_meshes = None
+        self._preview_dynamic_key = None
+        self._preview_dynamic_segments = None
+        self._preview_dynamic_widths = None
+        self._preview_dynamic_travel = None
+        self._preview_dynamic_meshes = None
+        self._preview_color_cache_static = OrderedDict()
+        self._preview_color_cache_dynamic = OrderedDict()
         self._preview_layer_index = None
         self._preview_step_index = None
         self._preview_step_layer = None
@@ -241,8 +316,23 @@ class PreviewMixin:
         return (layer_index, local_count)
 
     def set_preview_color_mode(self, mode: str):
-        mode = (mode or "").strip().lower()
-        if mode not in ("feature", "speed", "flow", "width"):
+        mode = (mode or "").strip().lower().replace(" ", "_")
+        mode_map = {
+            "line_type": "feature",
+            "line": "feature",
+        }
+        mode = mode_map.get(mode, mode)
+        if mode not in (
+            "feature",
+            "filament",
+            "speed",
+            "flow",
+            "width",
+            "layer_height",
+            "layer_time",
+            "fan",
+            "temperature",
+        ):
             mode = "feature"
         if self._preview_color_mode == mode:
             return
@@ -266,20 +356,19 @@ class PreviewMixin:
             self._preview_items["travel"] = item
         if not self._preview_extrude_bins:
             self._preview_extrude_bins = self._preview_width_bins()
-        if not self._preview_extrude_items or \
-                len(self._preview_extrude_items) != len(self._preview_extrude_bins):
+        if not self._preview_extrude_items_static or \
+                len(self._preview_extrude_items_static) != len(self._preview_extrude_bins) or \
+                len(self._preview_extrude_items_dynamic) != len(self._preview_extrude_bins):
             self._clear_preview_extrude_items()
-            for _min_w, _max_w, line_width in self._preview_extrude_bins:
-                md = gl.MeshData(
-                    vertexes=np.zeros((0, 3), dtype=float),
-                    faces=np.zeros((0, 3), dtype=np.int32),
-                )
-                item = gl.GLMeshItem(meshdata=md, smooth=False, drawFaces=True,
-                                     drawEdges=False, shader="shaded")
-                item.setGLOptions("opaque")
-                self.addItem(item)
-                item.setVisible(self._preview_visible)
-                self._preview_extrude_items.append(item)
+            for _min_w, _max_w, _line_width in self._preview_extrude_bins:
+                for target in (self._preview_extrude_items_static, self._preview_extrude_items_dynamic):
+                    md = self._empty_meshdata()
+                    item = gl.GLMeshItem(meshdata=md, smooth=False, drawFaces=True,
+                                         drawEdges=False, shader="shaded")
+                    item.setGLOptions("opaque")
+                    self.addItem(item)
+                    item.setVisible(self._preview_visible)
+                    target.append(item)
 
     def _preview_width_bins(self) -> List[Tuple[float, float, float]]:
         base = self._preview_base_width if self._preview_base_width > 0.0 else 0.4
@@ -314,12 +403,19 @@ class PreviewMixin:
         return max(0, len(bins) - 1)
 
     def _clear_preview_extrude_items(self):
-        for item in self._preview_extrude_items:
+        for item in self._all_preview_extrude_items():
             try:
                 self.removeItem(item)
             except Exception:
                 continue
-        self._preview_extrude_items = []
+        self._preview_extrude_items_static = []
+        self._preview_extrude_items_dynamic = []
+
+    def _all_preview_extrude_items(self):
+        items = []
+        items.extend(getattr(self, "_preview_extrude_items_static", []) or [])
+        items.extend(getattr(self, "_preview_extrude_items_dynamic", []) or [])
+        return items
 
     def _preview_feature_color(self, feature: str):
         colors = {
@@ -336,17 +432,44 @@ class PreviewMixin:
             "bridge": (0.95, 0.3, 0.3, 1.0),
             "gap_infill": (0.8, 0.6, 0.3, 1.0),
             "thin_wall": (0.9, 0.5, 0.2, 1.0),
-            "support": (0.2, 0.6, 0.9, 1.0),
-            "support_interface": (0.2, 0.5, 0.8, 1.0),
+            "support": (0.4, 0.75, 1.0, 1.0),
+            "support_interface": (0.35, 0.7, 0.95, 1.0),
             "skirt": (0.7, 0.5, 0.2, 1.0),
             "brim": (0.7, 0.4, 0.2, 1.0),
             "raft": (0.5, 0.5, 0.5, 1.0),
             "ironing": (0.9, 0.9, 0.2, 1.0),
             "travel": (0.7, 0.7, 0.7, 0.2),
             "retract": (0.7, 0.7, 0.7, 0.2),
-            "other": (0.8, 0.8, 0.8, 0.9),
+            "unretract": (0.2, 0.8, 0.8, 1.0),
+            "wipe": (0.95, 0.9, 0.2, 1.0),
+            "seams": (0.9, 0.9, 0.9, 1.0),
+            "other": (0.3, 0.55, 0.9, 1.0),
         }
         return colors.get(feature, colors["other"])
+
+    def _preview_filter_key(self):
+        if self._preview_feature_filter is None:
+            return None
+        return tuple(sorted(self._preview_feature_filter))
+
+    def _preview_static_state_key(self, layer_index: int):
+        return (
+            id(self._preview_data),
+            layer_index,
+            self._preview_filter_key(),
+            round(float(self._preview_base_width), 6),
+            round(float(self._preview_layer_height), 6),
+        )
+
+    def _preview_dynamic_state_key(self, layer_index: int, step_slice: int | None):
+        return (
+            id(self._preview_data),
+            layer_index,
+            step_slice,
+            self._preview_filter_key(),
+            round(float(self._preview_base_width), 6),
+            round(float(self._preview_layer_height), 6),
+        )
 
     def _preview_color_from_scalar(self, value: float, min_val: float, max_val: float):
         if max_val <= min_val:
@@ -382,42 +505,103 @@ class PreviewMixin:
             return np.zeros((0, 4), dtype=float)
         return np.tile(np.array(rgba, dtype=float), (count, 1))
 
-    def _update_preview_lines(self):
+    def _empty_meshdata(self) -> gl.MeshData:
+        mesh = getattr(self, "_preview_empty_mesh", None)
+        if mesh is None:
+            mesh = gl.MeshData(
+                vertexes=np.zeros((0, 3), dtype=float),
+                faces=np.zeros((0, 3), dtype=np.int32),
+            )
+            self._preview_empty_mesh = mesh
+        return mesh
+
+    def _preview_geometry_state_key(self, layer_index: int, step_slice: int | None):
+        return (id(self._preview_data), layer_index, step_slice, self._preview_filter_key(),
+                round(float(self._preview_base_width), 6), round(float(self._preview_layer_height), 6))
+
+    def _preview_color_for_segment(self, seg) -> Tuple[float, float, float, float]:
+        mode = self._preview_color_mode
+        if mode == "feature":
+            return self._preview_feature_color(seg.feature if seg.is_extrude else "travel")
+        if mode == "filament":
+            if seg.is_extrude:
+                return self._preview_filament_color or self._preview_feature_color("outer_wall")
+            return self._preview_feature_color("travel")
+        if mode == "speed":
+            return self._preview_color_from_scalar(seg.speed,
+                                                 self._preview_data.min_speed,
+                                                 self._preview_data.max_speed)
+        if mode == "width":
+            if seg.is_extrude:
+                width_value = seg.width if seg.width > 0.0 else self._preview_base_width
+                return self._preview_color_from_scalar(width_value,
+                                                      self._preview_data.min_width,
+                                                      self._preview_data.max_width)
+            return self._preview_feature_color("travel")
+        if mode == "flow":
+            if seg.is_extrude:
+                return self._preview_color_from_scalar(seg.flow,
+                                                      self._preview_data.min_flow,
+                                                      self._preview_data.max_flow)
+            return self._preview_feature_color("travel")
+        if mode == "layer_height":
+            if seg.is_extrude:
+                return self._preview_color_from_scalar(seg.layer_height,
+                                                      self._preview_data.min_layer_height,
+                                                      self._preview_data.max_layer_height)
+            return self._preview_feature_color("travel")
+        if mode == "layer_time":
+            if seg.is_extrude:
+                return self._preview_color_from_scalar(seg.layer_time,
+                                                      self._preview_data.min_layer_time,
+                                                      self._preview_data.max_layer_time)
+            return self._preview_feature_color("travel")
+        if mode == "fan":
+            if seg.is_extrude:
+                if self._preview_data.max_fan <= 0.0:
+                    return self._preview_feature_color(seg.feature)
+                return self._preview_color_from_scalar(seg.fan,
+                                                      self._preview_data.min_fan,
+                                                      self._preview_data.max_fan)
+            return self._preview_feature_color("travel")
+        if mode == "temperature":
+            if seg.is_extrude:
+                if self._preview_data.max_temp <= 0.0:
+                    return self._preview_feature_color(seg.feature)
+                return self._preview_color_from_scalar(seg.temperature,
+                                                      self._preview_data.min_temp,
+                                                      self._preview_data.max_temp)
+            return self._preview_feature_color("travel")
+        return self._preview_feature_color(seg.feature if seg.is_extrude else "travel")
+
+    def _collect_layer_geometry(self, layer_index: int, step_slice: int | None):
+        extrude_segments: List[List] = [[] for _ in self._preview_extrude_bins]
+        extrude_widths: List[List[float]] = [[] for _ in self._preview_extrude_bins]
+        travel_points: List[Tuple[float, float, float]] = []
         if self._preview_data is None or not getattr(self._preview_data, "layers", None):
-            for item in self._preview_items.values():
-                if item is not None:
-                    item.setData(pos=np.zeros((0, 3), dtype=float))
-            for item in self._preview_extrude_items:
-                item.setMeshData(
-                    meshdata=gl.MeshData(
-                        vertexes=np.zeros((0, 3), dtype=float),
-                        faces=np.zeros((0, 3), dtype=np.int32),
-                    )
-                )
-            self._update_nozzle_position()
-            return
+            return extrude_segments, extrude_widths, travel_points
+        if layer_index < 0 or layer_index >= len(self._preview_data.layers):
+            return extrude_segments, extrude_widths, travel_points
+        layer = self._preview_data.layers[layer_index]
+        segments = layer.segments
+        if step_slice is not None:
+            segments = segments[: max(0, min(int(step_slice), len(segments)))]
+        for seg in segments:
+            if self._preview_feature_filter is not None and seg.feature not in self._preview_feature_filter:
+                continue
+            if seg.is_extrude:
+                width_value = seg.width if seg.width > 0.0 else self._preview_base_width
+                bucket = self._bucket_for_width(width_value)
+                extrude_segments[bucket].append(seg)
+                extrude_widths[bucket].append(width_value)
+            else:
+                travel_points.extend([seg.start, seg.end])
+        return extrude_segments, extrude_widths, travel_points
 
-        self._preview_extrude_bins = self._preview_width_bins()
-        self._ensure_preview_items()
-        step_slice = None
-        if self._preview_step_index is None:
-            layer_index = len(self._preview_data.layers) - 1
-        else:
-            layer_index, step_slice = self._preview_layer_slice_for_step(self._preview_step_index)
-        self._update_nozzle_position(layer_index)
-
-        extrude_points: List[List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]] = [
-            [] for _ in self._preview_extrude_bins
-        ]
-        extrude_colors: List[List[Tuple[float, float, float, float]]] = [
-            [] for _ in self._preview_extrude_bins
-        ]
-        extrude_widths: List[List[float]] = [
-            [] for _ in self._preview_extrude_bins
-        ]
-        travel_points = []
-        travel_colors = []
-
+    def _collect_preview_geometry(self, layer_index: int, step_slice: int | None):
+        extrude_segments: List[List] = [[] for _ in self._preview_extrude_bins]
+        extrude_widths: List[List[float]] = [[] for _ in self._preview_extrude_bins]
+        travel_points: List[Tuple[float, float, float]] = []
         for idx, layer in enumerate(self._preview_data.layers[: layer_index + 1]):
             segments = layer.segments
             if step_slice is not None and idx == layer_index:
@@ -425,51 +609,230 @@ class PreviewMixin:
             for seg in segments:
                 if self._preview_feature_filter is not None and seg.feature not in self._preview_feature_filter:
                     continue
-                if self._preview_color_mode == "feature":
-                    color = self._preview_feature_color(seg.feature if seg.is_extrude else "travel")
-                elif self._preview_color_mode == "speed":
-                    color = self._preview_color_from_scalar(seg.speed,
-                                                            self._preview_data.min_speed,
-                                                            self._preview_data.max_speed)
-                elif self._preview_color_mode == "width":
-                    if seg.is_extrude:
-                        width_value = seg.width if seg.width > 0.0 else self._preview_base_width
-                        color = self._preview_color_from_scalar(width_value,
-                                                                self._preview_data.min_width,
-                                                                self._preview_data.max_width)
-                    else:
-                        color = self._preview_feature_color("travel")
-                else:
-                    if seg.is_extrude:
-                        color = self._preview_color_from_scalar(seg.flow,
-                                                                self._preview_data.min_flow,
-                                                                self._preview_data.max_flow)
-                    else:
-                        color = self._preview_feature_color("travel")
-
                 if seg.is_extrude:
                     width_value = seg.width if seg.width > 0.0 else self._preview_base_width
                     bucket = self._bucket_for_width(width_value)
-                    extrude_points[bucket].append((seg.start, seg.end))
-                    extrude_colors[bucket].append(color)
+                    extrude_segments[bucket].append(seg)
                     extrude_widths[bucket].append(width_value)
                 else:
                     travel_points.extend([seg.start, seg.end])
-                    travel_colors.extend([color, color])
+        return extrude_segments, extrude_widths, travel_points
 
-        travel_item = self._preview_items["travel"]
-        for item, segments, colors, widths in zip(
-            self._preview_extrude_items, extrude_points, extrude_colors, extrude_widths
-        ):
-            meshdata = self._preview_mesh_for_segments(segments, widths, colors)
+    def _apply_preview_mesh_colors(self, items, meshes, segments_by_bin, cache: OrderedDict | None = None):
+        if cache is None:
+            for item, meshdata, segments in zip(items, meshes, segments_by_bin):
+                if meshdata is None or item is None:
+                    continue
+                if segments:
+                    colors = [self._preview_color_for_segment(seg) for seg in segments]
+                    face_colors = np.repeat(np.array(colors, dtype=float), 12, axis=0)
+                    meshdata.setFaceColors(face_colors)
+                item.setMeshData(meshdata=meshdata)
+                item.setVisible(self._preview_visible and bool(segments))
+            return
+        if not isinstance(cache, OrderedDict):
+            cache = OrderedDict()
+        mode = self._preview_color_mode
+        cached = cache.get(mode)
+        if cached is not None and len(cached) == len(segments_by_bin):
+            cache_valid = True
+            for face_colors, segments in zip(cached, segments_by_bin):
+                expected_rows = len(segments) * 12
+                if expected_rows <= 0:
+                    continue
+                if face_colors is None or int(len(face_colors)) != expected_rows:
+                    cache_valid = False
+                    break
+            if cache_valid:
+                for item, meshdata, face_colors, segments in zip(items, meshes, cached, segments_by_bin):
+                    if meshdata is None or item is None:
+                        continue
+                    if segments and face_colors is not None and len(face_colors):
+                        meshdata.setFaceColors(face_colors)
+                    item.setMeshData(meshdata=meshdata)
+                    item.setVisible(self._preview_visible and bool(segments))
+                cache.move_to_end(mode)
+                return
+
+        face_cache = []
+        for item, meshdata, segments in zip(items, meshes, segments_by_bin):
+            if meshdata is None or item is None:
+                face_cache.append(np.zeros((0, 4), dtype=float))
+                continue
+            if segments:
+                colors = [self._preview_color_for_segment(seg) for seg in segments]
+                face_colors = np.repeat(np.array(colors, dtype=float), 12, axis=0)
+                meshdata.setFaceColors(face_colors)
+            else:
+                face_colors = np.zeros((0, 4), dtype=float)
+            face_cache.append(face_colors)
             item.setMeshData(meshdata=meshdata)
             item.setVisible(self._preview_visible and bool(segments))
+        cache[mode] = face_cache
+        if len(cache) > 4:
+            cache.popitem(last=False)
+
+    def _update_preview_lines(self):
+        if self._preview_data is None or not getattr(self._preview_data, "layers", None):
+            for item in self._preview_items.values():
+                if item is not None:
+                    item.setData(pos=np.zeros((0, 3), dtype=float))
+            for item in self._all_preview_extrude_items():
+                item.setMeshData(meshdata=self._empty_meshdata())
+            self._update_nozzle_position()
+            return
+
+        if not self._preview_extrude_bins:
+            self._preview_extrude_bins = self._preview_width_bins()
+        self._ensure_preview_items()
+        step_slice = None
+        if self._preview_step_index is None:
+            layer_index = len(self._preview_data.layers) - 1
+        else:
+            layer_index, step_slice = self._preview_layer_slice_for_step(self._preview_step_index)
+        self._update_nozzle_position(layer_index)
+        travel_item = self._preview_items["travel"]
+        travel_width = getattr(self, "_preview_travel_width", getattr(travel_item, "width", 1))
+
+        if step_slice is None:
+            geometry_key = self._preview_geometry_state_key(layer_index, step_slice)
+            if geometry_key != self._preview_geometry_key:
+                segments_by_bin, widths_by_bin, travel_points = self._collect_preview_geometry(
+                    layer_index, step_slice
+                )
+                self._preview_geometry_segments = segments_by_bin
+                self._preview_geometry_widths = widths_by_bin
+                self._preview_geometry_travel = travel_points
+                if isinstance(getattr(self, "_preview_color_cache_static", None), OrderedDict):
+                    self._preview_color_cache_static.clear()
+                meshes = []
+                for segments, widths in zip(segments_by_bin, widths_by_bin):
+                    segment_pairs = [(seg.start, seg.end) for seg in segments]
+                    meshes.append(self._preview_mesh_for_segments(segment_pairs, widths))
+                self._preview_geometry_meshes = meshes
+                self._preview_geometry_key = geometry_key
+                self._preview_cached_mode = self._preview_color_mode
+                self._apply_preview_mesh_colors(
+                    self._preview_extrude_items_static,
+                    meshes,
+                    segments_by_bin,
+                    cache=self._preview_color_cache_static,
+                )
+                self._apply_preview_mesh_colors(
+                    self._preview_extrude_items_dynamic,
+                    [self._empty_meshdata() for _ in self._preview_extrude_items_dynamic],
+                    [[] for _ in self._preview_extrude_items_dynamic],
+                    cache=None,
+                )
+                if travel_item is not None:
+                    if travel_points:
+                        travel_color = self._preview_feature_color("travel")
+                        travel_item.setData(
+                            pos=np.array(travel_points, dtype=float),
+                            color=self._color_array(travel_color, len(travel_points)),
+                            width=travel_width,
+                        )
+                    else:
+                        travel_item.setData(
+                            pos=np.zeros((0, 3), dtype=float),
+                            color=np.zeros((0, 4), dtype=float),
+                            width=travel_width,
+                        )
+                return
+
+            if self._preview_geometry_meshes is None or self._preview_geometry_segments is None:
+                return
+            if self._preview_cached_mode != self._preview_color_mode:
+                self._apply_preview_mesh_colors(
+                    self._preview_extrude_items_static,
+                    self._preview_geometry_meshes,
+                    self._preview_geometry_segments,
+                    cache=self._preview_color_cache_static,
+                )
+                self._preview_cached_mode = self._preview_color_mode
+            return
+
+        static_layer = layer_index - 1
+        static_key = self._preview_static_state_key(static_layer)
+        if static_key != self._preview_static_key:
+            if static_layer >= 0:
+                segments_by_bin, widths_by_bin, travel_points = self._collect_preview_geometry(
+                    static_layer, None
+                )
+            else:
+                segments_by_bin = [[] for _ in self._preview_extrude_bins]
+                widths_by_bin = [[] for _ in self._preview_extrude_bins]
+                travel_points = []
+            self._preview_static_segments = segments_by_bin
+            self._preview_static_widths = widths_by_bin
+            self._preview_static_travel = travel_points
+            if isinstance(getattr(self, "_preview_color_cache_static", None), OrderedDict):
+                self._preview_color_cache_static.clear()
+            meshes = []
+            for segments, widths in zip(segments_by_bin, widths_by_bin):
+                segment_pairs = [(seg.start, seg.end) for seg in segments]
+                meshes.append(self._preview_mesh_for_segments(segment_pairs, widths))
+            self._preview_static_meshes = meshes
+            self._preview_static_key = static_key
+            self._apply_preview_mesh_colors(
+                self._preview_extrude_items_static,
+                meshes,
+                segments_by_bin,
+                cache=self._preview_color_cache_static,
+            )
+
+        dynamic_key = self._preview_dynamic_state_key(layer_index, step_slice)
+        if dynamic_key != self._preview_dynamic_key:
+            segments_by_bin, widths_by_bin, travel_points = self._collect_layer_geometry(
+                layer_index, step_slice
+            )
+            self._preview_dynamic_segments = segments_by_bin
+            self._preview_dynamic_widths = widths_by_bin
+            self._preview_dynamic_travel = travel_points
+            if isinstance(getattr(self, "_preview_color_cache_dynamic", None), OrderedDict):
+                self._preview_color_cache_dynamic.clear()
+            meshes = []
+            for segments, widths in zip(segments_by_bin, widths_by_bin):
+                segment_pairs = [(seg.start, seg.end) for seg in segments]
+                meshes.append(self._preview_mesh_for_segments(segment_pairs, widths))
+            self._preview_dynamic_meshes = meshes
+            self._preview_dynamic_key = dynamic_key
+            self._apply_preview_mesh_colors(
+                self._preview_extrude_items_dynamic,
+                meshes,
+                segments_by_bin,
+                cache=self._preview_color_cache_dynamic,
+            )
+        elif self._preview_cached_mode != self._preview_color_mode:
+            if self._preview_dynamic_meshes is not None and self._preview_dynamic_segments is not None:
+                self._apply_preview_mesh_colors(
+                    self._preview_extrude_items_dynamic,
+                    self._preview_dynamic_meshes,
+                    self._preview_dynamic_segments,
+                    cache=self._preview_color_cache_dynamic,
+                )
+
+        if self._preview_cached_mode != self._preview_color_mode:
+            if self._preview_static_meshes is not None and self._preview_static_segments is not None:
+                self._apply_preview_mesh_colors(
+                    self._preview_extrude_items_static,
+                    self._preview_static_meshes,
+                    self._preview_static_segments,
+                    cache=self._preview_color_cache_static,
+                )
+            self._preview_cached_mode = self._preview_color_mode
+
         if travel_item is not None:
-            travel_width = getattr(self, "_preview_travel_width", getattr(travel_item, "width", 1))
-            if travel_points and travel_colors:
+            travel_points = []
+            if self._preview_static_travel:
+                travel_points.extend(self._preview_static_travel)
+            if self._preview_dynamic_travel:
+                travel_points.extend(self._preview_dynamic_travel)
+            if travel_points:
+                travel_color = self._preview_feature_color("travel")
                 travel_item.setData(
                     pos=np.array(travel_points, dtype=float),
-                    color=np.array(travel_colors, dtype=float),
+                    color=self._color_array(travel_color, len(travel_points)),
                     width=travel_width,
                 )
             else:
@@ -483,75 +846,95 @@ class PreviewMixin:
         self,
         segments: Sequence[Tuple[Tuple[float, float, float], Tuple[float, float, float]]],
         widths: Sequence[float],
-        colors: Sequence[Tuple[float, float, float, float]],
     ) -> gl.MeshData:
         if not segments:
-            return gl.MeshData(
-                vertexes=np.zeros((0, 3), dtype=float),
-                faces=np.zeros((0, 3), dtype=np.int32),
-            )
+            return self._empty_meshdata()
 
-        vertices: List[List[float]] = []
-        faces: List[List[int]] = []
-        face_colors: List[Tuple[float, float, float, float]] = []
+        starts = np.array([seg[0] for seg in segments], dtype=float)
+        ends = np.array([seg[1] for seg in segments], dtype=float)
+        if starts.ndim != 2 or ends.ndim != 2 or starts.shape[1] != 3 or ends.shape[1] != 3:
+            return self._empty_meshdata()
 
-        for (start, end), width_value, color in zip(segments, widths, colors):
-            p0 = np.array(start, dtype=float)
-            p1 = np.array(end, dtype=float)
-            dxy = p1[:2] - p0[:2]
-            length = float(math.hypot(dxy[0], dxy[1]))
-            if length < 1e-8:
-                continue
-            width = float(width_value if width_value > 0.0 else self._preview_base_width)
-            height = float(self._preview_layer_height if self._preview_layer_height > 0.0 else 0.2)
-            half_w = max(width * 0.5, self._preview_base_width * 0.25)
-            half_h = max(height * 0.5, height * 0.25)
-            perp = np.array([-dxy[1], dxy[0]], dtype=float) / length * half_w
+        dxy = ends[:, :2] - starts[:, :2]
+        lengths = np.hypot(dxy[:, 0], dxy[:, 1]).astype(float)
+        valid = lengths >= 1e-8
+        if not np.any(valid):
+            return self._empty_meshdata()
 
-            z0_low = float(p0[2] - half_h)
-            z0_high = float(p0[2] + half_h)
-            z1_low = float(p1[2] - half_h)
-            z1_high = float(p1[2] + half_h)
+        starts = starts[valid]
+        ends = ends[valid]
+        dxy = dxy[valid]
+        lengths = lengths[valid]
 
-            v0 = [float(p0[0] + perp[0]), float(p0[1] + perp[1]), z0_low]
-            v1 = [float(p0[0] - perp[0]), float(p0[1] - perp[1]), z0_low]
-            v2 = [float(p1[0] - perp[0]), float(p1[1] - perp[1]), z1_low]
-            v3 = [float(p1[0] + perp[0]), float(p1[1] + perp[1]), z1_low]
-            v4 = [float(p0[0] + perp[0]), float(p0[1] + perp[1]), z0_high]
-            v5 = [float(p0[0] - perp[0]), float(p0[1] - perp[1]), z0_high]
-            v6 = [float(p1[0] - perp[0]), float(p1[1] - perp[1]), z1_high]
-            v7 = [float(p1[0] + perp[0]), float(p1[1] + perp[1]), z1_high]
+        count = int(starts.shape[0])
+        if count <= 0:
+            return self._empty_meshdata()
 
-            base = len(vertices)
-            vertices.extend([v0, v1, v2, v3, v4, v5, v6, v7])
-            faces.extend([
-                [base + 0, base + 1, base + 2],
-                [base + 0, base + 2, base + 3],
-                [base + 4, base + 6, base + 5],
-                [base + 4, base + 7, base + 6],
-                [base + 0, base + 3, base + 7],
-                [base + 0, base + 7, base + 4],
-                [base + 1, base + 2, base + 6],
-                [base + 1, base + 6, base + 5],
-                [base + 0, base + 4, base + 5],
-                [base + 0, base + 5, base + 1],
-                [base + 3, base + 2, base + 6],
-                [base + 3, base + 6, base + 7],
-            ])
-            face_colors.extend([color] * 12)
+        widths_arr = np.asarray(widths, dtype=float)
+        if widths_arr.ndim != 1 or widths_arr.shape[0] != len(segments):
+            widths_arr = np.full(len(segments), float(self._preview_base_width), dtype=float)
+        widths_arr = widths_arr[valid]
+        widths_arr = np.where(widths_arr > 0.0, widths_arr, float(self._preview_base_width))
 
-        if not faces:
-            return gl.MeshData(
-                vertexes=np.zeros((0, 3), dtype=float),
-                faces=np.zeros((0, 3), dtype=np.int32),
-            )
+        base_width = float(self._preview_base_width if self._preview_base_width > 0.0 else 0.4)
+        layer_height = float(self._preview_layer_height if self._preview_layer_height > 0.0 else 0.2)
+        half_w = np.maximum(widths_arr * 0.5, base_width * 0.25)
+        half_h = max(layer_height * 0.5, layer_height * 0.25)
 
-        mesh = gl.MeshData(
-            vertexes=np.array(vertices, dtype=float),
-            faces=np.array(faces, dtype=np.int32),
+        units = dxy / lengths[:, None]
+        # Extend segment caps to hide seams between adjacent short segments.
+        extension = np.minimum(np.maximum(half_w * 0.6, base_width * 0.08), lengths * 0.45)
+        start_xy = starts[:, :2] - units * extension[:, None]
+        end_xy = ends[:, :2] + units * extension[:, None]
+        perp = np.stack((-units[:, 1], units[:, 0]), axis=1) * half_w[:, None]
+
+        z0_low = starts[:, 2] - half_h
+        z0_high = starts[:, 2] + half_h
+        z1_low = ends[:, 2] - half_h
+        z1_high = ends[:, 2] + half_h
+
+        vertices = np.empty((count, 8, 3), dtype=float)
+        vertices[:, 0, :2] = start_xy + perp
+        vertices[:, 1, :2] = start_xy - perp
+        vertices[:, 2, :2] = end_xy - perp
+        vertices[:, 3, :2] = end_xy + perp
+        vertices[:, 4, :2] = start_xy + perp
+        vertices[:, 5, :2] = start_xy - perp
+        vertices[:, 6, :2] = end_xy - perp
+        vertices[:, 7, :2] = end_xy + perp
+        vertices[:, 0, 2] = z0_low
+        vertices[:, 1, 2] = z0_low
+        vertices[:, 2, 2] = z1_low
+        vertices[:, 3, 2] = z1_low
+        vertices[:, 4, 2] = z0_high
+        vertices[:, 5, 2] = z0_high
+        vertices[:, 6, 2] = z1_high
+        vertices[:, 7, 2] = z1_high
+
+        face_pattern = np.array(
+            [
+                [0, 1, 2],
+                [0, 2, 3],
+                [4, 6, 5],
+                [4, 7, 6],
+                [0, 3, 7],
+                [0, 7, 4],
+                [1, 2, 6],
+                [1, 6, 5],
+                [0, 4, 5],
+                [0, 5, 1],
+                [3, 2, 6],
+                [3, 6, 7],
+            ],
+            dtype=np.int32,
         )
-        mesh.setFaceColors(np.array(face_colors, dtype=float))
-        return mesh
+        offsets = (np.arange(count, dtype=np.int32) * 8).reshape((-1, 1, 1))
+        faces = (face_pattern.reshape((1, 12, 3)) + offsets).reshape((-1, 3))
+
+        return gl.MeshData(
+            vertexes=vertices.reshape((-1, 3)),
+            faces=faces,
+        )
 
     def _ensure_nozzle_item(self):
         if self._nozzle is not None:

@@ -1,0 +1,24 @@
+from __future__ import annotations
+
+# source: profiles/OrcaFilamentLibrary/filament/FDplast/FDplast PLA @base.json
+DATA = {'description': "When printing this filament, there's a risk of warping and low layer adhesion strength. To get better "
+                'results, please refer to this wiki: Printing Tips for High Temp / Engineering materials.',
+ 'filament_cost': ['16'],
+ 'filament_density': ['1.26'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_id': 'FDPLAST04',
+ 'filament_max_volumetric_speed': ['12'],
+ 'filament_vendor': ['FDplast'],
+ 'from': 'system',
+ 'hot_plate_temp': ['65'],
+ 'hot_plate_temp_initial_layer': ['65'],
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'false',
+ 'name': 'FDplast PLA @base',
+ 'nozzle_temperature': ['215'],
+ 'nozzle_temperature_initial_layer': ['215'],
+ 'nozzle_temperature_range_high': ['225'],
+ 'nozzle_temperature_range_low': ['190'],
+ 'textured_plate_temp': ['65'],
+ 'textured_plate_temp_initial_layer': ['65'],
+ 'type': 'filament'}

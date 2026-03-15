@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 
@@ -9,8 +9,8 @@ TESTS = os.path.abspath(os.path.dirname(__file__))
 if TESTS not in sys.path:
     sys.path.insert(0, TESTS)
 
-from slicer.gcode.preview import parse_gcode_preview
-from slicer.gcode.stats import estimate_gcode_stats
+from slicer_v2.legacy_gcode_preview import parse_gcode_preview
+from slicer_v2.legacy_gcode_stats import estimate_gcode_stats
 from harness import BaseTestCase
 
 
@@ -60,7 +60,7 @@ class GCodeExtraTests(BaseTestCase):
 
 
 def _dummy_settings():
-    from slicer.gcode.writer import SliceSettings
+    from slicer_v2.legacy_gcode_writer import SliceSettings
 
     return SliceSettings(
         layer_height=0.2,
@@ -74,3 +74,4 @@ def _dummy_settings():
 
 if __name__ == "__main__":
     unittest.main()
+

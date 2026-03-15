@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/FLSun/process/0.20mm Standard @FLSun V400.json
+DATA = {'compatible_printers': ['FLSun V400 0.4 nozzle'],
+ 'default_acceleration': '5000',
+ 'default_jerk': '9',
+ 'exclude_object': '1',
+ 'from': 'system',
+ 'gap_infill_speed': '200',
+ 'inherits': 'fdm_process_common',
+ 'initial_layer_acceleration': '1000',
+ 'initial_layer_infill_speed': '100',
+ 'initial_layer_speed': '50',
+ 'inner_wall_acceleration': '5000',
+ 'inner_wall_speed': '200',
+ 'instantiation': 'true',
+ 'internal_solid_infill_speed': '200',
+ 'name': '0.20mm Standard @FLSun V400',
+ 'outer_wall_acceleration': '4000',
+ 'outer_wall_speed': '120',
+ 'overhang_1_4_speed': '80',
+ 'setting_id': 'GP004',
+ 'sparse_infill_speed': '250',
+ 'top_surface_acceleration': '3000',
+ 'top_surface_speed': '200',
+ 'travel_acceleration': '5000',
+ 'travel_speed': '400',
+ 'type': 'process'}

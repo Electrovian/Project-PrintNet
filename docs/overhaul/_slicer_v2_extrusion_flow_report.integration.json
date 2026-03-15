@@ -1,0 +1,12 @@
+{
+  "stage_count": 10,
+  "validation_ok": true,
+  "line_count": 11,
+  "extrusion_path_length_mm_total": 48.68629150101525,
+  "extrusion_volume_mm3_total": 3.97490332008122,
+  "estimated_filament_mm": 1.652572765265796,
+  "estimated_mass_g": 0.004928880116900713,
+  "estimated_cost_usd": 0.00011829312280561713,
+  "flow_multiplier": 1.0,
+  "warning_count": 0
+}

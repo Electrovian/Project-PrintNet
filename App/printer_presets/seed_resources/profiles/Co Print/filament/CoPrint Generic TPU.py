@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Co Print/filament/CoPrint Generic TPU.json
+DATA = {'compatible_printers': ['Co Print ChromaSet 0.4 nozzle',
+                         'Co Print ChromaSet 0.4 nozzle - Ender-3 V3',
+                         'Co Print ChromaSet 0.4 nozzle - Ender-3 V3 Plus',
+                         'Co Print ChromaSet 0.4 nozzle fast'],
+ 'fan_max_speed': ['80'],
+ 'fan_min_speed': ['80'],
+ 'filament_deretraction_speed': ['20'],
+ 'filament_flow_ratio': ['0.97'],
+ 'filament_id': 'GFL99',
+ 'filament_retract_when_changing_layer': ['0'],
+ 'filament_retraction_length': ['1.8'],
+ 'filament_retraction_speed': ['20'],
+ 'filament_type': ['TPU'],
+ 'from': 'system',
+ 'hot_plate_temp': ['50'],
+ 'hot_plate_temp_initial_layer': ['50'],
+ 'inherits': 'CoPrint Generic PLA',
+ 'instantiation': 'true',
+ 'name': 'CoPrint Generic TPU',
+ 'nozzle_temperature': ['230'],
+ 'nozzle_temperature_initial_layer': ['230'],
+ 'setting_id': 'GFSA04',
+ 'type': 'filament'}

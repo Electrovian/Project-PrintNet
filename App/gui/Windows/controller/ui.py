@@ -6,14 +6,33 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
+import subprocess
+import sys
 from typing import Any, TYPE_CHECKING
 
 import numpy as np
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from ...i18n import tr
 from ...theme import export_theme, get_theme_name, register_theme, set_theme
+from ...workers import Worker
 from config.defaults import DEFAULTS
-from slicer.gcode.writer import SliceSettings
+from config.printer_profile_lookup import resolve_printer_plate_config
+from config.runtime_printer_state import (
+    RuntimePrinterState,
+    runtime_printer_state_from_defaults,
+    runtime_printer_state_from_profile,
+)
+from slicer_v2.legacy_gcode_writer import (
+    SliceSettings,
+    generate_flow_rate_test,
+    generate_max_flowrate_test,
+    generate_pressure_advance_pattern,
+    generate_retraction_tower,
+    generate_temperature_tower,
+    generate_tolerance_test,
+)
 
 if TYPE_CHECKING:
     UiMixinBase = QtCore.QObject
@@ -25,6 +44,299 @@ class UiMixin(UiMixinBase):
     def __getattr__(self, name: str) -> Any:
         # MainController owns the runtime __getattr__ proxy; this keeps type checkers quiet.
         raise AttributeError(name)
+
+    def _dialog_parent(self):
+        parent = getattr(self, "main", None)
+        return parent if isinstance(parent, QtWidgets.QWidget) else None
+
+    def _use_tk_file_dialog(self) -> bool:
+        if os.name != "nt":
+            return False
+        # Tk dialogs are opt-in; they may still crash on some Windows Python builds.
+        default_flag = "0"
+        flag = str(os.environ.get("EON_USE_TK_FILE_DIALOG", default_flag)).strip().lower()
+        return flag in ("1", "true", "yes", "on")
+
+    def _use_powershell_file_dialog(self) -> bool:
+        if os.name != "nt":
+            return False
+        # Legacy WinForms dialog is opt-in. Native Qt dialog stays default.
+        default_flag = "0"
+        flag = str(os.environ.get("EON_USE_PS_FILE_DIALOG", default_flag)).strip().lower()
+        return flag in ("1", "true", "yes", "on")
+
+    def _use_native_qt_file_dialog(self) -> bool:
+        # Windows should use the native Explorer-style file dialog by default.
+        default_flag = "1" if os.name == "nt" else "0"
+        flag = str(os.environ.get("EON_USE_NATIVE_FILE_DIALOG", default_flag)).strip().lower()
+        return flag in ("1", "true", "yes", "on")
+
+    def _qt_file_dialog_options(self):
+        options = QtWidgets.QFileDialog.Options()
+        if not self._use_native_qt_file_dialog():
+            options |= QtWidgets.QFileDialog.DontUseNativeDialog
+        return options
+
+    def _qt_filter_to_tk(self, file_filter: str):
+        value = str(file_filter or "").strip()
+        if not value:
+            return [("All files", "*.*")]
+        chunks = [part.strip() for part in value.split(";;") if part.strip()]
+        rows = []
+        for chunk in chunks:
+            match = re.match(r"^([^()]+)\(([^()]+)\)$", chunk)
+            if match is None:
+                rows.append((chunk, "*.*"))
+                continue
+            label = match.group(1).strip() or "Files"
+            patterns_raw = match.group(2).strip()
+            patterns = [part.strip() for part in patterns_raw.split() if part.strip()]
+            if not patterns:
+                patterns = ["*.*"]
+            rows.append((label, " ".join(patterns)))
+        if not rows:
+            rows.append(("All files", "*.*"))
+        return rows
+
+    def _qt_filter_to_winforms(self, file_filter: str) -> str:
+        value = str(file_filter or "").strip()
+        if not value:
+            return "All files|*.*"
+        chunks = [part.strip() for part in value.split(";;") if part.strip()]
+        entries: list[str] = []
+        for chunk in chunks:
+            match = re.match(r"^([^()]+)\(([^()]+)\)$", chunk)
+            if match is None:
+                label = chunk or "Files"
+                pattern = "*.*"
+            else:
+                label = match.group(1).strip() or "Files"
+                patterns_raw = match.group(2).strip()
+                parts = [part.strip() for part in patterns_raw.split() if part.strip()]
+                pattern = ";".join(parts) if parts else "*.*"
+            entries.extend([label, pattern])
+        if not entries:
+            entries = ["All files", "*.*"]
+        return "|".join(entries)
+
+    def _ps_open_file_names(self, caption: str, directory: str, file_filter: str):
+        if not self._use_powershell_file_dialog():
+            return None
+        init_dir = str(directory or os.getcwd())
+        wf_filter = self._qt_filter_to_winforms(file_filter)
+        script = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$d=New-Object System.Windows.Forms.OpenFileDialog; "
+            "$d.Title=$args[0]; "
+            "$d.InitialDirectory=$args[1]; "
+            "$d.Filter=$args[2]; "
+            "$d.Multiselect=$true; "
+            "$d.CheckFileExists=$true; "
+            "$d.RestoreDirectory=$true; "
+            "if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){"
+            "$d.FileNames | ForEach-Object { $_ }"
+            "}"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-STA", "-Command", script, str(caption or ""), init_dir, wf_filter],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        except Exception:
+            return None
+        if int(result.returncode) != 0:
+            return None
+        paths = [line.strip() for line in str(result.stdout or "").splitlines() if line.strip()]
+        return paths
+
+    def _ps_open_file_name(self, caption: str, directory: str, file_filter: str):
+        if not self._use_powershell_file_dialog():
+            return None
+        paths = self._ps_open_file_names(caption, directory, file_filter)
+        if paths is None:
+            return None
+        return str(paths[0]) if paths else ""
+
+    def _ps_save_file_name(self, caption: str, directory: str, file_filter: str):
+        if not self._use_powershell_file_dialog():
+            return None
+        init_dir = str(directory or os.getcwd())
+        wf_filter = self._qt_filter_to_winforms(file_filter)
+        script = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$d=New-Object System.Windows.Forms.SaveFileDialog; "
+            "$d.Title=$args[0]; "
+            "$d.InitialDirectory=$args[1]; "
+            "$d.Filter=$args[2]; "
+            "$d.RestoreDirectory=$true; "
+            "if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){"
+            "$d.FileName"
+            "}"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-STA", "-Command", script, str(caption or ""), init_dir, wf_filter],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        except Exception:
+            return None
+        if int(result.returncode) != 0:
+            return None
+        value = str(result.stdout or "").strip()
+        return value if value else ""
+
+    def _tk_open_file_names(self, caption: str, directory: str, file_filter: str):
+        if not self._use_tk_file_dialog():
+            return None
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+        except Exception:
+            return None
+        root = tk.Tk()
+        try:
+            root.withdraw()
+            root.attributes("-topmost", True)
+            root.update()
+            selected = filedialog.askopenfilenames(
+                parent=root,
+                title=str(caption or ""),
+                initialdir=str(directory or os.getcwd()),
+                filetypes=self._qt_filter_to_tk(file_filter),
+            )
+        finally:
+            root.destroy()
+        paths = [str(path) for path in (selected or []) if str(path).strip()]
+        return paths
+
+    def _tk_open_file_name(self, caption: str, directory: str, file_filter: str):
+        if not self._use_tk_file_dialog():
+            return None
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+        except Exception:
+            return None
+        root = tk.Tk()
+        try:
+            root.withdraw()
+            root.attributes("-topmost", True)
+            root.update()
+            selected = filedialog.askopenfilename(
+                parent=root,
+                title=str(caption or ""),
+                initialdir=str(directory or os.getcwd()),
+                filetypes=self._qt_filter_to_tk(file_filter),
+            )
+        finally:
+            root.destroy()
+        value = str(selected or "").strip()
+        return value if value else ""
+
+    def _tk_save_file_name(self, caption: str, directory: str, file_filter: str):
+        if not self._use_tk_file_dialog():
+            return None
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+        except Exception:
+            return None
+        root = tk.Tk()
+        try:
+            root.withdraw()
+            root.attributes("-topmost", True)
+            root.update()
+            selected = filedialog.asksaveasfilename(
+                parent=root,
+                title=str(caption or ""),
+                initialdir=str(directory or os.getcwd()),
+                filetypes=self._qt_filter_to_tk(file_filter),
+            )
+        finally:
+            root.destroy()
+        value = str(selected or "").strip()
+        return value if value else ""
+
+    def _safe_get_open_file_name(
+        self,
+        caption: str,
+        directory: str,
+        file_filter: str,
+    ) -> tuple[str, str]:
+        try:
+            path, selected_filter = QtWidgets.QFileDialog.getOpenFileName(
+                self._dialog_parent(),
+                caption,
+                directory,
+                file_filter,
+                options=self._qt_file_dialog_options(),
+            )
+            return str(path or ""), str(selected_filter or "")
+        except Exception:
+            pass
+        ps_path = self._ps_open_file_name(caption, directory, file_filter)
+        if ps_path is not None:
+            return str(ps_path), str(file_filter or "")
+        tk_path = self._tk_open_file_name(caption, directory, file_filter)
+        if tk_path is not None:
+            return tk_path, str(file_filter or "")
+        return "", str(file_filter or "")
+
+    def _safe_get_open_file_names(
+        self,
+        caption: str,
+        directory: str,
+        file_filter: str,
+    ) -> tuple[list[str], str]:
+        try:
+            paths, selected_filter = QtWidgets.QFileDialog.getOpenFileNames(
+                self._dialog_parent(),
+                caption,
+                directory,
+                file_filter,
+                options=self._qt_file_dialog_options(),
+            )
+            return [str(path) for path in (paths or [])], str(selected_filter or "")
+        except Exception:
+            pass
+        ps_paths = self._ps_open_file_names(caption, directory, file_filter)
+        if ps_paths is not None:
+            return [str(path) for path in ps_paths], str(file_filter or "")
+        tk_paths = self._tk_open_file_names(caption, directory, file_filter)
+        if tk_paths is not None:
+            return tk_paths, str(file_filter or "")
+        return [], str(file_filter or "")
+
+    def _safe_get_save_file_name(
+        self,
+        caption: str,
+        directory: str,
+        file_filter: str,
+    ) -> tuple[str, str]:
+        try:
+            path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
+                self._dialog_parent(),
+                caption,
+                directory,
+                file_filter,
+                options=self._qt_file_dialog_options(),
+            )
+            return str(path or ""), str(selected_filter or "")
+        except Exception:
+            pass
+        ps_path = self._ps_save_file_name(caption, directory, file_filter)
+        if ps_path is not None:
+            return str(ps_path), str(file_filter or "")
+        tk_path = self._tk_save_file_name(caption, directory, file_filter)
+        if tk_path is not None:
+            return tk_path, str(file_filter or "")
+        return "", str(file_filter or "")
 
     # -------------------------------------------------- Model selection/removal
     def _on_model_selected(self, model_id: int):
@@ -255,47 +567,89 @@ class UiMixin(UiMixinBase):
         for mid in ids:
             name = self.viewer.get_model_name(mid) or f"Model {mid}"
             names.append(name)
-        bed = DEFAULTS.get("printer", {}).get("bed_size", (0, 0))
-        max_height = DEFAULTS.get("printer", {}).get("max_height", 0)
+        bed, max_height, _printer_name = self._effective_bed_limits()
         bed_str = f"{bed[0]}x{bed[1]} mm"
         msg = "Warning: " + ", ".join(names) + f" exceed bed {bed_str} or height {max_height} mm."
         self.statusBar().showMessage(msg)
         self._bed_warning_active = True
+
+    def _effective_bed_limits(self) -> tuple[tuple[float, float], float, str]:
+        state = getattr(self, "runtime_printer_state", None)
+        if isinstance(state, RuntimePrinterState):
+            return state.bed_size, float(state.bed_z), str(state.name)
+        defaults = DEFAULTS.get("printer", {})
+        bed_defaults = defaults.get("bed_size", (200.0, 200.0))
+        if not isinstance(bed_defaults, (list, tuple)) or len(bed_defaults) < 2:
+            bed_defaults = (200.0, 200.0)
+        bed_x = float(bed_defaults[0])
+        bed_y = float(bed_defaults[1])
+        bed_z = float(defaults.get("max_height", 200.0))
+        name = str(defaults.get("name", "Printer")).strip() or "Printer"
+        return (bed_x, bed_y), bed_z, name
+
+    def _effective_bed_limits(self) -> tuple[tuple[float, float], float, str]:
+        state = self.__dict__.get("runtime_printer_state")
+        if isinstance(state, RuntimePrinterState):
+            return (
+                (float(state.bed_x), float(state.bed_y)),
+                float(state.bed_z),
+                str(state.name),
+            )
+
+        fallback = runtime_printer_state_from_defaults(DEFAULTS.get("printer", {}))
+        self.runtime_printer_state = fallback
+        return (
+            (float(fallback.bed_x), float(fallback.bed_y)),
+            float(fallback.bed_z),
+            str(fallback.name),
+        )
 
     def _apply_printer_profile(self, printer: dict | None, source: str | None = None):
         if printer is None:
             return
         if hasattr(self, "printer_manager"):
             self.printer_manager.set_active_printer(printer)
-
-        defaults = DEFAULTS.get("printer", {})
-        bed_defaults = defaults.get("bed_size", (200, 200))
-
-        def _float_or(value, fallback):
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                return float(fallback)
-
-        bed_x = _float_or(printer.get("bed_x"), bed_defaults[0] if bed_defaults else 200)
-        bed_y = _float_or(printer.get("bed_y"), bed_defaults[1] if len(bed_defaults) > 1 else 200)
-        bed_z = _float_or(printer.get("bed_z"), defaults.get("max_height", 200))
-        name = str(printer.get("name", defaults.get("name", ""))).strip()
-        DEFAULTS.setdefault("printer", {})["bed_size"] = (bed_x, bed_y)
-        DEFAULTS["printer"]["max_height"] = bed_z
-        if name:
-            DEFAULTS["printer"]["name"] = name
+        existing_state = getattr(self, "runtime_printer_state", None)
+        if not isinstance(existing_state, RuntimePrinterState):
+            existing_state = runtime_printer_state_from_defaults(DEFAULTS.get("printer", {}))
+        self.runtime_printer_state = runtime_printer_state_from_profile(
+            printer,
+            fallback_state=existing_state,
+            source=source or "runtime",
+        )
+        resolved_plate = resolve_printer_plate_config(printer)
+        bed_x = float(resolved_plate.get("bed_x") or self.runtime_printer_state.bed_x)
+        bed_y = float(resolved_plate.get("bed_y") or self.runtime_printer_state.bed_y)
+        bed_z = float(resolved_plate.get("bed_z") or self.runtime_printer_state.bed_z)
+        self.runtime_printer_state = RuntimePrinterState(
+            name=self.runtime_printer_state.name,
+            bed_x=bed_x,
+            bed_y=bed_y,
+            bed_z=bed_z,
+            source=source or "runtime",
+        )
 
         main = self.__dict__.get("main")
-        viewer = main.__dict__.get("viewer") if main is not None else None
+        viewer = self.__dict__.get("viewer")
+        if viewer is None and main is not None:
+            viewer = main.__dict__.get("viewer")
         if viewer is not None and hasattr(viewer, "set_bed_limits"):
             viewer.set_bed_limits((bed_x, bed_y), bed_z)
+        if viewer is not None and hasattr(viewer, "set_bed_visuals"):
+            viewer.set_bed_visuals(
+                texture_path=str(resolved_plate.get("bed_texture_path", "") or ""),
+                model_path=str(resolved_plate.get("bed_model_path", "") or ""),
+            )
         if viewer is not None:
             self._update_bed_warnings()
         self._sync_printer_selection(printer, source=source)
 
     def _sync_printer_selection(self, printer: dict, source: str | None = None):
         name = str(printer.get("name", "")).strip()
+        if not name:
+            state = getattr(self, "runtime_printer_state", None)
+            if isinstance(state, RuntimePrinterState):
+                name = str(state.name).strip()
         if not name:
             return
         if source != "settings" and hasattr(self, "settings_panel"):
@@ -494,8 +848,7 @@ class UiMixin(UiMixinBase):
         dlg.exec_()
 
     def _load_theme_from_file(self):
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self.main,
+        path, _ = self._safe_get_open_file_name(
             "Load Theme",
             "",
             "Theme JSON (*.json);;All files (*.*)",
@@ -536,8 +889,7 @@ class UiMixin(UiMixinBase):
             QtWidgets.QMessageBox.warning(self.main, "Theme", "No theme data available.")
             return
         default_name = f"{get_theme_name()}.json"
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.main,
+        path, _ = self._safe_get_save_file_name(
             "Save Theme",
             default_name,
             "Theme JSON (*.json);;All files (*.*)",
@@ -677,6 +1029,34 @@ class UiMixin(UiMixinBase):
     def _on_arrange_reset(self):
         self._sync_popups()
 
+    def _on_plate_remove_requested(self):
+        QtWidgets.QMessageBox.information(
+            self.main,
+            tr("viewer.plate.remove.title", "Plate"),
+            tr(
+                "viewer.plate.remove.single_plate_only",
+                "Single-plate mode is active. The current plate cannot be removed.",
+            ),
+        )
+
+    def _on_plate_lock_changed(self, locked: bool):
+        if bool(locked):
+            self.statusBar().showMessage(
+                tr("viewer.plate.locked_status", "Current plate is locked.")
+            )
+        else:
+            self.statusBar().showMessage(
+                tr("viewer.plate.unlocked_status", "Current plate is unlocked.")
+            )
+
+    def _on_plate_name_changed(self, plate_name: str):
+        text = str(plate_name or "").strip() or "01"
+        self.statusBar().showMessage(
+            tr("viewer.plate.renamed_status", "Plate renamed to {name}.", name=text)
+        )
+        if hasattr(self, "_invalidate_slice_cache"):
+            self._invalidate_slice_cache(clear_preview=False)
+
     def _set_labels_visible(self, visible: bool):
         self._labels_visible = bool(visible)
         self.viewer.set_labels_visible(self._labels_visible)
@@ -686,26 +1066,41 @@ class UiMixin(UiMixinBase):
     def _on_mode_tab_changed(self, button):
         if button is None:
             return
-        label = button.text().strip().lower()
-        if label:
-            self._activate_mode(label)
+        mode_key = str(button.property("mode_key") or "").strip().lower()
+        if not mode_key:
+            mode_key = button.text().strip().lower()
+        if mode_key:
+            self._activate_mode(mode_key)
 
     def _activate_mode(self, mode: str):
         mode = (mode or "").strip().lower()
         if not mode:
             return
+        mode = {
+            "project": "files",
+            "calibration": "control",
+        }.get(mode, mode)
+        if mode != "preview":
+            prev = getattr(self, "_preview_wireframe_prev", None)
+            if prev is not None and hasattr(self.viewer, "set_wireframe_enabled"):
+                self.viewer.set_wireframe_enabled(prev)
+            self._preview_wireframe_prev = None
         if mode == "prepare":
             self.prepare_view.show()
             self.preview_view.hide()
             self._central_stack.setCurrentWidget(self.viewer)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(True)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(True)
             if hasattr(self.viewer, "set_labels_visible"):
                 self.viewer.set_labels_visible(self._labels_visible)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
                 self.viewer.set_models_visible(True)
+            if hasattr(self.viewer, "set_models_preview_alpha"):
+                self.viewer.set_models_preview_alpha(1.0)
             if hasattr(self.viewer, "set_platform_visible"):
                 self.viewer.set_platform_visible(True)
             if hasattr(self.viewer, "set_nozzle_visible"):
@@ -721,14 +1116,24 @@ class UiMixin(UiMixinBase):
             self.preview_view.show()
             self._central_stack.setCurrentWidget(self.viewer)
             self._auto_slice_prepare()
+            if hasattr(self.viewer, "get_wireframe_enabled"):
+                if getattr(self, "_preview_wireframe_prev", None) is None:
+                    self._preview_wireframe_prev = self.viewer.get_wireframe_enabled()
+            if hasattr(self.viewer, "set_wireframe_enabled"):
+                # Keep preview focused on emitted toolpaths, not model mesh edges.
+                self.viewer.set_wireframe_enabled(False)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(False)
             if hasattr(self.viewer, "set_labels_visible"):
                 self.viewer.set_labels_visible(False)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(True)
             if hasattr(self.viewer, "set_models_visible"):
                 self.viewer.set_models_visible(False)
+            if hasattr(self.viewer, "set_models_preview_alpha"):
+                self.viewer.set_models_preview_alpha(1.0)
             if hasattr(self.viewer, "set_print_stats_visible"):
                 self.viewer.set_print_stats_visible(False)
             if hasattr(self.viewer, "set_preview_object_visible"):
@@ -742,6 +1147,8 @@ class UiMixin(UiMixinBase):
             self._central_stack.setCurrentWidget(self.device_view)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(False)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
@@ -756,6 +1163,8 @@ class UiMixin(UiMixinBase):
             self._central_stack.setCurrentWidget(self.control_view)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(False)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
@@ -770,6 +1179,8 @@ class UiMixin(UiMixinBase):
             self._central_stack.setCurrentWidget(self.files_view)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(False)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
@@ -785,6 +1196,8 @@ class UiMixin(UiMixinBase):
             self._central_stack.setCurrentWidget(self.activity_view)
             if hasattr(self.viewer, "set_interaction_enabled"):
                 self.viewer.set_interaction_enabled(False)
+            if hasattr(self.viewer, "set_plate_overlay_visible"):
+                self.viewer.set_plate_overlay_visible(False)
             if hasattr(self.viewer, "set_preview_visible"):
                 self.viewer.set_preview_visible(False)
             if hasattr(self.viewer, "set_models_visible"):
@@ -793,6 +1206,8 @@ class UiMixin(UiMixinBase):
                 self.viewer.set_print_stats_visible(False)
             if hasattr(self.viewer, "set_preview_object_visible"):
                 self.viewer.set_preview_object_visible(False)
+            if hasattr(self, "_request_activity_refresh"):
+                self._request_activity_refresh(force=True)
         else:
             return
         self._active_mode = mode
@@ -805,8 +1220,10 @@ class UiMixin(UiMixinBase):
         if not self.viewer.get_model_ids():
             return
         settings = self.settings_panel.to_settings()
-        signature = self._build_slice_signature(settings)
-        if signature and signature == self._last_slice_signature and self._last_gcode_path:
+        reusable = None
+        if hasattr(self, "_resolve_reusable_gcode_path"):
+            reusable = self._resolve_reusable_gcode_path(settings)
+        if reusable:
             return
         self._slice_model(settings,
                           activate_preview=False,
@@ -816,10 +1233,357 @@ class UiMixin(UiMixinBase):
     def _open_device_view(self):
         if hasattr(self, "_mode_tabs"):
             for btn in self._mode_tabs:
-                if btn.text().strip().lower() == "device":
+                mode_key = str(btn.property("mode_key") or "").strip().lower()
+                label_key = btn.text().strip().lower()
+                if mode_key == "device" or label_key == "device":
                     btn.setChecked(True)
                     break
         self._activate_mode("device")
+
+    def _refresh_printer_views(self):
+        manager = getattr(self, "printer_manager", None)
+        if manager is None:
+            return
+        printers = [dict(item) for item in getattr(manager, "printers", []) if isinstance(item, dict)]
+        connected = [row for row in printers if not bool(row.get("catalog_only", False))]
+        if hasattr(self, "main"):
+            self.main.connected_printers = connected
+        if hasattr(self, "device_view"):
+            self.device_view.set_printers(connected)
+        if hasattr(self, "control_view"):
+            self.control_view.set_printers(connected)
+
+    def _run_background_task(
+        self,
+        *,
+        title: str,
+        label: str,
+        fn,
+        args: tuple = (),
+        kwargs: dict | None = None,
+        on_finished=None,
+        on_error=None,
+    ):
+        dialog = self._busy_dialog(title, label)
+        dialog.show()
+
+        worker = Worker(fn, *(args or ()), **(kwargs or {}))
+
+        def _finish(result):
+            dialog.close()
+            if callable(on_finished):
+                on_finished(result)
+
+        def _error(message: str):
+            dialog.close()
+            if callable(on_error):
+                on_error(message)
+                return
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.error.title", "Add Printer"),
+                str(message or tr("onboarding.error.unknown", "Unable to save printer.")),
+            )
+
+        worker.signals.finished.connect(_finish)
+        worker.signals.error.connect(_error)
+        self._start_worker(worker)
+
+    def _submit_onboarding_add_printer(self, manager, printer: dict):
+        self._run_background_task(
+            title=tr("onboarding.title", "Add Printer"),
+            label=tr("onboarding.saving", "Saving printer..."),
+            fn=manager.onboarding_add_printer,
+            args=(dict(printer or {}),),
+            on_finished=lambda result: self._finalize_onboarding_result(
+                result,
+                success_message=tr("onboarding.saved", "Printer saved."),
+            ),
+            on_error=lambda message: QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.error.title", "Add Printer"),
+                str(message or tr("onboarding.error.unknown", "Unable to save printer.")),
+            ),
+        )
+
+    def _on_device_add_printer_requested(self):
+        manager = getattr(self, "printer_manager", None)
+        if manager is None:
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.error.title", "Add Printer"),
+                tr("onboarding.error.manager_missing", "Printer manager is unavailable."),
+            )
+            return
+
+        methods = [
+            ("wifi", tr("onboarding.method.wifi", "Wi-Fi scan")),
+            ("bluetooth", tr("onboarding.method.bluetooth", "Bluetooth pairing")),
+            ("manual", tr("onboarding.method.manual", "Manual endpoint")),
+        ]
+        labels = [label for _key, label in methods]
+        selection, ok = QtWidgets.QInputDialog.getItem(
+            self.main,
+            tr("onboarding.title", "Add Printer"),
+            tr("onboarding.prompt.method", "Choose onboarding method:"),
+            labels,
+            0,
+            False,
+        )
+        if not ok:
+            return
+        selected_key = methods[labels.index(selection)][0]
+        if selected_key == "wifi":
+            self._run_wifi_onboarding(manager)
+            return
+        if selected_key == "bluetooth":
+            self._run_bluetooth_onboarding(manager)
+            return
+        self._run_manual_onboarding(manager)
+
+    def _run_wifi_onboarding(self, manager):
+        default_cidr = str(os.environ.get("EON_WIFI_SCAN_CIDR", "192.168.1.0/24")).strip() or "192.168.1.0/24"
+        cidr, ok = QtWidgets.QInputDialog.getText(
+            self.main,
+            tr("onboarding.wifi.title", "Wi-Fi Scan"),
+            tr("onboarding.wifi.prompt_cidr", "Enter network CIDR:"),
+            text=default_cidr,
+        )
+        if not ok:
+            return
+        cidr_value = str(cidr).strip()
+
+        def _on_discovery_finished(report):
+            payload = report if isinstance(report, dict) else {}
+            if not bool(payload.get("ok", False)):
+                QtWidgets.QMessageBox.warning(
+                    self.main,
+                    tr("onboarding.error.title", "Add Printer"),
+                    str(payload.get("message", tr("onboarding.error.unknown", "Wi-Fi scan failed."))),
+                )
+                return
+            discovered = [dict(item) for item in payload.get("printers", []) if isinstance(item, dict)]
+            if not discovered:
+                QtWidgets.QMessageBox.information(
+                    self.main,
+                    tr("onboarding.wifi.title", "Wi-Fi Scan"),
+                    tr("onboarding.wifi.none_found", "No compatible printers were detected."),
+                )
+                return
+            labels = [str(item.get("name", "Printer")) for item in discovered]
+            choice, selected = QtWidgets.QInputDialog.getItem(
+                self.main,
+                tr("onboarding.wifi.title", "Wi-Fi Scan"),
+                tr("onboarding.wifi.select_printer", "Select discovered printer:"),
+                labels,
+                0,
+                False,
+            )
+            if not selected:
+                return
+            printer = discovered[labels.index(choice)]
+            self._submit_onboarding_add_printer(manager, printer)
+
+        self._run_background_task(
+            title=tr("onboarding.wifi.title", "Wi-Fi Scan"),
+            label=tr("onboarding.wifi.scanning", "Scanning local network..."),
+            fn=manager.discover_local_wifi_printers_from_cidr,
+            args=(cidr_value,),
+            kwargs={"host_limit": 64, "max_targets": 256},
+            on_finished=_on_discovery_finished,
+            on_error=lambda message: QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.error.title", "Add Printer"),
+                str(message or tr("onboarding.error.unknown", "Wi-Fi scan failed.")),
+            ),
+        )
+
+    def _run_bluetooth_onboarding(self, manager):
+        def _on_discovery_finished(report):
+            payload = report if isinstance(report, dict) else {}
+            if not bool(payload.get("ok", False)):
+                message = str(payload.get("message", tr("onboarding.bluetooth.unavailable", "Bluetooth unavailable.")))
+                QtWidgets.QMessageBox.warning(self.main, tr("onboarding.bluetooth.title", "Bluetooth Pairing"), message)
+                return
+            devices = [dict(item) for item in payload.get("devices", []) if isinstance(item, dict)]
+            if not devices:
+                QtWidgets.QMessageBox.information(
+                    self.main,
+                    tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                    tr("onboarding.bluetooth.none_found", "No Bluetooth devices were discovered."),
+                )
+                return
+            labels = [f"{item.get('name', 'Device')} ({item.get('id', '')})" for item in devices]
+            choice, selected = QtWidgets.QInputDialog.getItem(
+                self.main,
+                tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                tr("onboarding.bluetooth.select_device", "Select Bluetooth device:"),
+                labels,
+                0,
+                False,
+            )
+            if not selected:
+                return
+            device = devices[labels.index(choice)]
+            self._run_background_task(
+                title=tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                label=tr("onboarding.bluetooth.pairing", "Pairing device..."),
+                fn=manager.pair_bluetooth_printer,
+                kwargs={"device_id": str(device.get("id", "")).strip()},
+                on_finished=lambda pair_result: (
+                    QtWidgets.QMessageBox.information(
+                        self.main,
+                        tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                        tr("onboarding.bluetooth.paired", "Device paired successfully."),
+                    )
+                    if bool((pair_result or {}).get("ok", False))
+                    else QtWidgets.QMessageBox.warning(
+                        self.main,
+                        tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                        str((pair_result or {}).get("message", tr("onboarding.bluetooth.pair_failed", "Unable to pair device."))),
+                    )
+                ),
+                on_error=lambda message: QtWidgets.QMessageBox.warning(
+                    self.main,
+                    tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                    str(message or tr("onboarding.bluetooth.pair_failed", "Unable to pair device.")),
+                ),
+            )
+
+        self._run_background_task(
+            title=tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+            label=tr("onboarding.bluetooth.scanning", "Scanning Bluetooth devices..."),
+            fn=manager.discover_bluetooth_printers,
+            kwargs={"timeout_s": 6.0},
+            on_finished=_on_discovery_finished,
+            on_error=lambda message: QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.bluetooth.title", "Bluetooth Pairing"),
+                str(message or tr("onboarding.bluetooth.unavailable", "Bluetooth unavailable.")),
+            ),
+        )
+
+    def _run_manual_onboarding(self, manager):
+        name, ok = QtWidgets.QInputDialog.getText(
+            self.main,
+            tr("onboarding.manual.title", "Manual Printer"),
+            tr("onboarding.manual.prompt_name", "Printer name:"),
+            text=tr("onboarding.manual.default_name", "Manual Printer"),
+        )
+        if not ok:
+            return
+        connector_types = ["octoprint", "moonraker", "prusalink", "bambu_lan", "creality", "local_file"]
+        connector, ok = QtWidgets.QInputDialog.getItem(
+            self.main,
+            tr("onboarding.manual.title", "Manual Printer"),
+            tr("onboarding.manual.prompt_connector", "Connector type:"),
+            connector_types,
+            0,
+            False,
+        )
+        if not ok:
+            return
+        endpoint, ok = QtWidgets.QInputDialog.getText(
+            self.main,
+            tr("onboarding.manual.title", "Manual Printer"),
+            tr("onboarding.manual.prompt_endpoint", "Endpoint URL:"),
+            text="http://",
+        )
+        if not ok:
+            return
+        token, _ = QtWidgets.QInputDialog.getText(
+            self.main,
+            tr("onboarding.manual.title", "Manual Printer"),
+            tr("onboarding.manual.prompt_token", "API token (optional):"),
+            QtWidgets.QLineEdit.Normal,
+            "",
+        )
+        printer = {
+            "name": str(name).strip() or tr("onboarding.manual.default_name", "Manual Printer"),
+            "connector_type": str(connector).strip().lower(),
+            "endpoint": str(endpoint).strip(),
+            "api_key": str(token).strip(),
+        }
+
+        def _on_test_done(test_result):
+            payload = test_result if isinstance(test_result, dict) else {}
+            if not bool(payload.get("ok", False)):
+                QtWidgets.QMessageBox.warning(
+                    self.main,
+                    tr("onboarding.manual.title", "Manual Printer"),
+                    str(payload.get("message", tr("onboarding.manual.health_failed", "Health test failed."))),
+                )
+                return
+            self._submit_onboarding_add_printer(manager, printer)
+
+        self._run_background_task(
+            title=tr("onboarding.manual.title", "Manual Printer"),
+            label=tr("onboarding.manual.testing", "Testing endpoint..."),
+            fn=manager.test_manual_endpoint,
+            kwargs={
+                "connector_type": connector,
+                "endpoint": str(endpoint).strip(),
+                "name": str(name).strip(),
+                "credentials": {"api_key": str(token).strip()},
+            },
+            on_finished=_on_test_done,
+            on_error=lambda message: QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.manual.title", "Manual Printer"),
+                str(message or tr("onboarding.manual.health_failed", "Health test failed.")),
+            ),
+        )
+
+    def _finalize_onboarding_result(self, result, *, success_message: str):
+        if not isinstance(result, dict):
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("onboarding.error.title", "Add Printer"),
+                tr("onboarding.error.unknown", "Unable to save printer."),
+            )
+            return
+        if not bool(result.get("ok", False)):
+            diagnostic = result.get("diagnostic", {})
+            if isinstance(diagnostic, dict) and diagnostic.get("message"):
+                message = str(diagnostic.get("message"))
+            else:
+                message = str(result.get("message", tr("onboarding.error.unknown", "Unable to save printer.")))
+            QtWidgets.QMessageBox.warning(self.main, tr("onboarding.error.title", "Add Printer"), message)
+            return
+        self._refresh_printer_views()
+        QtWidgets.QMessageBox.information(
+            self.main,
+            tr("onboarding.title", "Add Printer"),
+            success_message,
+        )
+
+    def _on_device_diagnostics_requested(self, printer: dict | None):
+        manager = getattr(self, "printer_manager", None)
+        if manager is None or not isinstance(printer, dict):
+            return
+        report = manager.run_connection_diagnostics(printer)
+        ok = bool(report.get("ok", False))
+        message = str(report.get("message", "")).strip()
+        if not message and ok:
+            message = tr("diagnostics.ok", "Connection diagnostics passed.")
+        if not message:
+            message = tr("diagnostics.failed", "Connection diagnostics failed.")
+        hints = []
+        upper = message.upper()
+        if "API_KEY_REQUIRED" in upper or "TOKEN_REQUIRED" in upper:
+            hints.append(tr("diagnostics.hint.credentials", "Check API token credentials and keychain entries."))
+        if "REQUEST_FAILED" in upper or "UNREACHABLE" in upper or "HTTP_" in upper:
+            hints.append(tr("diagnostics.hint.network", "Verify network reachability, firewall, and endpoint URL."))
+        if "CONNECTOR_UNSUPPORTED" in upper:
+            hints.append(tr("diagnostics.hint.connector", "Select a supported connector/protocol."))
+        detail_lines = [message]
+        for hint in hints:
+            detail_lines.append(f"- {hint}")
+        detail = "\n".join(detail_lines)
+        if ok:
+            QtWidgets.QMessageBox.information(self.main, tr("diagnostics.title", "Connection Diagnostics"), detail)
+        else:
+            QtWidgets.QMessageBox.warning(self.main, tr("diagnostics.title", "Connection Diagnostics"), detail)
 
     def _switch_mode_tab(self):
         if not hasattr(self, "_mode_tabs"):
@@ -950,6 +1714,8 @@ class UiMixin(UiMixinBase):
             self.viewer.set_selected_models(new_ids, emit_signal=False)
             self._sync_popups()
         self._refresh_files_view()
+        if hasattr(self, "_invalidate_slice_cache"):
+            self._invalidate_slice_cache(clear_preview=True)
         return new_ids
 
     def _remove_models(self, model_ids):
@@ -1145,6 +1911,8 @@ class UiMixin(UiMixinBase):
             self._undo_in_progress = False
         self._update_undo_redo_state()
         self._refresh_files_view()
+        if hasattr(self, "_invalidate_slice_cache"):
+            self._invalidate_slice_cache(clear_preview=True)
 
     def _undo(self):
         if len(self._undo_stack) <= 1:
@@ -1209,6 +1977,341 @@ class UiMixin(UiMixinBase):
             self.viewer.set_wireframe_enabled(enabled)
         state = "on" if enabled else "off"
         self.statusBar().showMessage(f"Wireframe {state}")
+
+    def _show_3dconnexion_dialog(self):
+        url = "https://3dconnexion.com/us/drivers/"
+        reply = QtWidgets.QMessageBox.question(
+            self.main,
+            "3Dconnexion",
+            "3Dconnexion devices use the system driver.\n"
+            "Open the driver download page?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply == QtWidgets.QMessageBox.Yes:
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
+
+    def _toggle_overhang(self, checked: bool):
+        try:
+            settings = self.settings_panel.to_settings()
+            angle = float(getattr(settings, "overhang_angle", 45.0))
+        except Exception:
+            angle = SliceSettings().overhang_angle
+        if hasattr(self.viewer, "set_overhang_visible"):
+            self.viewer.set_overhang_visible(bool(checked), angle=angle)
+        state = "on" if checked else "off"
+        self.statusBar().showMessage(f"Overhang view {state}")
+
+    def _open_config_folder(self):
+        path = self._app_config_dir()
+        os.makedirs(path, exist_ok=True)
+        self._open_path(path, "Configuration Folder")
+
+    def _check_for_updates(self):
+        url = "https://github.com/Electrovian/Project-EON-OpenSlicer/releases"
+        self._open_url(url, "Updates")
+
+    def _open_log_view(self):
+        if hasattr(self.main, "activity_logger") and self.main.activity_logger is not None:
+            path = self.main.activity_logger.log_dir
+        else:
+            path = os.path.join(self._project_root(), "logs")
+        os.makedirs(path, exist_ok=True)
+        self._open_path(path, "Logs")
+
+    def _open_user_guide(self):
+        base_dir = self._project_root()
+        candidates = [
+            os.path.join(base_dir, "README.md"),
+            os.path.join(base_dir, "Mobile", "MOBILE_DEPLOYMENT.md"),
+        ]
+        self._open_first_existing(candidates, "User Guide")
+
+    def _open_user_course(self):
+        base_dir = self._project_root()
+        candidates = [
+            os.path.join(base_dir, "Research", "Read.me"),
+            os.path.join(base_dir, "README.md"),
+        ]
+        self._open_first_existing(candidates, "User Course")
+
+    def _open_about_dialog(self):
+        version = self._read_version()
+        if not version:
+            version = "0.0.0"
+        QtWidgets.QMessageBox.information(
+            self.main,
+            "About EON-OpenSlicer",
+            f"EON-OpenSlicer\nVersion {version}\n\n"
+            "A centralized 3D printing lab management system.",
+        )
+
+    def _open_calibration_tutorial(self):
+        self._open_user_guide()
+
+    def _calibrate_temperature(self):
+        fields = [
+            {"key": "start_temp", "label": "Start temp (C)", "value": 220, "min": 120, "max": 320, "step": 5, "decimals": 0},
+            {"key": "end_temp", "label": "End temp (C)", "value": 190, "min": 120, "max": 320, "step": 5, "decimals": 0},
+            {"key": "step", "label": "Step (C)", "value": -5, "min": -30, "max": 30, "step": 1, "decimals": 0},
+            {"key": "block_height", "label": "Block height (mm)", "value": 5.0, "min": 1.0, "max": 30.0, "step": 0.5, "decimals": 1},
+            {"key": "tower_size", "label": "Tower size (mm)", "value": 20.0, "min": 5.0, "max": 60.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Temperature Tower", fields)
+        if params is None:
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_temperature_tower(
+            settings,
+            params["start_temp"],
+            params["end_temp"],
+            params["step"],
+            params["block_height"],
+            params["tower_size"],
+        )
+        self._write_calibration_gcode("temperature_tower.gcode", gcode, settings)
+
+    def _calibrate_flow_rate(self):
+        fields = [
+            {"key": "start_percent", "label": "Start flow (%)", "value": 90, "min": 50, "max": 150, "step": 1, "decimals": 0},
+            {"key": "end_percent", "label": "End flow (%)", "value": 110, "min": 50, "max": 150, "step": 1, "decimals": 0},
+            {"key": "step", "label": "Step (%)", "value": 5, "min": 1, "max": 20, "step": 1, "decimals": 0},
+            {"key": "block_height", "label": "Block height (mm)", "value": 2.0, "min": 0.4, "max": 10.0, "step": 0.2, "decimals": 1},
+            {"key": "square_size", "label": "Square size (mm)", "value": 20.0, "min": 5.0, "max": 60.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Flow Rate Test", fields)
+        if params is None:
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_flow_rate_test(
+            settings,
+            params["start_percent"],
+            params["end_percent"],
+            params["step"],
+            params["block_height"],
+            params["square_size"],
+        )
+        self._write_calibration_gcode("flow_rate_test.gcode", gcode, settings)
+
+    def _calibrate_pressure_advance(self):
+        fields = [
+            {"key": "start_value", "label": "Start value", "value": 0.0, "min": 0.0, "max": 1.0, "step": 0.01, "decimals": 3},
+            {"key": "end_value", "label": "End value", "value": 0.2, "min": 0.0, "max": 1.0, "step": 0.01, "decimals": 3},
+            {"key": "step", "label": "Step", "value": 0.02, "min": 0.005, "max": 0.2, "step": 0.005, "decimals": 3},
+            {"key": "line_length", "label": "Line length (mm)", "value": 80.0, "min": 20.0, "max": 200.0, "step": 5.0, "decimals": 1},
+            {"key": "line_count", "label": "Line count", "value": 5, "min": 1, "max": 20, "step": 1, "decimals": 0},
+            {"key": "spacing", "label": "Spacing (mm)", "value": 5.0, "min": 1.0, "max": 20.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Pressure Advance", fields)
+        if params is None:
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_pressure_advance_pattern(
+            settings,
+            params["start_value"],
+            params["end_value"],
+            params["step"],
+            params["line_length"],
+            int(params["line_count"]),
+            params["spacing"],
+        )
+        self._write_calibration_gcode("pressure_advance.gcode", gcode, settings)
+
+    def _calibrate_retraction(self):
+        fields = [
+            {"key": "start_distance", "label": "Start distance (mm)", "value": 0.4, "min": 0.0, "max": 10.0, "step": 0.1, "decimals": 2},
+            {"key": "end_distance", "label": "End distance (mm)", "value": 2.0, "min": 0.0, "max": 10.0, "step": 0.1, "decimals": 2},
+            {"key": "step", "label": "Step (mm)", "value": 0.2, "min": 0.05, "max": 2.0, "step": 0.05, "decimals": 2},
+            {"key": "block_height", "label": "Block height (mm)", "value": 5.0, "min": 1.0, "max": 30.0, "step": 0.5, "decimals": 1},
+            {"key": "tower_size", "label": "Tower size (mm)", "value": 20.0, "min": 5.0, "max": 60.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Retraction Test", fields)
+        if params is None:
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_retraction_tower(
+            settings,
+            params["start_distance"],
+            params["end_distance"],
+            params["step"],
+            params["block_height"],
+            params["tower_size"],
+        )
+        self._write_calibration_gcode("retraction_tower.gcode", gcode, settings)
+
+    def _calibrate_tolerance(self):
+        fields = [
+            {"key": "sizes", "label": "Sizes (comma-separated mm)", "value": "5, 10, 15", "type": "text"},
+            {"key": "spacing", "label": "Spacing (mm)", "value": 5.0, "min": 1.0, "max": 30.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Tolerance Test", fields)
+        if params is None:
+            return
+        try:
+            sizes = [float(val.strip()) for val in str(params["sizes"]).split(",") if val.strip()]
+        except Exception:
+            QtWidgets.QMessageBox.warning(self.main, "Tolerance Test", "Invalid sizes list.")
+            return
+        if not sizes:
+            QtWidgets.QMessageBox.warning(self.main, "Tolerance Test", "Enter at least one size.")
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_tolerance_test(settings, sizes, params["spacing"])
+        self._write_calibration_gcode("tolerance_test.gcode", gcode, settings)
+
+    def _calibrate_max_flowrate(self):
+        fields = [
+            {"key": "start_speed", "label": "Start speed (mm/s)", "value": 30, "min": 5, "max": 300, "step": 5, "decimals": 0},
+            {"key": "end_speed", "label": "End speed (mm/s)", "value": 120, "min": 5, "max": 300, "step": 5, "decimals": 0},
+            {"key": "step", "label": "Step (mm/s)", "value": 10, "min": 1, "max": 100, "step": 1, "decimals": 0},
+            {"key": "line_length", "label": "Line length (mm)", "value": 80.0, "min": 20.0, "max": 200.0, "step": 5.0, "decimals": 1},
+            {"key": "line_count", "label": "Line count", "value": 5, "min": 1, "max": 20, "step": 1, "decimals": 0},
+            {"key": "spacing", "label": "Spacing (mm)", "value": 5.0, "min": 1.0, "max": 20.0, "step": 1.0, "decimals": 1},
+        ]
+        params = self._prompt_calibration_params("Max Flowrate Test", fields)
+        if params is None:
+            return
+        settings = self.settings_panel.to_settings()
+        gcode = generate_max_flowrate_test(
+            settings,
+            params["start_speed"],
+            params["end_speed"],
+            params["step"],
+            params["line_length"],
+            int(params["line_count"]),
+            params["spacing"],
+        )
+        self._write_calibration_gcode("max_flowrate_test.gcode", gcode, settings)
+
+    def _prompt_calibration_params(self, title: str, fields: list[dict]):
+        dlg = QtWidgets.QDialog(self.main)
+        dlg.setWindowTitle(title)
+        dlg.setModal(True)
+        layout = QtWidgets.QVBoxLayout(dlg)
+        form = QtWidgets.QFormLayout()
+        layout.addLayout(form)
+
+        widgets = {}
+        for field in fields:
+            key = field.get("key")
+            label = field.get("label", key)
+            field_type = field.get("type", "float")
+            if field_type == "text":
+                widget = QtWidgets.QLineEdit(dlg)
+                widget.setText(str(field.get("value", "")))
+            else:
+                if field.get("decimals", 0) == 0:
+                    widget = QtWidgets.QSpinBox(dlg)
+                    widget.setRange(int(field.get("min", 0)), int(field.get("max", 9999)))
+                    widget.setSingleStep(int(field.get("step", 1)))
+                    widget.setValue(int(field.get("value", 0)))
+                else:
+                    widget = QtWidgets.QDoubleSpinBox(dlg)
+                    widget.setDecimals(int(field.get("decimals", 2)))
+                    widget.setRange(float(field.get("min", -9999)), float(field.get("max", 9999)))
+                    widget.setSingleStep(float(field.get("step", 1.0)))
+                    widget.setValue(float(field.get("value", 0.0)))
+            form.addRow(QtWidgets.QLabel(str(label)), widget)
+            widgets[key] = widget
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, parent=dlg
+        )
+        layout.addWidget(buttons)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
+            return None
+        values = {}
+        for field in fields:
+            key = field.get("key")
+            widget = widgets.get(key)
+            if widget is None:
+                continue
+            if isinstance(widget, QtWidgets.QLineEdit):
+                values[key] = widget.text().strip()
+            else:
+                values[key] = widget.value()
+        return values
+
+    def _write_calibration_gcode(self, filename: str, gcode: str, settings: SliceSettings):
+        suggested_dir = os.getcwd()
+        if self._last_gcode_path:
+            suggested_dir = os.path.dirname(self._last_gcode_path)
+        suggested = os.path.join(suggested_dir, filename)
+        out_path, _ = self._safe_get_save_file_name(
+            "Save Calibration G-code",
+            suggested,
+            "G-code files (*.gcode);;All files (*.*)",
+        )
+        if not out_path:
+            return
+        if not out_path.lower().endswith(".gcode"):
+            out_path = f"{out_path}.gcode"
+        try:
+            with open(out_path, "w", encoding="utf-8") as handle:
+                handle.write(gcode)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self.main, "Calibration", f"Failed to write gcode:\n{exc}")
+            return
+        self._last_gcode_path = out_path
+        if hasattr(self, "_analyze_gcode") and hasattr(self, "_update_preview_from_gcode"):
+            stats = self._analyze_gcode(out_path, settings)
+            self._update_preview_from_gcode(out_path, stats)
+            self._activate_mode("preview")
+        self.statusBar().showMessage(f"Saved calibration G-code to {out_path}")
+
+    def _open_url(self, url: str, title: str):
+        ok = QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
+        if not ok:
+            QtWidgets.QMessageBox.warning(self.main, title, f"Unable to open:\n{url}")
+
+    def _open_path(self, path: str, title: str):
+        ok = QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
+        if not ok:
+            QtWidgets.QMessageBox.warning(self.main, title, f"Unable to open:\n{path}")
+
+    def _open_first_existing(self, paths: list[str], title: str):
+        for path in paths:
+            if os.path.exists(path):
+                return self._open_path(os.path.abspath(path), title)
+        QtWidgets.QMessageBox.warning(self.main, title, "No documentation found.")
+
+    def _app_config_dir(self) -> str:
+        base = QtCore.QStandardPaths.writableLocation(QtCore.QStandardPaths.AppConfigLocation)
+        if not base:
+            base = os.path.join(os.path.expanduser("~"), ".eon_openslicer")
+        return os.path.join(base, "EON-OpenSlicer")
+
+    def _project_root(self) -> str:
+        current = os.path.abspath(os.path.dirname(__file__))
+        for _ in range(10):
+            if os.path.isdir(os.path.join(current, ".git")):
+                return current
+            has_app = os.path.isdir(os.path.join(current, "App"))
+            has_website = os.path.isdir(os.path.join(current, "Website"))
+            if has_app and has_website:
+                return current
+            parent = os.path.dirname(current)
+            if parent == current:
+                break
+            current = parent
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
+
+    def _read_version(self) -> str | None:
+        init_path = os.path.join(self._project_root(), "App", "__init__.py")
+        if not os.path.exists(init_path):
+            return None
+        try:
+            with open(init_path, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    if line.strip().startswith("__version__"):
+                        parts = line.split("=", 1)
+                        if len(parts) > 1:
+                            return parts[1].strip().strip("\"' ")
+        except Exception:
+            return None
+        return None
 
     def _reset_window_layout(self):
         if hasattr(self, "_model_dock"):
