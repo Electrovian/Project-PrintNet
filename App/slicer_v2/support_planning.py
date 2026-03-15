@@ -296,10 +296,14 @@ def _allowable_overhang_offset_mm(layer_height_mm: float, threshold_angle_deg: f
     return float(max(0.0, layer_height / tangent))
 
 
-def _point_supported_with_offset(point: Point2, lower_islands: Sequence[Island], allowed_offset_mm: float) -> bool:
+def _point_supported_direct(point: Point2, lower_islands: Sequence[Island]) -> bool:
     for lower in lower_islands:
         if lower.contains_point(point, include_boundary=True):
             return True
+    return False
+
+
+def _point_supported_with_offset(point: Point2, lower_islands: Sequence[Island], allowed_offset_mm: float) -> bool:
     if allowed_offset_mm <= EPSILON:
         return False
     offsets = (
@@ -344,8 +348,9 @@ def _estimate_vertical_supported_ratio_scanline(
     x_samples = max(1, int(ceil(width / step)))
     y_samples = max(1, int(ceil(height / step)))
 
-    supported = 0
+    supported = 0.0
     inside = 0
+    offset_support_weight = 0.2
     for y_index in range(y_samples):
         y = y_min + ((y_index + 0.5) * step)
         if y > y_max + EPSILON:
@@ -358,11 +363,14 @@ def _estimate_vertical_supported_ratio_scanline(
             if not upper_island.contains_point(point, include_boundary=True):
                 continue
             inside += 1
+            if _point_supported_direct(point, lower_islands):
+                supported += 1.0
+                continue
             if _point_supported_with_offset(point, lower_islands, allowed_offset_mm):
-                supported += 1
+                supported += offset_support_weight
     if inside <= 0:
         return 0.0
-    return float(max(0.0, min(1.0, supported / max(1, inside))))
+    return float(max(0.0, min(1.0, supported / max(1.0, float(inside)))))
 
 
 def _is_critical_unsupported_region(island: Island, *, supported_ratio: float, extrusion_width_mm: float) -> bool:
@@ -967,7 +975,7 @@ def _apply_tree_branch_heuristics(
     growth_ratio = max(1.0, min(2.2, growth_ratio * (1.0 + (wall_count_clamped * 0.02)) * top_rate_scale))
     min_radius = max(min_radius, tip_diameter * 0.5)
     max_radius_cap = max(min_radius, (branch_diameter * 0.5) * wall_scale * brim_scale * diameter_angle_scale)
-    distance_scale = max(0.3, branch_distance / max(EPSILON, float(support_spacing_mm)))
+    distance_scale = max(1.0, branch_distance / max(EPSILON, float(support_spacing_mm)))
     merge_distance = max(min_radius, float(support_spacing_mm) * merge_ratio * angle_scale * distance_scale)
     route_weight = max(0.0, float(parent_weight_route))
     load_weight = max(0.0, float(parent_weight_load))
