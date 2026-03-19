@@ -525,6 +525,31 @@ export function usePrintNetState() {
         }
 
         setStatusLine("Checking credentials...");
+        try {
+          const authResponse = await apiClient.loginWithPassword({ userId: requestedUserId, password });
+          const token = String(authResponse?.session?.token || "").trim();
+          const identity = await resolveIdentityFromToken(token, {
+            userId: String(authResponse?.session?.user_id || requestedUserId),
+            role: String(authResponse?.session?.role || "student")
+          });
+          setAuthSession(identity);
+          setQueueSnapshotBase(null);
+          setActivityState(emptyActivityState());
+          setJobResult(null);
+          setMaintenance(defaultMaintenance());
+          setStatusLine("Signed in.");
+          return { ok: true, requiresVerification: false };
+        } catch (authError) {
+          const authCode = String(authError?.code || "").trim().toUpperCase();
+          const authDetail = String(authError?.message || "").trim().toUpperCase();
+          const verificationRequired =
+            authCode === "AUTH_VERIFICATION_REQUIRED" ||
+            authDetail.includes("AUTH_VERIFICATION_REQUIRED");
+          if (!verificationRequired) {
+            throw authError;
+          }
+        }
+
         const challengeResponse = await apiClient.requestLoginCode({ userId: requestedUserId, password });
         const challenge = challengeResponse?.challenge || {};
         const challengeId = String(challenge.challenge_id || "").trim();

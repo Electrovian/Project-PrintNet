@@ -71,7 +71,7 @@ class LocalWifiOnboarding:
 
         online_target_count = 0
         printers: list[dict[str, Any]] = []
-        seen = set()
+        seen: dict[str, int] = {}
 
         for target in targets:
             probe_result = self._run_probe(target, timeout_value)
@@ -83,10 +83,14 @@ class LocalWifiOnboarding:
                 continue
             online_target_count += 1
             candidate = self._candidate_from_probe(target, connector_type, probe_result)
-            identity = self._printer_identity(candidate)
-            if identity in seen:
+            identity = self._discovery_identity(candidate)
+            existing_index = seen.get(identity)
+            if existing_index is not None:
+                existing = printers[existing_index]
+                if self._prefer_discovered_candidate(existing, candidate):
+                    printers[existing_index] = candidate
                 continue
-            seen.add(identity)
+            seen[identity] = len(printers)
             printers.append(candidate)
 
         printers.sort(key=lambda item: str(item.get("name", "")).lower())
@@ -417,3 +421,25 @@ class LocalWifiOnboarding:
 
         name = str(printer.get("name", "")).strip().lower()
         return f"{connector_type}|{name}"
+
+    def _discovery_identity(self, printer: Mapping[str, Any]) -> str:
+        connector_type = str(printer.get("connector_type", "")).strip().lower()
+        if connector_type == "creality":
+            url = str(printer.get("creality_url", "") or printer.get("endpoint", "")).strip().rstrip("/").lower()
+            if url:
+                return f"creality|{url}"
+            host = str(printer.get("host", "")).strip().lower()
+            port = int(printer.get("port", 0) or 0)
+            if host and port > 0:
+                return f"creality|{host}:{port}"
+        return self._printer_identity(printer)
+
+    @staticmethod
+    def _prefer_discovered_candidate(existing: Mapping[str, Any], candidate: Mapping[str, Any]) -> bool:
+        existing_type = str(existing.get("connector_type", "")).strip().lower()
+        candidate_type = str(candidate.get("connector_type", "")).strip().lower()
+        if existing_type == "creality" and candidate_type == "creality":
+            existing_protocol = str(existing.get("creality_protocol", "")).strip().lower()
+            candidate_protocol = str(candidate.get("creality_protocol", "")).strip().lower()
+            return existing_protocol != "moonraker" and candidate_protocol == "moonraker"
+        return False

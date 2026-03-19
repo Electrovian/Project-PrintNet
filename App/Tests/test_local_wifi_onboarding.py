@@ -36,6 +36,16 @@ def _probe_creality_server_info_on_8080(target, _timeout_s: float) -> Mapping[st
     return {"ok": False}
 
 
+def _probe_creality_on_server_info_and_api_printer(target, _timeout_s: float) -> Mapping[str, Any]:
+    if int(target.port) != 8080:
+        return {"ok": False}
+    if target.path == "/server/info":
+        return {"ok": True, "connector_type": "creality"}
+    if target.path == "/api/printer":
+        return {"ok": True, "connector_type": "creality"}
+    return {"ok": False}
+
+
 class LocalWifiOnboardingTests(unittest.TestCase):
     def test_discover_requires_hosts(self):
         onboarding = LocalWifiOnboarding(probe_hook=_probe_map_by_port)
@@ -133,6 +143,15 @@ class LocalWifiOnboardingTests(unittest.TestCase):
 
     def test_creality_server_info_on_non_default_port_keeps_moonraker_protocol(self):
         onboarding = LocalWifiOnboarding(probe_hook=_probe_creality_server_info_on_8080)
+        result = onboarding.discover(hosts=["10.0.0.55"], ports=[8080], max_targets=32)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["printer_count"], 1)
+        printer = result["printers"][0]
+        self.assertEqual(printer.get("connector_type"), "creality")
+        self.assertEqual(printer.get("creality_protocol"), "moonraker")
+
+    def test_creality_probes_across_paths_are_deduplicated_with_moonraker_preference(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_creality_on_server_info_and_api_printer)
         result = onboarding.discover(hosts=["10.0.0.55"], ports=[8080], max_targets=32)
         self.assertTrue(result["ok"])
         self.assertEqual(result["printer_count"], 1)

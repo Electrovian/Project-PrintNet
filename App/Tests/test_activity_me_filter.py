@@ -14,14 +14,14 @@ except Exception:
 
 class ActivityMeFilterTests(unittest.TestCase):
     @unittest.skipIf(ActivitySyncMixin is None, "activity sync module unavailable")
-    def test_build_me_rows_returns_empty_when_me_hint_missing(self):
+    def test_build_me_rows_falls_back_to_all_rows_when_me_hint_missing(self):
         holder = type("Holder", (), {"_activity_me_user": ""})()
         rows = [
             {"job_id": "1", "user": "alice"},
             {"job_id": "2", "user": "bob"},
         ]
         filtered = ActivitySyncMixin._build_me_rows(holder, rows)
-        self.assertEqual(filtered, [])
+        self.assertEqual(filtered, rows)
 
     @unittest.skipIf(ActivitySyncMixin is None, "activity sync module unavailable")
     def test_build_me_rows_returns_empty_when_no_user_matches(self):
