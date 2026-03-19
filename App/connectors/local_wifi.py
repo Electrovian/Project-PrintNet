@@ -157,26 +157,34 @@ class LocalWifiOnboarding:
         discovered_printers: Sequence[Mapping[str, Any]] | None,
     ) -> list[dict[str, Any]]:
         merged: list[dict[str, Any]] = []
-        seen: set[str] = set()
+        seen: dict[str, int] = {}
 
         for row in existing_printers or []:
             if not isinstance(row, Mapping):
                 continue
             item = dict(row)
-            identity = self._printer_identity(item)
-            if identity in seen:
+            identity = self._discovery_identity(item)
+            existing_index = seen.get(identity)
+            if existing_index is not None:
+                existing = merged[existing_index]
+                if self._prefer_discovered_candidate(existing, item):
+                    merged[existing_index] = self._merge_printer_rows(existing, item)
                 continue
-            seen.add(identity)
+            seen[identity] = len(merged)
             merged.append(item)
 
         for row in discovered_printers or []:
             if not isinstance(row, Mapping):
                 continue
             item = dict(row)
-            identity = self._printer_identity(item)
-            if identity in seen:
+            identity = self._discovery_identity(item)
+            existing_index = seen.get(identity)
+            if existing_index is not None:
+                existing = merged[existing_index]
+                if self._prefer_discovered_candidate(existing, item):
+                    merged[existing_index] = self._merge_printer_rows(existing, item)
                 continue
-            seen.add(identity)
+            seen[identity] = len(merged)
             merged.append(item)
 
         return merged
@@ -443,3 +451,15 @@ class LocalWifiOnboarding:
             candidate_protocol = str(candidate.get("creality_protocol", "")).strip().lower()
             return existing_protocol != "moonraker" and candidate_protocol == "moonraker"
         return False
+
+    @staticmethod
+    def _merge_printer_rows(existing: Mapping[str, Any], candidate: Mapping[str, Any]) -> dict[str, Any]:
+        merged = dict(existing)
+        for key, value in candidate.items():
+            if isinstance(value, str):
+                if value.strip():
+                    merged[key] = value
+                continue
+            if value is not None:
+                merged[key] = value
+        return merged
