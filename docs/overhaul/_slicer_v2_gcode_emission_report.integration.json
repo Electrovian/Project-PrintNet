@@ -1,0 +1,13 @@
+{
+  "stage_count": 10,
+  "validation_ok": true,
+  "line_count": 32,
+  "estimated_time_seconds": 1.0,
+  "estimated_filament_mm": 1.652572765265796,
+  "gcode_firmware_flavor": "marlin",
+  "gcode_absolute_extrusion": true,
+  "gcode_command_count_total": 32,
+  "gcode_extrusion_command_count_total": 5,
+  "gcode_travel_command_count_total": 10,
+  "warning_count": 0
+}

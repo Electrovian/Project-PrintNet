@@ -1,0 +1,24 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge PETG Transparent @FF G4.json
+DATA = {'activate_air_filtration': ['1'],
+ 'additional_cooling_fan_speed': ['40'],
+ 'compatible_printers': ['Flashforge Guider4 0.4 nozzle'],
+ 'complete_print_exhaust_fan_speed': ['40'],
+ 'cool_plate_temp': ['0'],
+ 'cool_plate_temp_initial_layer': ['0'],
+ 'during_print_exhaust_fan_speed': ['40'],
+ 'eng_plate_temp': ['80'],
+ 'eng_plate_temp_initial_layer': ['80'],
+ 'filament_settings_id': ['Flashforge PETG Transparent @FF G4'],
+ 'from': 'system',
+ 'hot_plate_temp': ['80'],
+ 'hot_plate_temp_initial_layer': ['80'],
+ 'inherits': 'Flashforge Generic PETG',
+ 'instantiation': 'true',
+ 'name': 'Flashforge PETG Transparent @FF G4',
+ 'pressure_advance': ['0.08'],
+ 'slow_down_layer_time': ['5'],
+ 'textured_plate_temp': ['80'],
+ 'textured_plate_temp_initial_layer': ['80'],
+ 'type': 'filament'}

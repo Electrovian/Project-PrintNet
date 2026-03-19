@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/process/0.24mm Draft @Flashforge G3U 0.4 Nozzle.json
+DATA = {'bridge_flow': '0.96',
+ 'bridge_speed': '15',
+ 'compatible_printers': ['Flashforge Guider 3 Ultra 0.4 Nozzle'],
+ 'filename_format': '{input_filename_base}.gcode',
+ 'from': 'system',
+ 'infill_wall_overlap': '25%',
+ 'inherits': '0.20mm Standard @Flashforge G3U 0.4 Nozzle',
+ 'instantiation': 'true',
+ 'internal_bridge_speed': '30',
+ 'layer_height': '0.24',
+ 'name': '0.24mm Draft @Flashforge G3U 0.4 Nozzle',
+ 'post_process': '',
+ 'prime_tower_brim_width': '5',
+ 'print_settings_id': '0.24mm Draft @Flashforge G3U 0.4 Nozzle',
+ 'setting_id': 'GP001',
+ 'support_bottom_interface_spacing': '0.2',
+ 'support_bottom_z_distance': '0.15',
+ 'support_interface_spacing': '0.2',
+ 'support_line_width': '0.4',
+ 'support_object_xy_distance': '0.4',
+ 'support_speed': '80',
+ 'type': 'process'}

@@ -1,0 +1,8 @@
+from __future__ import annotations
+
+# source: profiles/Elegoo/process/ECC/0.12mm Draft @Elegoo CC 0.2 nozzle.json
+DATA = {'inherits': '0.10mm Standard @Elegoo CC 0.2 nozzle',
+ 'instantiation': 'true',
+ 'layer_height': '0.12',
+ 'name': '0.12mm Draft @Elegoo CC 0.2 nozzle',
+ 'type': 'process'}

@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/WonderMaker/filament/WonderMaker PLA Marble.json
+DATA = {'compatible_printers': ['WonderMaker ZR 0.2 nozzle',
+                         'WonderMaker ZR 0.4 nozzle',
+                         'WonderMaker ZR 0.6 nozzle',
+                         'WonderMaker ZR 0.8 nozzle',
+                         'WonderMaker ZR Ultra 0.2 nozzle',
+                         'WonderMaker ZR Ultra 0.4 nozzle',
+                         'WonderMaker ZR Ultra 0.6 nozzle',
+                         'WonderMaker ZR Ultra 0.8 nozzle',
+                         'WonderMaker ZR Ultra S 0.2 nozzle',
+                         'WonderMaker ZR Ultra S 0.4 nozzle',
+                         'WonderMaker ZR Ultra S 0.6 nozzle',
+                         'WonderMaker ZR Ultra S 0.8 nozzle'],
+ 'filament_cost': ['29.99'],
+ 'filament_density': ['1.22'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_id': 'GFA07',
+ 'filament_multitool_ramming': ['1'],
+ 'filament_vendor': ['WonderMaker'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'true',
+ 'name': 'WonderMaker PLA Marble',
+ 'type': 'filament'}

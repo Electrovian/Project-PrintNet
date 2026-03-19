@@ -1,0 +1,18 @@
+﻿# Desktop Stability Gate Run
+Timestamp UTC: 2026-02-10T00:46:13Z
+Python: python
+
+Step | Status | Seconds | ExitCode | Command
+--- | --- | ---: | ---: | ---
+Desktop smoke flow | PASS | 0.78 | 0 | python .\scripts\desktop-smoke.py
+Print mixin regressions | PASS | 0.74 | 0 | python -m unittest Tests.test_print_mixin
+Printer selection sync regressions | PASS | 0.19 | 0 | python -m unittest Tests.test_printer_selection_sync
+Printer manager regressions | PASS | 0.25 | 0 | python -m unittest Tests.test_printer_manager
+Worker regressions | PASS | 0.19 | 0 | python -m unittest Tests.test_workers
+Operation state regressions | PASS | 0.18 | 0 | python -m unittest Tests.test_operation_state
+Project atomic save regressions | PASS | 0.76 | 0 | python -m unittest Tests.test_project_save_atomic
+Settings snapshot regressions | PASS | 0.76 | 0 | python -m unittest Tests.test_project_settings_snapshot
+Critical module syntax | PASS | 0.18 | 0 | python -m py_compile App/gui/Windows/controller/print.py App/gui/Windows/controller/project.py App/gui/Windows/controller/ui.py App/gui/workers.py
+
+Passed: 9
+Failed: 0

@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/DeltaMaker/filament/fdm_filament_pet.json
+DATA = {'close_fan_the_first_x_layers': ['3'],
+ 'fan_cooling_layer_time': ['15'],
+ 'fan_max_speed': ['40'],
+ 'fan_min_speed': ['20'],
+ 'filament_cost': ['30'],
+ 'filament_density': ['1.27'],
+ 'filament_max_volumetric_speed': ['0'],
+ 'filament_start_gcode': ['; filament start gcode\n'],
+ 'filament_type': ['PETG'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_common',
+ 'instantiation': 'false',
+ 'name': 'fdm_filament_pet',
+ 'nozzle_temperature': ['250'],
+ 'nozzle_temperature_initial_layer': ['240'],
+ 'nozzle_temperature_range_high': ['255'],
+ 'nozzle_temperature_range_low': ['235'],
+ 'overhang_fan_speed': ['50'],
+ 'reduce_fan_stop_start_freq': ['1'],
+ 'slow_down_for_layer_cooling': ['1'],
+ 'temperature_vitrification': ['80'],
+ 'type': 'filament'}

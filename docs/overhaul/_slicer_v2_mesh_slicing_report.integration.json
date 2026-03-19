@@ -1,0 +1,26 @@
+{
+  "generated_at_utc": "2026-02-13T14:08:41.835306+00:00",
+  "mesh_path": "C:\\Users\\Elect\\AppData\\Local\\Temp\\eon_slicer_v2_mesh_9aj143c5\\smoke.stl",
+  "source_format": "ascii-stl",
+  "triangle_count": 12,
+  "layer_count": 5,
+  "segment_count_total": 40,
+  "contour_count_total": 5,
+  "warning_count": 0,
+  "warnings": [],
+  "mesh_created_for_smoke": "C:\\Users\\Elect\\AppData\\Local\\Temp\\eon_slicer_v2_mesh_9aj143c5\\smoke.stl",
+  "layer_contour_counts": [
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "layer_segment_counts": [
+    8,
+    8,
+    8,
+    8,
+    8
+  ]
+}

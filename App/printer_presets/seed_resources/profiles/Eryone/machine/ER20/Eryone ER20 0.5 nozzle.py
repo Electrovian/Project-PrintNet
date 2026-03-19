@@ -1,0 +1,15 @@
+from __future__ import annotations
+
+# source: profiles/Eryone/machine/ER20/Eryone ER20 0.5 nozzle.json
+DATA = {'default_filament_profile': [],
+ 'default_print_profile': '0.25mm Standard @Eryone ER20 0.5 nozzle',
+ 'from': 'system',
+ 'inherits': 'fdm_machine_eryone_ER20_common',
+ 'instantiation': 'true',
+ 'max_layer_height': ['0.38'],
+ 'min_layer_height': ['0.10'],
+ 'name': 'Eryone ER20 0.5 nozzle',
+ 'nozzle_diameter': ['0.5'],
+ 'printer_model': 'Eryone ER20',
+ 'printer_variant': '0.5',
+ 'type': 'machine'}

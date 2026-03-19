@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+# source: profiles/Tiertime/filament/fdm_filament_sbs.json
+DATA = {'additional_cooling_fan_speed': ['40'],
+ 'close_fan_the_first_x_layers': ['3'],
+ 'cool_plate_temp': ['70'],
+ 'cool_plate_temp_initial_layer': ['70'],
+ 'eng_plate_temp': ['70'],
+ 'eng_plate_temp_initial_layer': ['70'],
+ 'fan_cooling_layer_time': ['100'],
+ 'fan_min_speed': ['0'],
+ 'filament_cost': ['15'],
+ 'filament_density': ['1.02'],
+ 'filament_max_volumetric_speed': ['23'],
+ 'filament_start_gcode': ['; filament start gcode\n'
+                          '{if  (bed_temperature[current_extruder] '
+                          '>45)||(bed_temperature_initial_layer[current_extruder] >45)}M106 P3 S255\n'
+                          '{elsif(bed_temperature[current_extruder] '
+                          '>35)||(bed_temperature_initial_layer[current_extruder] >35)}M106 P3 S180\n'
+                          '{endif}\n'
+                          '\n'
+                          '{if activate_air_filtration[current_extruder] && support_air_filtration}\n'
+                          'M106 P3 S{during_print_exhaust_fan_speed_num[current_extruder]} \n'
+                          '{endif}'],
+ 'filament_type': ['SBS'],
+ 'from': 'system',
+ 'hot_plate_temp': ['70'],
+ 'hot_plate_temp_initial_layer': ['70'],
+ 'inherits': 'fdm_filament_common',
+ 'instantiation': 'false',
+ 'name': 'fdm_filament_sbs',
+ 'nozzle_temperature': ['235'],
+ 'nozzle_temperature_initial_layer': ['235'],
+ 'nozzle_temperature_range_high': ['250'],
+ 'nozzle_temperature_range_low': ['215'],
+ 'overhang_fan_threshold': ['50%'],
+ 'reduce_fan_stop_start_freq': ['0'],
+ 'slow_down_layer_time': ['4'],
+ 'slow_down_min_speed': ['20'],
+ 'temperature_vitrification': ['70'],
+ 'textured_plate_temp': ['70'],
+ 'textured_plate_temp_initial_layer': ['70'],
+ 'type': 'filament'}

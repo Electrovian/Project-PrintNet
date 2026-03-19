@@ -1,0 +1,490 @@
+from __future__ import annotations
+
+VENDOR = "M3D"
+INDEX = {
+  "description": "Configuration for M3D printers",
+  "filament_list": [],
+  "force_update": "0",
+  "machine_list": [
+    {
+      "name": "fdm_machine_common",
+      "sub_path": "machine/fdm_machine_common.json"
+    },
+    {
+      "name": "M3D Enabler D8500 MM",
+      "sub_path": "machine/M3D Enabler D8500 MM.json"
+    }
+  ],
+  "machine_model_list": [
+    {
+      "name": "M3D Enabler D8500 MM Model",
+      "sub_path": "machine/M3D Enabler D8500 MM Model.json"
+    }
+  ],
+  "name": "M3D",
+  "process_list": [
+    {
+      "name": "fdm_process_common",
+      "sub_path": "process/fdm_process_common.json"
+    },
+    {
+      "name": "0.15mm MM @D8500",
+      "sub_path": "process/0.15mm MM @D8500.json"
+    },
+    {
+      "name": "0.20mm MM @D8500",
+      "sub_path": "process/0.20mm MM @D8500.json"
+    }
+  ],
+  "version": "1.0.0"
+}
+
+MACHINE = {
+  "machine/M3D Enabler D8500 MM Model.json": {
+    "bed_model": "model/M3D_bed_model.stl",
+    "bed_texture": "model/M3D_bed_texture.png",
+    "default_materials": "Generic PLA @system",
+    "family": "M3D",
+    "machine_tech": "FFF",
+    "model_id": "M3D_D8500_MM",
+    "name": "M3D Enabler D8500 MM Model",
+    "nozzle_diameter": "0.4",
+    "scan_folder": "1",
+    "type": "machine_model"
+  },
+  "machine/M3D Enabler D8500 MM.json": {
+    "auxiliary_fan": "1",
+    "before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n;[layer_z]\nG92 E0",
+    "change_filament_gcode": "M18 E",
+    "deretraction_speed": [
+      "50",
+      "50"
+    ],
+    "extruder_clearance_height_to_rod": "19",
+    "extruder_clearance_radius": "100",
+    "extruder_colour": [
+      "#FCE94F",
+      "#FCE94F"
+    ],
+    "extruder_offset": [
+      "0x0",
+      "0x0"
+    ],
+    "fan_speedup_time": "1",
+    "from": "system",
+    "host_type": "esp3d",
+    "inherits": "fdm_machine_common",
+    "instantiation": "true",
+    "is_custom_defined": "0",
+    "layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
+    "long_retractions_when_cut": [
+      "0",
+      "0"
+    ],
+    "machine_end_gcode": "; ===== EON END GCODE =====\nM400\nM83\nG92 E0\nG1 E-17 F1800           ; retract BEFORE any moves or power changes\n\n; Now lift and park\nG91\nG1 Z2 F2000\nG90\nG1 X100 Y160 F3000      ; parking point\n\n; Power down in order\nM104 T0 S0\nM104 T1 S0\nM106 S50                ; keep fan at ~50% while cooling (adjust if desired)\n; (Leave steppers on by omitting M84)\n; ===== END EON END GCODE =====\n",
+    "machine_load_filament_time": "0.5",
+    "machine_max_acceleration_e": [
+      "10000",
+      "10000"
+    ],
+    "machine_max_acceleration_x": [
+      "2000",
+      "2000"
+    ],
+    "machine_max_acceleration_y": [
+      "2000",
+      "2000"
+    ],
+    "machine_max_acceleration_z": [
+      "400",
+      "400"
+    ],
+    "machine_max_speed_e": [
+      "30",
+      "30"
+    ],
+    "machine_max_speed_x": [
+      "400",
+      "400"
+    ],
+    "machine_max_speed_y": [
+      "300",
+      "300"
+    ],
+    "machine_max_speed_z": [
+      "12",
+      "12"
+    ],
+    "machine_pause_gcode": "M601",
+    "machine_start_gcode": "; ===== EON START GCODE =====\n; minx:{first_layer_print_min[0]}\n; miny:{first_layer_print_min[1]}\n; maxx:{first_layer_print_max[0]}\n; maxy:{first_layer_print_max[1]}\n; used_0:{is_extruder_used[0]}\n; used_1:{is_extruder_used[1]}\n\n; Heaters\n{if is_extruder_used[0]}M104 T0 S{first_layer_temperature[0]}{endif}\n{if !is_extruder_used[0]}M104 T0 S150{endif}\n{if is_extruder_used[1]}M104 T1 S{first_layer_temperature[1]}{endif}\n{if !is_extruder_used[1]}M104 T1 S150{endif}\nM140 S0\nM106 S50\n\n; Home and clearance\nG28 X Y\nG28 Z\nG91\nG1 Z10 F1200            ; lift 10mm\nG90\n\n; Bed wait (dummy)\nM190 S0\n\n; Wait for target temps\n{if is_extruder_used[0]}M109 T0 S{first_layer_temperature[0]}{endif}\n{if is_extruder_used[1]}M109 T1 S{first_layer_temperature[1]}{endif}\n\n; Absolute XYZ / Relative E\nG90\nM83\n\n; ===== Dynamic Bed Leveling ====\nT0\nG1 Z3 F3000\nG1 X15 Y15 F6000\nG1 Z0.25 F1000; Otherwise EON displays with a 3mm height\n; Single probe touch\nG30\nM420 S1\n; Bias the contact as -0.25 and fix Z-zero\nG92 Z-0.25        ; probed contact now treated as Z = -0.25\nG1 Z0.3 F300\n\n; ===== PRIME / TWO-LINE WIPES (sparse, no air extrude) =====\n\n; --- Tool 0: lines at Y=5 and Y=6 ---\n{if is_extruder_used[0]}\nT0\nG92 E0\nG1 X20 Y5 F3000\nG1 Z0.30 F600\nG1 X180 E18 F700\nG1 Y6.0 F1200\nG1 X20 E18 F700\nG92 E0\n{endif}\n\n; --- Tool 1: lines at Y=7 and Y=8 ---\n{if is_extruder_used[1]}\nT1\nG92 E0\nG1 X20 Y7 F3000\nG1 Z0.30 F600\nG1 X180 E18 F700\nG1 Y8.0 F1200\nG1 X20 E18 F700\nG92 E0\n{endif}\n\n; Activate initial tool (no retracts; EON starts immediately)\nT{initial_extruder}\nG92 E0\n; ===== END EON START GCODE =====\n",
+    "machine_tool_change_time": "0.5",
+    "machine_unload_filament_time": "0.5",
+    "max_layer_height": [
+      "0.32",
+      "0.32"
+    ],
+    "min_layer_height": [
+      "0.1",
+      "0.1"
+    ],
+    "name": "M3D Enabler D8500 MM",
+    "nozzle_diameter": [
+      "0.4",
+      "0.4"
+    ],
+    "nozzle_type": "brass",
+    "print_host": "m3d-enabler.local",
+    "printable_area": [
+      "0x0",
+      "210x0",
+      "210x150",
+      "0x150"
+    ],
+    "printer_model": "M3D Enabler D8500 MM Model",
+    "printer_settings_id": "M3D Enabler D8500 MM",
+    "printer_variant": "0.4",
+    "retract_before_wipe": [
+      "100%",
+      "100%"
+    ],
+    "retract_length_toolchange": [
+      "17",
+      "17"
+    ],
+    "retract_lift_above": [
+      "0",
+      "0"
+    ],
+    "retract_lift_below": [
+      "0",
+      "0"
+    ],
+    "retract_lift_enforce": [
+      "All Surfaces",
+      "All Surfaces"
+    ],
+    "retract_restart_extra": [
+      "0",
+      "0"
+    ],
+    "retract_restart_extra_toolchange": [
+      "0",
+      "0"
+    ],
+    "retract_when_changing_layer": [
+      "1",
+      "1"
+    ],
+    "retraction_distances_when_cut": [
+      "18",
+      "18"
+    ],
+    "retraction_length": [
+      "4.5",
+      "4.5"
+    ],
+    "retraction_minimum_travel": [
+      "2.5",
+      "2.5"
+    ],
+    "retraction_speed": [
+      "60",
+      "60"
+    ],
+    "setting_id": "M3D_D8500_MM_04",
+    "single_extruder_multi_material": "0",
+    "thumbnails": "120x60/PNG",
+    "travel_slope": [
+      "45",
+      "45"
+    ],
+    "type": "machine",
+    "version": "1.0.0",
+    "wipe": [
+      "1",
+      "1"
+    ],
+    "wipe_distance": [
+      "2",
+      "2"
+    ],
+    "z_hop": [
+      "0",
+      "0"
+    ],
+    "z_hop_types": [
+      "Normal Lift",
+      "Normal Lift"
+    ]
+  },
+  "machine/fdm_machine_common.json": {
+    "auxiliary_fan": "1",
+    "change_filament_gcode": "M18 E",
+    "deretraction_speed": [
+      "50"
+    ],
+    "extruder_clearance_height_to_rod": "19",
+    "extruder_clearance_radius": "100",
+    "extruder_colour": [
+      "#FCE94F"
+    ],
+    "extruder_offset": [
+      "0x0"
+    ],
+    "fan_speedup_time": "1",
+    "from": "system",
+    "host_type": "esp3d",
+    "instantiation": "false",
+    "long_retractions_when_cut": [
+      "0"
+    ],
+    "machine_end_gcode": "; ===== EON END GCODE =====\nM400\nM83\nG92 E0\nG1 E-17 F1800           ; retract BEFORE any moves or power changes\n\n; Now lift and park\nG91\nG1 Z2 F2000\nG90\nG1 X100 Y160 F3000      ; parking point\n\n; Power down in order\nM104 T0 S0\nM104 T1 S0\nM106 S50                ; keep fan at ~50% while cooling (adjust if desired)\n; (Leave steppers on by omitting M84)\n; ===== END EON END GCODE =====\n",
+    "machine_load_filament_time": "0.5",
+    "machine_max_acceleration_e": [
+      "10000"
+    ],
+    "machine_max_acceleration_x": [
+      "2000"
+    ],
+    "machine_max_acceleration_y": [
+      "2000"
+    ],
+    "machine_max_acceleration_z": [
+      "400"
+    ],
+    "machine_max_speed_e": [
+      "30"
+    ],
+    "machine_max_speed_x": [
+      "400"
+    ],
+    "machine_max_speed_y": [
+      "300"
+    ],
+    "machine_max_speed_z": [
+      "12"
+    ],
+    "machine_start_gcode": "; ===== EON START GCODE =====\n; minx:{first_layer_print_min[0]}\n; miny:{first_layer_print_min[1]}\n; maxx:{first_layer_print_max[0]}\n; maxy:{first_layer_print_max[1]}\n; used_0:{is_extruder_used[0]}\n; used_1:{is_extruder_used[1]}\n\n; Heaters\n{if is_extruder_used[0]}M104 T0 S{first_layer_temperature[0]}{endif}\n{if !is_extruder_used[0]}M104 T0 S150{endif}\n{if is_extruder_used[1]}M104 T1 S{first_layer_temperature[1]}{endif}\n{if !is_extruder_used[1]}M104 T1 S150{endif}\nM140 S0\nM106 S50\n\n; Home and clearance\nG28 X Y\nG28 Z\nG91\nG1 Z10 F1200            ; lift 10mm\nG90\n\n; Bed wait (dummy)\nM190 S0\n\n; Wait for target temps\n{if is_extruder_used[0]}M109 T0 S{first_layer_temperature[0]}{endif}\n{if is_extruder_used[1]}M109 T1 S{first_layer_temperature[1]}{endif}\n\n; Absolute XYZ / Relative E\nG90\nM83\n\n; ===== Dynamic Bed Leveling ====\nT0\nG1 Z3 F3000\nG1 X15 Y15 F6000\nG1 Z0.25 F1000; Otherwise EON displays with a 3mm height\n; Single probe touch\nG30\nM420 S1\n; Bias the contact as -0.25 and fix Z-zero\nG92 Z-0.25        ; probed contact now treated as Z = -0.25\nG1 Z0.3 F300\n\n; ===== PRIME / TWO-LINE WIPES (sparse, no air extrude) =====\n\n; --- Tool 0: lines at Y=5 and Y=6 ---\n{if is_extruder_used[0]}\nT0\nG92 E0\nG1 X20 Y5 F3000\nG1 Z0.30 F600\nG1 X180 E18 F700\nG1 Y6.0 F1200\nG1 X20 E18 F700\nG92 E0\n{endif}\n\n; --- Tool 1: lines at Y=7 and Y=8 ---\n{if is_extruder_used[1]}\nT1\nG92 E0\nG1 X20 Y7 F3000\nG1 Z0.30 F600\nG1 X180 E18 F700\nG1 Y8.0 F1200\nG1 X20 E18 F700\nG92 E0\n{endif}\n\n; Activate initial tool (no retracts; EON starts immediately)\nT{initial_extruder}\nG92 E0\n; ===== END EON START GCODE =====\n",
+    "machine_tool_change_time": "0.5",
+    "machine_unload_filament_time": "0.5",
+    "max_layer_height": [
+      "0.32"
+    ],
+    "min_layer_height": [
+      "0.1"
+    ],
+    "name": "fdm_machine_common",
+    "nozzle_diameter": [
+      "0.4"
+    ],
+    "printable_area": [
+      "0x0",
+      "210x0",
+      "210x150",
+      "0x150"
+    ],
+    "printer_settings_id": "fdm_machine_common",
+    "printer_technology": "FFF",
+    "retract_before_wipe": [
+      "100%"
+    ],
+    "retract_length_toolchange": [
+      "17"
+    ],
+    "retract_lift_above": [
+      "0"
+    ],
+    "retract_lift_below": [
+      "0"
+    ],
+    "retract_lift_enforce": [
+      "All Surfaces"
+    ],
+    "retract_restart_extra": [
+      "0"
+    ],
+    "retract_restart_extra_toolchange": [
+      "0"
+    ],
+    "retract_when_changing_layer": [
+      "1"
+    ],
+    "retraction_distances_when_cut": [
+      "18"
+    ],
+    "retraction_length": [
+      "4.5"
+    ],
+    "retraction_minimum_travel": [
+      "2.5"
+    ],
+    "retraction_speed": [
+      "60"
+    ],
+    "single_extruder_multi_material": "0",
+    "thumbnails": [
+      "16x16"
+    ],
+    "travel_slope": [
+      "45"
+    ],
+    "type": "machine",
+    "version": "1.0.0.0",
+    "wipe": [
+      "1"
+    ],
+    "wipe_distance": [
+      "2"
+    ],
+    "z_hop": [
+      "0"
+    ],
+    "z_hop_types": [
+      "Normal Lift"
+    ]
+  }
+}
+
+PROCESS = {
+  "process/0.15mm MM @D8500.json": {
+    "bridge_acceleration": "50%",
+    "brim_type": "no_brim",
+    "compatible_printers": [
+      "M3D Enabler D8500 MM"
+    ],
+    "default_acceleration": "1000",
+    "enable_overhang_speed": "1",
+    "enable_prime_tower": "1",
+    "enable_support": "1",
+    "filename_format": "{input_filename_base}_{print_time}.gcode",
+    "from": "system",
+    "gap_infill_speed": "60",
+    "inherits": "fdm_process_common",
+    "initial_layer_acceleration": "500",
+    "initial_layer_speed": "35",
+    "inner_wall_acceleration": "1000",
+    "inner_wall_line_width": "0.4",
+    "inner_wall_speed": "90",
+    "instantiation": "true",
+    "internal_solid_infill_acceleration": "100%",
+    "internal_solid_infill_speed": "60",
+    "layer_height": "0.15",
+    "name": "0.15mm MM @D8500",
+    "outer_wall_acceleration": "1000",
+    "outer_wall_speed": "45",
+    "prime_tower_brim_width": "1",
+    "prime_tower_width": "40",
+    "prime_volume": "30",
+    "slow_down_layers": "1",
+    "sparse_infill_acceleration": "100%",
+    "sparse_infill_density": "5%",
+    "sparse_infill_speed": "60",
+    "support_interface_speed": "30",
+    "support_object_first_layer_gap": "1",
+    "support_object_xy_distance": "0.5",
+    "support_type": "normal(manual)",
+    "top_surface_acceleration": "1000",
+    "travel_acceleration": "1000",
+    "travel_speed": "100",
+    "type": "process",
+    "wall_loops": "2",
+    "wipe_tower_extra_spacing": "200%",
+    "wipe_tower_filament": "2"
+  },
+  "process/0.20mm MM @D8500.json": {
+    "bridge_acceleration": "50%",
+    "brim_type": "no_brim",
+    "compatible_printers": [
+      "M3D Enabler D8500 MM"
+    ],
+    "default_acceleration": "1000",
+    "enable_overhang_speed": "1",
+    "enable_prime_tower": "1",
+    "enable_support": "1",
+    "filename_format": "{input_filename_base}_{print_time}.gcode",
+    "from": "system",
+    "gap_infill_speed": "60",
+    "inherits": "fdm_process_common",
+    "initial_layer_acceleration": "500",
+    "initial_layer_speed": "35",
+    "inner_wall_acceleration": "1000",
+    "inner_wall_line_width": "0.4",
+    "inner_wall_speed": "90",
+    "instantiation": "true",
+    "internal_solid_infill_acceleration": "100%",
+    "internal_solid_infill_speed": "60",
+    "layer_height": "0.2",
+    "name": "0.20mm MM @D8500",
+    "outer_wall_acceleration": "1000",
+    "outer_wall_speed": "45",
+    "prime_tower_brim_width": "1",
+    "prime_tower_width": "40",
+    "prime_volume": "30",
+    "slow_down_layers": "1",
+    "sparse_infill_acceleration": "100%",
+    "sparse_infill_density": "5%",
+    "sparse_infill_speed": "60",
+    "support_interface_speed": "30",
+    "support_object_first_layer_gap": "1",
+    "support_object_xy_distance": "0.5",
+    "support_type": "normal(manual)",
+    "top_surface_acceleration": "1000",
+    "top_surface_speed": "40",
+    "travel_acceleration": "1000",
+    "travel_speed": "100",
+    "type": "process",
+    "wall_loops": "2",
+    "wipe_tower_extra_spacing": "200%",
+    "wipe_tower_filament": "2"
+  },
+  "process/fdm_process_common.json": {
+    "brim_type": "no_brim",
+    "enable_overhang_speed": "0",
+    "enable_prime_tower": "1",
+    "enable_support": "1",
+    "filename_format": "{input_filename_base}_{print_time}.gcode",
+    "from": "system",
+    "gap_infill_speed": "60",
+    "initial_layer_speed": "35",
+    "inner_wall_line_width": "0.4",
+    "inner_wall_speed": "90",
+    "instantiation": "false",
+    "internal_solid_infill_speed": "60",
+    "name": "fdm_process_common",
+    "outer_wall_speed": "45",
+    "prime_tower_brim_width": "1",
+    "prime_tower_width": "40",
+    "prime_volume": "30",
+    "slow_down_layers": "1",
+    "sparse_infill_density": "5%",
+    "sparse_infill_speed": "60",
+    "support_interface_speed": "30",
+    "support_type": "normal(manual)",
+    "top_surface_speed": "40",
+    "travel_speed": "100",
+    "type": "process",
+    "wall_loops": "2",
+    "wipe_tower_extra_spacing": "200%",
+    "wipe_tower_filament": "2"
+  }
+}
+
+FILAMENT = {}
+
+MISC = {}
+
+ASSETS = [
+  "M3D Enabler D8500 MM Model_cover.png",
+  "model/M3D_bed_model.stl",
+  "model/M3D_bed_texture.png"
+]
+
+ALL = {
+  "vendor": VENDOR,
+  "index": INDEX,
+  "machine": MACHINE,
+  "process": PROCESS,
+  "filament": FILAMENT,
+  "misc": MISC,
+  "assets": ASSETS,
+}

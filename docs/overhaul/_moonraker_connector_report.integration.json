@@ -1,0 +1,23 @@
+{
+  "connect_ok": true,
+  "upload_ok": true,
+  "start_ok": true,
+  "pause_ok": true,
+  "resume_ok": true,
+  "cancel_ok": true,
+  "status_ok": true,
+  "status_state": "printing",
+  "status_progress_pct": 25.0,
+  "status_time_left_s": 90,
+  "remote_path": "gcodes/demo.gcode",
+  "request_count": 7,
+  "paths": [
+    "/server/info",
+    "/server/files/upload",
+    "/printer/print/start?filename=gcodes/demo.gcode",
+    "/printer/print/pause",
+    "/printer/print/resume",
+    "/printer/print/cancel",
+    "/printer/objects/query?print_stats&virtual_sdcard"
+  ]
+}

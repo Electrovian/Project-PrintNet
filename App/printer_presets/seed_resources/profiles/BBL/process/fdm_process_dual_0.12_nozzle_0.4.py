@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/BBL/process/fdm_process_dual_0.12_nozzle_0.4.json
+DATA = {'bottom_color_penetration_layers': '5',
+ 'bottom_shell_layers': '5',
+ 'bridge_flow': '1',
+ 'elefant_foot_compensation': '0.15',
+ 'from': 'system',
+ 'gap_infill_speed': ['250', '250', '250', '250'],
+ 'inherits': 'fdm_process_dual_common',
+ 'initial_layer_infill_speed': ['105', '105', '105', '105'],
+ 'initial_layer_speed': ['20', '20', '20', '20'],
+ 'inner_wall_speed': ['300', '300', '300', '300'],
+ 'instantiation': 'false',
+ 'internal_solid_infill_speed': ['250', '250', '250', '250'],
+ 'layer_height': '0.12',
+ 'name': 'fdm_process_dual_0.12_nozzle_0.4',
+ 'sparse_infill_speed': ['270', '270', '270', '270'],
+ 'support_bottom_z_distance': '0.12',
+ 'support_threshold_angle': '20',
+ 'support_top_z_distance': '0.12',
+ 'top_color_penetration_layers': '5',
+ 'top_shell_layers': '5',
+ 'top_shell_thickness': '0.6',
+ 'type': 'process'}

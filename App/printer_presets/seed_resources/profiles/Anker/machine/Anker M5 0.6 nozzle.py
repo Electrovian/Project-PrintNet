@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Anker/machine/Anker M5 0.6 nozzle.json
+DATA = {'auxiliary_fan': '0',
+ 'bed_exclude_area': [],
+ 'default_filament_profile': ['Anker Generic PLA+'],
+ 'default_print_profile': '0.30mm Standard 0.6 nozzle @Anker',
+ 'extruder_clearance_height_to_lid': '250',
+ 'extruder_clearance_height_to_rod': '30',
+ 'extruder_clearance_radius': '45',
+ 'from': 'system',
+ 'inherits': 'fdm_marlin_common',
+ 'instantiation': 'true',
+ 'max_layer_height': ['0.48'],
+ 'min_layer_height': ['0.15'],
+ 'name': 'Anker M5 0.6 nozzle',
+ 'nozzle_diameter': ['0.6'],
+ 'nozzle_type': 'brass',
+ 'printable_area': ['0x0', '235x0', '235x235', '0x235'],
+ 'printable_height': '250',
+ 'printer_model': 'Anker M5',
+ 'printer_structure': 'i3',
+ 'printer_variant': '0.6',
+ 'retraction_length': ['1.5'],
+ 'setting_id': 'GM010',
+ 'type': 'machine',
+ 'upward_compatible_machine': []}

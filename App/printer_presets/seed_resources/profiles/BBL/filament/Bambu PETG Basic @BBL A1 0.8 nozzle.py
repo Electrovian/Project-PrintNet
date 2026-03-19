@@ -1,0 +1,24 @@
+from __future__ import annotations
+
+# source: profiles/BBL/filament/Bambu PETG Basic @BBL A1 0.8 nozzle.json
+DATA = {'compatible_printers': ['Bambu Lab A1 0.8 nozzle', 'Bambu Lab A1 0.6 nozzle'],
+ 'fan_max_speed': ['50'],
+ 'fan_min_speed': ['30'],
+ 'filament_flow_ratio': ['0.94'],
+ 'filament_long_retractions_when_cut': ['1'],
+ 'filament_max_volumetric_speed': ['13'],
+ 'filament_retraction_distances_when_cut': ['18'],
+ 'filament_retraction_length': ['0.4'],
+ 'filament_wipe': ['1'],
+ 'filament_wipe_distance': ['1'],
+ 'filament_z_hop': ['0.2'],
+ 'filament_z_hop_types': ['Spiral Lift'],
+ 'from': 'system',
+ 'inherits': 'Bambu PETG Basic @base',
+ 'instantiation': 'true',
+ 'name': 'Bambu PETG Basic @BBL A1 0.8 nozzle',
+ 'nozzle_temperature': ['245'],
+ 'nozzle_temperature_initial_layer': ['245'],
+ 'pre_start_fan_time': ['0'],
+ 'setting_id': 'GFSG00_08',
+ 'type': 'filament'}

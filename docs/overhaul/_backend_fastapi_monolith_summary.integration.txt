@@ -1,0 +1,15 @@
+ok: True
+health_live_status: 200
+health_ready_status: 200
+auth_status: 200
+operator_auth_status: 200
+whoami_status: 200
+profiles_status: 200
+profiles_count: 3
+printer_register_status: 200
+job_submit_status: 200
+job_status_status: 200
+job_events_status: 200
+job_events_count: 1
+validation_status: 400
+validation_error_code: BACKEND_VALIDATION_ERROR

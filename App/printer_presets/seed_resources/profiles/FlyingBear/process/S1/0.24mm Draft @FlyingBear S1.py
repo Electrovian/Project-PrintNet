@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/FlyingBear/process/S1/0.24mm Draft @FlyingBear S1.json
+DATA = {'bottom_shell_layers': '3',
+ 'brim_width': '3',
+ 'compatible_printers': ['FlyingBear S1 0.4 nozzle'],
+ 'exclude_object': '1',
+ 'from': 'system',
+ 'gap_infill_speed': '230',
+ 'inherits': 'fdm_process_common_S1',
+ 'inner_wall_speed': '230',
+ 'instantiation': 'true',
+ 'internal_bridge_speed': '50',
+ 'internal_solid_infill_speed': '230',
+ 'layer_height': '0.24',
+ 'name': '0.24mm Draft @FlyingBear S1',
+ 'overhang_1_4_speed': '50',
+ 'overhang_2_4_speed': '50',
+ 'overhang_3_4_speed': '30',
+ 'print_settings_id': '0.24mm Draft @FlyingBear S1',
+ 'setting_id': 'GP004',
+ 'sparse_infill_speed': '230',
+ 'top_shell_layers': '4',
+ 'top_shell_thickness': '1',
+ 'tree_support_wall_count': '1',
+ 'type': 'process'}

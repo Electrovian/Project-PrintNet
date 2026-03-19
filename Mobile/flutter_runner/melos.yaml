@@ -1,0 +1,5 @@
+name: eon_flutter_runner
+
+packages:
+  - apps/**
+  - packages/**

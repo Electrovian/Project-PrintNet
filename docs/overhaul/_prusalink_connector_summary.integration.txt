@@ -1,0 +1,12 @@
+connect_ok: True
+upload_ok: True
+start_ok: True
+pause_ok: True
+resume_ok: True
+cancel_ok: True
+status_ok: True
+status_state: operational
+status_progress_pct: 66.0
+remote_path: uploads/demo.gcode
+request_count: 7
+paths: ['/api/version', '/api/files/local', '/api/files/local/uploads/demo.gcode', '/api/job', '/api/job', '/api/job', '/api/job']

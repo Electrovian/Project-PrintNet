@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Peopoly/process/fdm_process_pply_0.16.json
+DATA = {'bottom_shell_layers': '4',
+ 'bridge_flow': '1',
+ 'elefant_foot_compensation': '0.15',
+ 'from': 'system',
+ 'gap_infill_speed': '320',
+ 'inherits': 'fdm_process_pply_common',
+ 'initial_layer_infill_speed': '105',
+ 'initial_layer_speed': '50',
+ 'inner_wall_speed': '300',
+ 'instantiation': 'false',
+ 'internal_solid_infill_speed': '350',
+ 'layer_height': '0.16',
+ 'name': 'fdm_process_pply_0.16',
+ 'outer_wall_speed': '200',
+ 'overhang_1_4_speed': '60',
+ 'overhang_2_4_speed': '30',
+ 'overhang_3_4_speed': '10',
+ 'sparse_infill_speed': '330',
+ 'support_threshold_angle': '25',
+ 'top_shell_layers': '4',
+ 'top_shell_thickness': '0.6',
+ 'type': 'process'}

@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+# source: profiles/BBL/filament/Bambu PETG Translucent @BBL A1M 0.8 nozzle.json
+DATA = {'compatible_printers': ['Bambu Lab A1 mini 0.6 nozzle', 'Bambu Lab A1 mini 0.8 nozzle'],
+ 'fan_max_speed': ['60'],
+ 'fan_min_speed': ['20'],
+ 'filament_long_retractions_when_cut': ['1'],
+ 'filament_max_volumetric_speed': ['16'],
+ 'filament_retraction_distances_when_cut': ['18'],
+ 'filament_retraction_length': ['0.2'],
+ 'from': 'system',
+ 'inherits': 'Bambu PETG Translucent @base',
+ 'instantiation': 'true',
+ 'name': 'Bambu PETG Translucent @BBL A1M 0.8 nozzle',
+ 'pre_start_fan_time': ['2'],
+ 'setting_id': 'GFSG01_03',
+ 'slow_down_layer_time': ['8'],
+ 'type': 'filament'}

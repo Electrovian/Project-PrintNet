@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Creality/filament/Creality Generic PLA @Ender-3V3-all.json
+DATA = {'compatible_printers': ['Creality Ender-3 V3 SE 0.2 nozzle',
+                         'Creality Ender-3 V3 SE 0.4 nozzle',
+                         'Creality Ender-3 V3 SE 0.6 nozzle',
+                         'Creality Ender-3 V3 SE 0.8 nozzle',
+                         'Creality Ender-3 V3 KE 0.4 nozzle',
+                         'Creality Ender-3 V3 0.4 nozzle',
+                         'Creality Ender-3 V3 0.6 nozzle',
+                         'Creality Ender-3 V3 Plus 0.4 nozzle',
+                         'Creality Ender-3 V3 Plus 0.6 nozzle'],
+ 'cool_plate_temp': ['55'],
+ 'cool_plate_temp_initial_layer': ['55'],
+ 'eng_plate_temp': ['55'],
+ 'eng_plate_temp_initial_layer': ['55'],
+ 'filament_max_volumetric_speed': ['18'],
+ 'from': 'system',
+ 'hot_plate_temp': ['55'],
+ 'hot_plate_temp_initial_layer': ['55'],
+ 'inherits': 'Creality Generic PLA',
+ 'instantiation': 'true',
+ 'name': 'Creality Generic PLA @Ender-3V3-all',
+ 'setting_id': 'GFSL99_00',
+ 'slow_down_min_speed': ['20'],
+ 'textured_plate_temp': ['55'],
+ 'textured_plate_temp_initial_layer': ['55'],
+ 'type': 'filament'}

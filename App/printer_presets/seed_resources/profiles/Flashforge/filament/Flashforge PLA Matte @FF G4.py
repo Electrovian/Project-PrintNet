@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge PLA Matte @FF G4.json
+DATA = {'activate_air_filtration': ['1'],
+ 'additional_cooling_fan_speed': ['40'],
+ 'compatible_printers': ['Flashforge Guider4 0.4 nozzle'],
+ 'complete_print_exhaust_fan_speed': ['40'],
+ 'cool_plate_temp': ['55'],
+ 'cool_plate_temp_initial_layer': ['55'],
+ 'during_print_exhaust_fan_speed': ['40'],
+ 'eng_plate_temp': ['55'],
+ 'eng_plate_temp_initial_layer': ['55'],
+ 'filament_settings_id': ['Flashforge PLA Matte @FF G4'],
+ 'filament_start_gcode': ['; filament start gcode\n;right_extruder_material:PLA\n'],
+ 'from': 'system',
+ 'hot_plate_temp': ['55'],
+ 'inherits': 'Flashforge Generic HS PLA',
+ 'instantiation': 'true',
+ 'name': 'Flashforge PLA Matte @FF G4',
+ 'nozzle_temperature': ['210'],
+ 'nozzle_temperature_initial_layer': ['210'],
+ 'nozzle_temperature_range_high': ['240'],
+ 'pressure_advance': ['0.035'],
+ 'slow_down_layer_time': ['8'],
+ 'textured_plate_temp': ['55'],
+ 'textured_plate_temp_initial_layer': ['55'],
+ 'type': 'filament'}

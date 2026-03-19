@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/SUNLU/SUNLU PLA Matte @base.json
+DATA = {'enable_pressure_advance': ['1'],
+ 'filament_cost': ['25.99'],
+ 'filament_density': ['1.3'],
+ 'filament_flow_ratio': ['1.0'],
+ 'filament_id': 'GFSNL02',
+ 'filament_max_volumetric_speed': ['21'],
+ 'filament_scarf_gap': ['0%'],
+ 'filament_scarf_height': ['5%'],
+ 'filament_scarf_length': ['10'],
+ 'filament_scarf_seam_type': ['none'],
+ 'filament_start_gcode': [';filament start gcode\n;right_extruder_material: PLA\n'],
+ 'filament_vendor': ['SUNLU'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'false',
+ 'name': 'SUNLU PLA Matte @base',
+ 'nozzle_temperature': ['220'],
+ 'nozzle_temperature_initial_layer': ['220'],
+ 'nozzle_temperature_range_high': ['245'],
+ 'nozzle_temperature_range_low': ['205'],
+ 'pressure_advance': ['0.03'],
+ 'temperature_vitrification': ['53'],
+ 'type': 'filament'}

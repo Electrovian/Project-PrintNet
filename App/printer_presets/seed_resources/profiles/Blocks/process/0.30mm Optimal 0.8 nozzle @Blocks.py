@@ -1,0 +1,13 @@
+from __future__ import annotations
+
+# source: profiles/Blocks/process/0.30mm Optimal 0.8 nozzle @Blocks.json
+DATA = {'bottom_shell_layers': '3',
+ 'compatible_printers': ['BLOCKS Pro S100', 'BLOCKS Pro S100 0.8 nozzle'],
+ 'from': 'system',
+ 'inherits': 'fdm_process_common 0.8 nozzle',
+ 'instantiation': 'true',
+ 'layer_height': '0.3',
+ 'name': '0.30mm Optimal 0.8 nozzle @Blocks',
+ 'setting_id': 'GP004',
+ 'top_shell_layers': '3',
+ 'type': 'process'}

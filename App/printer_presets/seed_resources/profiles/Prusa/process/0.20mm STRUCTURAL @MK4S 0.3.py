@@ -1,0 +1,13 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/process/0.20mm STRUCTURAL @MK4S 0.3.json
+DATA = {'bottom_shell_layers': '4',
+ 'from': 'system',
+ 'inherits': '0.16mm STRUCTURAL @MK4S 0.3',
+ 'instantiation': 'true',
+ 'layer_height': '0.2',
+ 'name': '0.20mm STRUCTURAL @MK4S 0.3',
+ 'raft_contact_distance': '0.18',
+ 'support_top_z_distance': '0.2',
+ 'top_shell_layers': '5',
+ 'type': 'process'}

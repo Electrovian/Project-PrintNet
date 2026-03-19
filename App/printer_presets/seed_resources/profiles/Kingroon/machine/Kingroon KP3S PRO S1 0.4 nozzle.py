@@ -1,0 +1,39 @@
+from __future__ import annotations
+
+# source: profiles/Kingroon/machine/Kingroon KP3S PRO S1 0.4 nozzle.json
+DATA = {'default_print_profile': '0.20mm Standard @Kingroon KP3S PRO S1',
+ 'inherits': 'fdm_machine_common',
+ 'instantiation': 'true',
+ 'machine_end_gcode': 'G1 E-1.0 F2100 ; retract\n'
+                      'G92 E0.0\n'
+                      'G1{if max_layer_z < max_print_height} Z{z_offset+min(max_layer_z+30, max_print_height)}{endif} '
+                      'E-34.0 F720 ; move print head up & retract filament\n'
+                      'G4 ; wait\n'
+                      'M104 S0 ; turn off temperature\n'
+                      'M140 S0 ; turn off heatbed\n'
+                      'M107 ; turn off fan\n'
+                      'G1 X0 Y105 F3000 ; park print head\n'
+                      'M84 ; disable motors',
+ 'machine_start_gcode': 'G90 ; use absolute coordinates\n'
+                        'M83 ; extruder relative mode\n'
+                        'M204 S[machine_max_acceleration_extruding] T[machine_max_acceleration_retracting]\n'
+                        'M104 S[first_layer_temperature] ; set extruder temp\n'
+                        'M140 S[first_layer_bed_temperature] ; set bed temp\n'
+                        'G28 ; home all\n'
+                        'G1 Y1.0 Z0.3 F1000 ; move print head up\n'
+                        'M190 S[first_layer_bed_temperature] ; wait for bed temp\n'
+                        'M109 S[first_layer_temperature] ; wait for extruder temp\n'
+                        'G92 E0.0\n'
+                        '; initial load\n'
+                        ' M117 Purge extruder\n'
+                        ' G1 X2 Y20 Z0.3 F5000.0 ; move to start-line position\n'
+                        ' G1 X2 Y175.0 Z0.3 F1500.0 E15 ; draw 1st line\n'
+                        ' G1 X2 Y175.0 Z0.4 F5000.0 ; move to side a little\n'
+                        ' G1 X2 Y20 Z0.4 F1500.0 E30 ; draw 2nd line\n'
+                        ' G92 E0 ; reset extruder\n'
+                        ' G1 Z1.0 F3000 ; move z up little to prevent scratching of surface',
+ 'name': 'Kingroon KP3S PRO S1 0.4 nozzle',
+ 'nozzle_diameter': ['0.4'],
+ 'printer_model': 'Kingroon KP3S PRO S1',
+ 'setting_id': 'GM003',
+ 'type': 'machine'}

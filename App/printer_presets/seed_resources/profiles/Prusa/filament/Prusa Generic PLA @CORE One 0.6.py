@@ -1,0 +1,13 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/filament/Prusa Generic PLA @CORE One 0.6.json
+DATA = {'compatible_printers': ['Prusa CORE One 0.6 nozzle'],
+ 'filament_id': 'Prusa Generic PLA @CORE One 0.6',
+ 'from': 'system',
+ 'inherits': 'Prusa Generic PLA @CORE One',
+ 'instantiation': 'true',
+ 'name': 'Prusa Generic PLA @CORE One 0.6',
+ 'nozzle_temperature': ['210'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['15'],
+ 'type': 'filament'}

@@ -1,0 +1,24 @@
+from __future__ import annotations
+
+# source: profiles/BBL/process/0.08mm High Quality @BBL A1M.json
+DATA = {'compatible_printers': ['Bambu Lab A1 mini 0.4 nozzle'],
+ 'default_acceleration': ['3000'],
+ 'description': 'Compared with the default profile of a 0.4 mm nozzle, it has a smaller layer height, lower speeds and '
+                'acceleration, and the sparse infill pattern is Gyroid. So, it results in almost negligible layer '
+                'lines and much higher printing quality, but much longer printing time.',
+ 'elefant_foot_compensation': '0',
+ 'from': 'system',
+ 'gap_infill_speed': ['210'],
+ 'inherits': 'fdm_process_single_0.08',
+ 'inner_wall_speed': ['120'],
+ 'instantiation': 'true',
+ 'internal_solid_infill_speed': ['150'],
+ 'name': '0.08mm High Quality @BBL A1M',
+ 'outer_wall_acceleration': ['2000'],
+ 'outer_wall_speed': ['60'],
+ 'setting_id': 'GP101',
+ 'sparse_infill_pattern': 'gyroid',
+ 'sparse_infill_speed': ['150'],
+ 'top_surface_speed': ['150'],
+ 'travel_speed': ['700'],
+ 'type': 'process'}

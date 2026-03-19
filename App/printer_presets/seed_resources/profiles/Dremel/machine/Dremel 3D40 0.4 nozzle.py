@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+# source: profiles/Dremel/machine/Dremel 3D40 0.4 nozzle.json
+DATA = {'auxiliary_fan': '0',
+ 'default_filament_profile': ['Dremel Generic PLA @3D40 all'],
+ 'default_print_profile': '.20mm Standard @Dremel 3D40 0.4',
+ 'deretraction_speed': ['40'],
+ 'emit_machine_limits_to_gcode': '1',
+ 'enable_filament_ramming': '1',
+ 'extra_loading_move': '-2',
+ 'extruder_clearance_height_to_lid': '101',
+ 'extruder_clearance_height_to_rod': '45',
+ 'extruder_clearance_radius': '45',
+ 'fan_speedup_overhangs': '1',
+ 'from': 'system',
+ 'gcode_flavor': 'marlin',
+ 'inherits': 'fdm_dremel_common',
+ 'instantiation': 'true',
+ 'machine_end_gcode': 'M104 S0\nM140 S0\nG92 E1\nG1 E-1 F300\nG162 Z F600\nG162 X Y F2000\nM84',
+ 'machine_max_acceleration_e': ['6200', '5000'],
+ 'machine_max_acceleration_extruding': ['6200', '20000'],
+ 'machine_max_acceleration_retracting': ['5000', '5000'],
+ 'machine_max_acceleration_travel': ['9000', '9000'],
+ 'machine_max_acceleration_x': ['6200', '20000'],
+ 'machine_max_acceleration_y': ['6200', '20000'],
+ 'machine_max_acceleration_z': ['500', '500'],
+ 'machine_max_jerk_e': ['2.5', '2.5'],
+ 'machine_max_jerk_x': ['12', '12'],
+ 'machine_max_jerk_y': ['12', '12'],
+ 'machine_max_jerk_z': ['2', '2'],
+ 'machine_max_speed_e': ['3000', '100'],
+ 'machine_max_speed_x': ['1000', '1000'],
+ 'machine_max_speed_y': ['1000', '1000'],
+ 'machine_max_speed_z': ['30', '30'],
+ 'machine_min_extruding_rate': ['0', '0'],
+ 'machine_min_travel_rate': ['0', '0'],
+ 'machine_start_gcode': 'G90\n'
+                        'G28\n'
+                        'M132 X Y Z A\n'
+                        'G1 Z100 F3300\n'
+                        'G1 X-110.5 Y-74 F6000\n'
+                        'M6 T0\n'
+                        'M907 X100 Y100 Z60 A100\n'
+                        'G1 Z0.6 F3300\n'
+                        'G4 P2000\n'
+                        'M108 T0',
+ 'max_layer_height': ['0.34'],
+ 'min_layer_height': ['0.05'],
+ 'name': 'Dremel 3D40 0.4 nozzle',
+ 'nozzle_diameter': ['0.4'],
+ 'nozzle_type': 'undefine',
+ 'printable_area': ['-127.5x-77.5', '97.5x-77.5', '97.5x77.5', '-127.5x77.5'],
+ 'printable_height': '170',
+ 'printer_model': 'Dremel 3D40',
+ 'printer_settings_id': 'Dremel',
+ 'printer_structure': 'hbot',
+ 'printer_variant': '0.4',
+ 'retract_before_wipe': ['70%'],
+ 'retract_length_toolchange': ['1'],
+ 'retract_lift_enforce': ['Top Only'],
+ 'retract_when_changing_layer': ['1'],
+ 'retraction_length': ['3'],
+ 'retraction_minimum_travel': ['5'],
+ 'retraction_speed': ['60'],
+ 'setting_id': 'GM001',
+ 'thumbnails': ['96x96', '300x300'],
+ 'thumbnails_format': 'PNG',
+ 'type': 'machine',
+ 'use_relative_e_distances': '0',
+ 'wipe': ['1'],
+ 'wipe_distance': ['1'],
+ 'z_hop': ['0.5'],
+ 'z_hop_types': ['Normal Lift']}

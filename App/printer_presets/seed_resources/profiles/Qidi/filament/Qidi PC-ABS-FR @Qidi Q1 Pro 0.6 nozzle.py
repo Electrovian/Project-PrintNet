@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/filament/Qidi PC-ABS-FR @Qidi Q1 Pro 0.6 nozzle.json
+DATA = {'activate_air_filtration': ['1'],
+ 'activate_chamber_temp_control': ['0'],
+ 'chamber_temperature': ['55'],
+ 'compatible_printers': ['Qidi Q1 Pro 0.6 nozzle'],
+ 'during_print_exhaust_fan_speed': ['0'],
+ 'fan_max_speed': ['40'],
+ 'fan_min_speed': ['10'],
+ 'filament_id': 'GFB99',
+ 'filament_max_volumetric_speed': ['8'],
+ 'filament_settings_id': ['Qidi PC-ABS-FR @Qidi Q1 Pro 0.6 nozzle'],
+ 'from': 'system',
+ 'hot_plate_temp': ['100'],
+ 'hot_plate_temp_initial_layer': ['100'],
+ 'inherits': 'Qidi PC-ABS-FR',
+ 'instantiation': 'true',
+ 'name': 'Qidi PC-ABS-FR @Qidi Q1 Pro 0.6 nozzle',
+ 'nozzle_temperature': ['250'],
+ 'pressure_advance': ['0.028'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['4'],
+ 'slow_down_min_speed': ['20'],
+ 'type': 'filament'}

@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+# source: profiles/BBL/filament/Bambu PA-CF @base.json
+DATA = {'description': "When printing this filament, there's a risk of nozzle clogging, oozing, warping and low layer "
+                'adhesion strength. To get better results, please refer to this wiki: Printing Tips for High Temp / '
+                'Engineering materials.',
+ 'filament_cost': ['84.99'],
+ 'filament_density': ['1.09'],
+ 'filament_flow_ratio': ['0.96'],
+ 'filament_id': 'GFN03',
+ 'filament_type': ['PA-CF'],
+ 'filament_vendor': ['Bambu Lab'],
+ 'from': 'system',
+ 'impact_strength_z': ['5.7'],
+ 'inherits': 'fdm_filament_pa',
+ 'instantiation': 'false',
+ 'name': 'Bambu PA-CF @base',
+ 'nozzle_temperature': ['280'],
+ 'nozzle_temperature_initial_layer': ['280'],
+ 'overhang_fan_speed': ['40'],
+ 'overhang_fan_threshold': ['0%'],
+ 'temperature_vitrification': ['170'],
+ 'type': 'filament'}

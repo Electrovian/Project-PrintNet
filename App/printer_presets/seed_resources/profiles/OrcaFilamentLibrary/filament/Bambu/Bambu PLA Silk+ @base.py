@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+# source: profiles/OrcaFilamentLibrary/filament/Bambu/Bambu PLA Silk+ @base.json
+DATA = {'description': 'To make the prints get higher gloss, please dry the filament before use, and set the outer wall speed '
+                'to be 40 to 60 mm/s when slicing.',
+ 'filament_cost': ['29.99'],
+ 'filament_density': ['1.27'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_id': 'OGFA06',
+ 'filament_scarf_height': ['5%'],
+ 'filament_scarf_seam_type': ['all'],
+ 'filament_vendor': ['Bambu Lab'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'false',
+ 'name': 'Bambu PLA Silk+ @base',
+ 'nozzle_temperature': ['230'],
+ 'nozzle_temperature_initial_layer': ['230'],
+ 'type': 'filament'}

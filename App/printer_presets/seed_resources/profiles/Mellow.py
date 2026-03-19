@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Mellow.json
+DATA = {'description': 'Mellow Printer Profiles',
+ 'filament_list': [],
+ 'force_update': '0',
+ 'machine_list': [{'name': 'fdm_machine_common', 'sub_path': 'machine/fdm_machine_common.json'},
+                  {'name': 'fdm_common_M1', 'sub_path': 'machine/fdm_common_M1.json'},
+                  {'name': 'M1 0.2 nozzle', 'sub_path': 'machine/M1 0.2 nozzle.json'},
+                  {'name': 'M1 0.4 nozzle', 'sub_path': 'machine/M1 0.4 nozzle.json'},
+                  {'name': 'M1 0.6 nozzle', 'sub_path': 'machine/M1 0.6 nozzle.json'},
+                  {'name': 'M1 0.8 nozzle', 'sub_path': 'machine/M1 0.8 nozzle.json'}],
+ 'machine_model_list': [{'name': 'M1', 'sub_path': 'machine/M1.json'}],
+ 'name': 'Mellow',
+ 'process_list': [{'name': 'fdm_process_common', 'sub_path': 'process/fdm_process_common.json'},
+                  {'name': 'fdm_process_M1_common', 'sub_path': 'process/fdm_process_M1_common.json'},
+                  {'name': '0.08mm Extra Fine @M1', 'sub_path': 'process/0.08mm Extra Fine @M1.json'},
+                  {'name': '0.12mm Fine @M1', 'sub_path': 'process/0.12mm Fine @M1.json'},
+                  {'name': '0.16mm Optimal @M1', 'sub_path': 'process/0.16mm Optimal @M1.json'},
+                  {'name': '0.20mm Standard @M1', 'sub_path': 'process/0.20mm Standard @M1.json'},
+                  {'name': '0.24mm Draft @M1', 'sub_path': 'process/0.24mm Draft @M1.json'},
+                  {'name': '0.28mm Extra Draft @M1', 'sub_path': 'process/0.28mm Extra Draft @M1.json'},
+                  {'name': '0.32mm Standard @M1', 'sub_path': 'process/0.32mm Extra Draft @M1.json'},
+                  {'name': '0.40mm Standard @M1', 'sub_path': 'process/0.40mm Extra Draft @M1.json'},
+                  {'name': '0.56mm Standard @M1', 'sub_path': 'process/0.56mm Extra Draft @M1.json'}],
+ 'version': '02.03.01.10'}

@@ -1,0 +1,14 @@
+from __future__ import annotations
+
+# source: profiles/Blocks/process/0.26mm Standard 0.6 nozzle @Blocks_RD50_V2.json
+DATA = {'bottom_shell_layers': '4',
+ 'compatible_printers': ['BLOCKS RD50 V2', 'BLOCKS RD50 V2 0.6 nozzle'],
+ 'from': 'system',
+ 'inherits': 'fdm_process_common 0.6 nozzle',
+ 'instantiation': 'true',
+ 'layer_height': '0.26',
+ 'name': '0.26mm Standard 0.6 nozzle @Blocks_RD50_V2',
+ 'setting_id': 'GP004',
+ 'top_shell_layers': '4',
+ 'top_solid_infill_flow_ratio': '0.96',
+ 'type': 'process'}

@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+# source: profiles/Wanhao France/machine/D12 230 PRO M2 DIRECT 0.4 nozzle.json
+DATA = {'auxiliary_fan': '0',
+ 'before_layer_change_gcode': ';BEFORE_LAYER_CHANGE\n;[layer_z]\nG92 E0',
+ 'change_filament_gcode': 'M600',
+ 'default_filament_profile': ['YUMI PLA Direct Drive'],
+ 'default_print_profile': '0.20mm Standard @Wanhao-D12-230',
+ 'deretraction_speed': ['70'],
+ 'extra_loading_move': '-2',
+ 'extruder_clearance_height_to_lid': '140',
+ 'extruder_clearance_height_to_rod': '36',
+ 'extruder_clearance_radius': '65',
+ 'from': 'system',
+ 'gcode_flavor': 'marlin2',
+ 'inherits': 'fdm_machine_common',
+ 'instantiation': 'true',
+ 'machine_end_gcode': '; Wanhao D12-230 Default End Gcode\n'
+                      'G91                     ; Mode déplacement relatif\n'
+                      'G1 E-2 F300             ; Retrait léger du filament pour éviter le suintement\n'
+                      'G1 Z10 F1200             ; Monte la tête de 10 mm\n'
+                      'G90                     ; Retour en position absolue\n'
+                      "G1 X0 Y200 F3000         ; Déplace la tête vers l'arrière pour dégager la pièce\n"
+                      'M104 S0                  ; Éteint la chauffe de la buse\n'
+                      'M140 S0                  ; Éteint la chauffe du plateau\n'
+                      'M107                     ; Arrête tous les ventilateurs\n'
+                      'M106 S0 P3               ; Arrête le ventilateur de la carte mère\n'
+                      'M106 S0 P2               ; Arrête le ventilateur auxiliaire\n'
+                      "M84 X Y E                ; Désactive les moteurs des axes X, Y et de l'extrudeur\n"
+                      'SET_VELOCITY_LIMIT ACCEL=2000 ACCEL_TO_DECEL=1000',
+ 'machine_max_acceleration_e': ['6000'],
+ 'machine_max_acceleration_extruding': ['10000'],
+ 'machine_max_acceleration_retracting': ['5000'],
+ 'machine_max_acceleration_travel': ['5000', '500'],
+ 'machine_max_acceleration_x': ['1200'],
+ 'machine_max_acceleration_y': ['1000'],
+ 'machine_max_acceleration_z': ['500'],
+ 'machine_max_jerk_e': ['2.5'],
+ 'machine_max_jerk_x': ['14'],
+ 'machine_max_jerk_y': ['14'],
+ 'machine_max_jerk_z': ['0.2'],
+ 'machine_max_speed_e': ['50'],
+ 'machine_max_speed_x': ['200'],
+ 'machine_max_speed_y': ['200'],
+ 'machine_max_speed_z': ['15'],
+ 'machine_pause_gcode': 'M600',
+ 'machine_start_gcode': 'G31\n'
+                        'save_last_file\n'
+                        'SAVE_VARIABLE VARIABLE=was_interrupted VALUE=True\n'
+                        'G21                                ; set metrics values\n'
+                        'M104 S[nozzle_temperature_initial_layer]               ; set extruder temperature\n'
+                        'M140 S[bed_temperature_initial_layer_single]           ; set bed temperature\n'
+                        'G91                                ; set relative positioning mode\n'
+                        'G28                                ; home\n'
+                        'G90                                ; set absolute positioning mode\n'
+                        'G1 X0 Y0 F3000                      ; park head\n'
+                        'M117                                ; Purge extrudeur\n'
+                        'G92 E0                             ; Reset extrudeur\n'
+                        'M109 S[nozzle_temperature_initial_layer]                         ; set and wait extruder '
+                        'temperature\n'
+                        'M190 S[bed_temperature_initial_layer_single]            ; set and wait bed temperature\n'
+                        'BED_MESH_CALIBRATE ADAPTIVE=1 ADAPTIVE_MARGIN=5 ; adaptive bed leveling\n'
+                        '\n'
+                        'G1 Z1.0 F3000                      ; Prépare la buse à une petite hauteur\n'
+                        "M83                                ; Positionnement relatif pour l'extrudeur\n"
+                        '\n'
+                        "; Purge longue à l'avant du plateau (Y=0), centrée\n"
+                        'G1 X{print_bed_max[0] / 2 - 20} Y0 Z0.3 F5000     ; Début ligne 1\n'
+                        'G1 X{print_bed_max[0] / 2 + 20} Y0 Z0.3 F750 E24  ; Ligne 1 (2x plus longue)\n'
+                        'G1 X{print_bed_max[0] / 2 - 20} Y1 Z0.3 F5000     ; Légère montée et retour\n'
+                        'G1 X{print_bed_max[0] / 2 + 20} Y1 Z0.3 F750 E24  ; Ligne 2\n'
+                        '\n'
+                        'G1 E-5 F1800                                     ; Rétraction\n'
+                        "M82                                              ; Positionnement absolu pour l'extrudeur\n"
+                        'G92 E0                                           ; Reset extrusion\n'
+                        'G1 Z1.0 F3000                                    ; Légère montée',
+ 'max_layer_height': ['0.32'],
+ 'min_layer_height': ['0.08'],
+ 'name': 'D12 230 PRO M2 DIRECT 0.4 nozzle',
+ 'nozzle_diameter': ['0.4'],
+ 'nozzle_height': '4',
+ 'nozzle_type': 'brass',
+ 'printable_area': ['0x0', '230x0', '230x230', '0x230'],
+ 'printable_height': '240',
+ 'printer_model': 'D12 230 PRO M2 DIRECT',
+ 'printer_variant': '0.4',
+ 'retract_before_wipe': ['0%'],
+ 'retract_length_toolchange': ['0'],
+ 'retract_when_changing_layer': ['0'],
+ 'retraction_length': ['2'],
+ 'retraction_minimum_travel': ['2'],
+ 'retraction_speed': ['70'],
+ 'setting_id': 'GM003',
+ 'thumbnails': '48x48/PNG, 300x300/PNG',
+ 'type': 'machine',
+ 'wipe_distance': ['2'],
+ 'z_hop': ['0.4'],
+ 'z_hop_types': ['Auto Lift']}

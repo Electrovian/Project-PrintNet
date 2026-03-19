@@ -1,0 +1,8 @@
+normalized_at_utc: 2026-02-13T13:22:43.996884+00:00
+input_key_count: 8
+output_key_count: 18
+alias_applied_count: 7
+coerced_value_count: 7
+clamped_value_count: 0
+unknown_key_count: 1
+warning_count: 0

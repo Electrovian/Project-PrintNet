@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/filament/Flashforge HIPS @FF G4 HF.json
+DATA = {'compatible_printers': ['Flashforge Guider4 0.4 HF nozzle'],
+ 'complete_print_exhaust_fan_speed': ['50'],
+ 'during_print_exhaust_fan_speed': ['40'],
+ 'filament_flow_ratio': ['1'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'filament_minimal_purge_on_wipe_tower': ['15'],
+ 'filament_settings_id': ['Flashforge HIPS @FF G4 HF'],
+ 'filament_start_gcode': ['; filament start gcode\n;right_extruder_material: HIPS\n'],
+ 'filament_type': ['HIPS'],
+ 'filament_unloading_speed': ['90'],
+ 'filament_unloading_speed_start': ['100'],
+ 'from': 'system',
+ 'hot_plate_temp': ['100'],
+ 'hot_plate_temp_initial_layer': ['100'],
+ 'inherits': 'Flashforge Generic ABS @G3U',
+ 'instantiation': 'true',
+ 'name': 'Flashforge HIPS @FF G4 HF',
+ 'nozzle_temperature_initial_layer': ['230'],
+ 'nozzle_temperature_range_high': ['250'],
+ 'type': 'filament'}

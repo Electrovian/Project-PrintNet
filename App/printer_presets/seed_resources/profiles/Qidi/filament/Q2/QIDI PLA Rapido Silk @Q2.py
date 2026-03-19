@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/filament/Q2/QIDI PLA Rapido Silk @Q2.json
+DATA = {'additional_cooling_fan_speed': ['0'],
+ 'compatible_printers': [],
+ 'filament_adhesiveness_category': ['100'],
+ 'filament_density': ['1.24'],
+ 'filament_id': 'QD_1_1_4',
+ 'filament_max_volumetric_speed': ['7.5'],
+ 'filament_type': ['PLA'],
+ 'from': 'system',
+ 'hot_plate_temp': ['55'],
+ 'hot_plate_temp_initial_layer': ['55'],
+ 'impact_strength_z': ['4.6'],
+ 'inherits': 'fdm_filament_q_common',
+ 'instantiation': 'false',
+ 'name': 'QIDI PLA Rapido Silk@Q2-Series',
+ 'nozzle_temperature': ['220'],
+ 'nozzle_temperature_initial_layer': ['220'],
+ 'nozzle_temperature_range_high': ['240'],
+ 'nozzle_temperature_range_low': ['190'],
+ 'overhang_fan_threshold': ['50%'],
+ 'setting_id': 'GFSL99',
+ 'supertack_plate_temp': ['0'],
+ 'supertack_plate_temp_initial_layer': ['0'],
+ 'temperature_vitrification': ['45'],
+ 'type': 'filament'}

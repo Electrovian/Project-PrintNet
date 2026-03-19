@@ -1,0 +1,14 @@
+from __future__ import annotations
+
+# source: profiles/Ratrig/machine/RatRig V-Cast 0.6 nozzle.json
+DATA = {'from': 'system',
+ 'inherits': 'RatRig V-Cast 0.4 nozzle',
+ 'instantiation': 'true',
+ 'name': 'RatRig V-Cast 0.6 nozzle',
+ 'nozzle_diameter': ['0.6'],
+ 'printable_area': ['0x0', '300x0', '300x300', '0x300'],
+ 'printable_height': '250',
+ 'printer_model': 'RatRig V-Cast',
+ 'printer_variant': '0.6',
+ 'setting_id': 'GM007',
+ 'type': 'machine'}

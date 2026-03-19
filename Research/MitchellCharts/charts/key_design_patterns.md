@@ -124,51 +124,51 @@
 
 ```mermaid
 flowchart TD
-    A[3D Mesh] --> B[Slice at Z-Heights]
-    B --> C[Raw 2D Polygons]
-    C --> D[Union Overlapping Polygons]
-    D --> E[Identify Islands with Holes]
-    E --> F[Apply Hole Compensation]
-    F --> G[Offset for Perimeters]
-    G --> H[Shell Generation Loop]
-    H --> I{More Shells?}
-    I -->|Yes| G
-    I -->|No| J[Inner Region Extraction]
-    J --> K[Thin Wall Detection]
-    J --> L[Gap Fill Detection]
-    J --> M[Infill Region]
-    M --> N[Generate Infill Lines]
-    N --> O[Clip to Region]
-    O --> P[Final Paths]
-    K --> P
-    L --> P
+    mesh["3D Mesh"] --> slice_z_heights["Slice at Z-Heights"]
+    slice_z_heights --> raw_polygons["Raw 2D Polygons"]
+    raw_polygons --> merged_polygons["Union Overlapping Polygons"]
+    merged_polygons --> islands_with_holes["Identify Islands with Holes"]
+    islands_with_holes --> hole_compensation["Apply Hole Compensation"]
+    hole_compensation --> perimeter_offset["Offset for Perimeters"]
+    perimeter_offset --> shell_generation["Shell Generation Loop"]
+    shell_generation --> more_shells{"More Shells?"}
+    more_shells -->|Yes| perimeter_offset
+    more_shells -->|No| inner_region["Inner Region Extraction"]
+    inner_region --> thin_walls["Thin Wall Detection"]
+    inner_region --> gap_fill["Gap Fill Detection"]
+    inner_region --> infill_region["Infill Region"]
+    infill_region --> infill_lines["Generate Infill Lines"]
+    infill_lines --> clipped_region["Clip to Region"]
+    clipped_region --> final_paths["Final Paths"]
+    thin_walls --> final_paths
+    gap_fill --> final_paths
 ```
 
 ## Settings Hierarchy
 
 ```mermaid
 flowchart TD
-    A[User Input] --> B[settings_panel UI]
-    B --> C[SliceSettings Dataclass]
-    D[Printer Config] --> C
-    E[defaults.py] --> C
-    F[FirmwareProfile] --> C
+    user_input["User Input"] --> settings_panel["settings_panel UI"]
+    settings_panel --> slice_settings["SliceSettings Dataclass"]
+    printer_config["Printer Config"] --> slice_settings
+    defaults["defaults.py"] --> slice_settings
+    firmware_profile["FirmwareProfile"] --> slice_settings
 
-    C --> G[Layer Settings]
-    C --> H[Perimeter Settings]
-    C --> I[Infill Settings]
-    C --> J[Support Settings]
-    C --> K[Speed Settings]
-    C --> L[Material Settings]
-    C --> M[Advanced Settings]
+    slice_settings --> layer_settings["Layer Settings"]
+    slice_settings --> perimeter_settings["Perimeter Settings"]
+    slice_settings --> infill_settings["Infill Settings"]
+    slice_settings --> support_settings["Support Settings"]
+    slice_settings --> speed_settings["Speed Settings"]
+    slice_settings --> material_settings["Material Settings"]
+    slice_settings --> advanced_settings["Advanced Settings"]
 
-    G --> N[layer_height, first_layer_height, etc.]
-    H --> O[wall_count, line_width, seam_position, etc.]
-    I --> P[infill_percent, pattern, angle, etc.]
-    J --> Q[support_type, density, interface, etc.]
-    K --> R[print_speed, travel_speed, bridge_speed, etc.]
-    L --> S[nozzle_diameter, filament_density, temperature, etc.]
-    M --> T[arc_fitting, combing, retraction, etc.]
+    layer_settings --> layer_examples["layer_height, first_layer_height, etc."]
+    perimeter_settings --> perimeter_examples["wall_count, line_width, seam_position, etc."]
+    infill_settings --> infill_examples["infill_percent, pattern, angle, etc."]
+    support_settings --> support_examples["support_type, density, interface, etc."]
+    speed_settings --> speed_examples["print_speed, travel_speed, bridge_speed, etc."]
+    material_settings --> material_examples["nozzle_diameter, filament_density, temperature, etc."]
+    advanced_settings --> advanced_examples["arc_fitting, combing, retraction, etc."]
 ```
 
 ## Summary of Architectural Strengths

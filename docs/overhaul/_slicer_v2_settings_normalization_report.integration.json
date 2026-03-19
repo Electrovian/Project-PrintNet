@@ -1,0 +1,46 @@
+{
+  "raw_settings": {
+    "layer_height_mm": "0.22",
+    "wall_loops": "3",
+    "sparse_infill_density": "20%",
+    "support_enable": "1",
+    "support_style": "tree",
+    "default_speed": "70",
+    "travel_speed_mm_s": "180",
+    "custom_vendor_flag": "keep-me"
+  },
+  "normalized_settings": {
+    "layer_height": 0.22,
+    "model_height_mm": 20.0,
+    "perimeter_count": 3,
+    "infill_percent": 20.0,
+    "infill_pattern": "rectilinear",
+    "support_enabled": true,
+    "support_type": "tree",
+    "travel_speed": 180.0,
+    "print_speed": 70.0,
+    "bridge_enabled": true,
+    "seam_position": "aligned",
+    "nozzle_diameter": 0.4,
+    "filament_diameter": 1.75,
+    "extrusion_width": 0.4,
+    "top_layers": 3,
+    "bottom_layers": 3,
+    "brim_width": 0.0,
+    "custom_vendor_flag": "keep-me"
+  },
+  "normalization_report": {
+    "normalized_at_utc": "2026-02-13T13:22:43.996884+00:00",
+    "input_key_count": 8,
+    "output_key_count": 18,
+    "alias_applied_count": 7,
+    "coerced_value_count": 7,
+    "clamped_value_count": 0,
+    "unknown_key_count": 1,
+    "warning_count": 0,
+    "warnings": [],
+    "unknown_keys": [
+      "custom_vendor_flag"
+    ]
+  }
+}

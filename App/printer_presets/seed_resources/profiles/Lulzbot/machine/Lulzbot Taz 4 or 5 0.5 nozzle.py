@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+# source: profiles/Lulzbot/machine/Lulzbot Taz 4 or 5 0.5 nozzle.json
+DATA = {'auxiliary_fan': '0',
+ 'before_layer_change_gcode': 'G92 E0; reset relative extrusion',
+ 'change_filament_gcode': 'M400\nM600 B10 X115 Y-10 Z10\nM190 S{bed_temperature[0]}\nM109 S{temperature[0]}',
+ 'default_filament_profile': ['Lulzbot 2.85mm PLA'],
+ 'default_print_profile': '0.25mm Standard @Lulzbot Taz 4 or 5',
+ 'deretraction_speed': ['40'],
+ 'emit_machine_limits_to_gcode': '0',
+ 'from': 'system',
+ 'inherits': 'fdm_machine_common',
+ 'instantiation': 'true',
+ 'layer_change_gcode': '; LAYER:{layer_num}\nM117 Layer: {layer_num +1} / [total_layer_count]',
+ 'machine_end_gcode': ';End G-Code Begin\n'
+                      'M400; wait for moves to finish\n'
+                      'M140 S0; disable hotend\n'
+                      'M104 S0; disable bed heater\n'
+                      'M107; disable fans\n'
+                      'G91; relative positioning\n'
+                      'G1 E-1 F300; filament retraction to release pressure\n'
+                      'G1 Z0.5 E-5 X-20 Y-20 F3000; lift up and retract even more filament\n'
+                      'M77;stopGLCD timer\n'
+                      'G90;absolute positioning\n'
+                      'G1 X0 Y250;move to cooling position\n'
+                      'M84;disable steppers\n'
+                      'M117 Print Complete.;print complete message',
+ 'machine_max_acceleration_extruding': ['500', '500'],
+ 'machine_max_acceleration_retracting': ['1000', '1000'],
+ 'machine_max_acceleration_travel': ['1250', '1250'],
+ 'machine_max_acceleration_x': ['500', '500'],
+ 'machine_max_acceleration_y': ['500', '500'],
+ 'machine_max_acceleration_z': ['100', '100'],
+ 'machine_max_jerk_e': ['5', '5'],
+ 'machine_max_jerk_x': ['8', '8'],
+ 'machine_max_jerk_y': ['8', '8'],
+ 'machine_max_jerk_z': ['0.4', '0.4'],
+ 'machine_max_speed_e': ['60', '60'],
+ 'machine_max_speed_x': ['500', '500'],
+ 'machine_max_speed_y': ['500', '500'],
+ 'machine_max_speed_z': ['10', '10'],
+ 'machine_pause_gcode': 'M600 B10',
+ 'machine_start_gcode': ';This G-Code has been generated specifically for the Lulzbot Taz 4 and 5 - translated from '
+                        'CuraLE 4.13.10 by Wrathernaut\n'
+                        'M73 P0; clear GLCD progress bar\n'
+                        'M75; start GLCD timer\n'
+                        'M140 S{bed_temperature_initial_layer[0]}; start bed heating up\n'
+                        'G90; absolute positioning\n'
+                        'M107; disable fans\n'
+                        'M82; set extruder to absolute mode\n'
+                        'G28 X0 Y0; home X and Y\n'
+                        'G28 Z0; home Z\n'
+                        'G1 Z15.0 F175; move extruder up\n'
+                        'M117 Heating...; progress indicator message on LCD\n'
+                        'M109 R{nozzle_temperature_initial_layer[0]}; wait for extruder to reach printing temp\n'
+                        'M190 R{bed_temperature_initial_layer[0]}; wait for bed to reach printing temp\n'
+                        'G92 E0; set extruder position to 0\n'
+                        'G1 F200 E0; prime the nozzle with filament\n'
+                        'G92 E0; re-set extruder position to 0\n'
+                        'G1 F175; set travel speed\n'
+                        'M203 X192 Y208 Z3; set limits on travel speed\n'
+                        'M117 TAZ Printing...; progress indicator message on LCD\n'
+                        ';Start G-Code End',
+ 'max_layer_height': ['0.4'],
+ 'min_layer_height': ['0.08'],
+ 'name': 'Lulzbot Taz 4 or 5 0.5 nozzle',
+ 'nozzle_diameter': ['0.5'],
+ 'nozzle_type': 'undefine',
+ 'printable_area': ['0x0', '280x0', '280x280', '0x280'],
+ 'printable_height': '250',
+ 'printer_model': 'Lulzbot Taz 4 or 5',
+ 'printer_settings_id': 'Lulzbot4-5',
+ 'retract_before_wipe': ['70%'],
+ 'retract_length_toolchange': ['1'],
+ 'retraction_length': ['5'],
+ 'retraction_minimum_travel': ['2'],
+ 'scan_first_layer': '0',
+ 'setting_id': 'LZ004',
+ 'single_extruder_multi_material': '1',
+ 'type': 'machine'}

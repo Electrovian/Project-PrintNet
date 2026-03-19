@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/OrcaFilamentLibrary/filament/Polymaker/PolyLite PETG @base.json
+DATA = {'cool_plate_temp': ['0'],
+ 'cool_plate_temp_initial_layer': ['0'],
+ 'eng_plate_temp': ['70'],
+ 'eng_plate_temp_initial_layer': ['70'],
+ 'fan_cooling_layer_time': ['30'],
+ 'fan_max_speed': ['90'],
+ 'fan_min_speed': ['40'],
+ 'filament_flow_ratio': ['0.95'],
+ 'filament_id': 'OGFG60',
+ 'filament_vendor': ['Polymaker'],
+ 'from': 'system',
+ 'hot_plate_temp': ['70'],
+ 'hot_plate_temp_initial_layer': ['70'],
+ 'inherits': 'fdm_filament_pet',
+ 'instantiation': 'false',
+ 'name': 'PolyLite PETG @base',
+ 'overhang_fan_speed': ['90'],
+ 'overhang_fan_threshold': ['10%'],
+ 'slow_down_layer_time': ['12'],
+ 'slow_down_min_speed': ['10'],
+ 'textured_plate_temp': ['70'],
+ 'textured_plate_temp_initial_layer': ['70'],
+ 'type': 'filament'}

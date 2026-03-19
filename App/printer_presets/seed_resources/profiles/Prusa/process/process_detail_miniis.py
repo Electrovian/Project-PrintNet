@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Prusa/process/process_detail_miniis.json
+DATA = {'bridge_acceleration': '1000',
+ 'bridge_speed': '25',
+ 'default_acceleration': '1500',
+ 'from': 'system',
+ 'gap_infill_speed': '40',
+ 'inherits': 'process_common_miniis',
+ 'initial_layer_acceleration': '500',
+ 'initial_layer_speed': '20',
+ 'inner_wall_acceleration': '1200',
+ 'inner_wall_speed': '60',
+ 'instantiation': 'false',
+ 'internal_solid_infill_acceleration': '2000',
+ 'internal_solid_infill_speed': '100',
+ 'name': 'process_detail_miniis',
+ 'outer_wall_acceleration': '1000',
+ 'outer_wall_speed': '40',
+ 'small_perimeter_speed': '40',
+ 'sparse_infill_acceleration': '2000',
+ 'sparse_infill_speed': '100',
+ 'support_speed': '60',
+ 'top_surface_acceleration': '1000',
+ 'top_surface_speed': '60',
+ 'travel_acceleration': '3000',
+ 'travel_speed': '300',
+ 'type': 'process'}

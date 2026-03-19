@@ -1,0 +1,13 @@
+{
+  "stage_count": 10,
+  "island_count_total": 5,
+  "layer_count": 5,
+  "perimeter_mode": "variable_width",
+  "perimeter_count": 3,
+  "perimeter_path_count": 10,
+  "perimeter_length_mm_total": 28.09703585014921,
+  "line_width_min_mm": 0.3,
+  "line_width_max_mm": 0.55,
+  "warning_count": 5,
+  "validation_ok": true
+}

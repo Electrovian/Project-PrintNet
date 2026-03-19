@@ -2,7 +2,8 @@
 
 ```mermaid
 sequenceDiagram
-    participant User
+    autonumber
+    actor User
     participant MainWindow
     participant MainController
     participant Viewer3D
@@ -15,7 +16,7 @@ sequenceDiagram
     participant GCodeWriter
     participant PreviewView
 
-    User->>MainWindow: Load STL File
+    User->>MainWindow: Load STL file
     MainWindow->>Viewer3D: load_model()
     Viewer3D->>Viewer3D: Create MeshModel
     Viewer3D-->>MainWindow: Model Loaded
@@ -54,7 +55,7 @@ sequenceDiagram
     GCodeWriter->>GCodeWriter: retract()
     GCodeWriter->>GCodeWriter: travel()
     SlicerEmit->>GCodeWriter: write_footer()
-    GCodeWriter-->>SlicerEmit: G-Code File Path
+    GCodeWriter-->>SlicerEmit: G-Code file path
 
     SlicerEmit-->>Worker: Success
     Worker-->>MainController: Slice Complete

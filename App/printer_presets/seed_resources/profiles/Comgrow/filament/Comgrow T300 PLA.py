@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Comgrow/filament/Comgrow T300 PLA.json
+DATA = {'compatible_printers': ['Comgrow T300 0.4 nozzle'],
+ 'fan_cooling_layer_time': ['50'],
+ 'fan_max_speed': ['100'],
+ 'fan_min_speed': ['60'],
+ 'filament_flow_ratio': ['0.98'],
+ 'filament_id': 'GFL99',
+ 'filament_max_volumetric_speed': ['24'],
+ 'filament_retraction_length': ['0.5'],
+ 'from': 'system',
+ 'full_fan_speed_layer': ['3'],
+ 'hot_plate_temp': ['65'],
+ 'hot_plate_temp_initial_layer': ['65'],
+ 'inherits': 'Comgrow Generic PLA',
+ 'instantiation': 'true',
+ 'name': 'Comgrow T300 PLA',
+ 'nozzle_temperature': ['200'],
+ 'nozzle_temperature_initial_layer': ['235'],
+ 'nozzle_temperature_range_high': ['260'],
+ 'nozzle_temperature_range_low': ['190'],
+ 'setting_id': 'GFSA04',
+ 'slow_down_layer_time': ['6'],
+ 'type': 'filament'}

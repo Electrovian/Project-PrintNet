@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Snapmaker/filament/Snapmaker ABS @U1 base.json
+DATA = {'fan_max_speed': ['15'],
+ 'filament_cooling_final_speed': ['60'],
+ 'filament_cooling_initial_speed': ['35'],
+ 'filament_cooling_moves': ['2'],
+ 'filament_end_gcode': [''],
+ 'filament_flow_ratio': ['0.95'],
+ 'filament_id': '1682237920',
+ 'filament_load_time': ['2'],
+ 'filament_loading_speed': ['35'],
+ 'filament_loading_speed_start': ['35'],
+ 'filament_max_volumetric_speed': ['8'],
+ 'filament_unload_time': ['2'],
+ 'filament_unloading_speed': ['35'],
+ 'filament_unloading_speed_start': ['35'],
+ 'from': 'system',
+ 'hot_plate_temp': ['110'],
+ 'hot_plate_temp_initial_layer': ['105'],
+ 'inherits': 'fdm_filament_abs',
+ 'instantiation': 'false',
+ 'name': 'Snapmaker ABS @U1 base',
+ 'overhang_fan_speed': ['20'],
+ 'pressure_advance': ['0.02'],
+ 'type': 'filament'}

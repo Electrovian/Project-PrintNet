@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Elegoo/process/0.12mm Fine @Elegoo Neptune4 Plus (0.8 nozzle).json
+DATA = {'bottom_shell_layers': '6',
+ 'compatible_printers': ['Elegoo Neptune 4 Plus (0.8 nozzle)'],
+ 'from': 'system',
+ 'inherits': 'fdm_process_neptune4_common',
+ 'initial_layer_line_width': '0.82',
+ 'inner_wall_line_width': '0.85',
+ 'instantiation': 'true',
+ 'internal_solid_infill_line_width': '0.85',
+ 'layer_height': '0.12',
+ 'line_width': '0.8',
+ 'name': '0.12mm Fine @Elegoo Neptune4 Plus (0.8 nozzle)',
+ 'outer_wall_line_width': '0.8',
+ 'resolution': '0.012',
+ 'setting_id': 'GP004',
+ 'sparse_infill_line_width': '0.85',
+ 'support_interface_spacing': '0.2',
+ 'support_line_width': '0.78',
+ 'support_top_z_distance': '0.12',
+ 'top_shell_layers': '7',
+ 'top_shell_thickness': '0.8',
+ 'top_surface_line_width': '0.78',
+ 'type': 'process'}

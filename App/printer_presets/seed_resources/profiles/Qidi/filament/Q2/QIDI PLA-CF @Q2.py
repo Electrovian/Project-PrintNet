@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/filament/Q2/QIDI PLA-CF @Q2.json
+DATA = {'additional_cooling_fan_speed': ['0'],
+ 'compatible_printers': [],
+ 'filament_adhesiveness_category': ['100'],
+ 'filament_density': ['1.25'],
+ 'filament_flow_ratio': ['0.93'],
+ 'filament_id': 'QD_1_1_5',
+ 'filament_max_volumetric_speed': ['15'],
+ 'filament_type': ['PLA-CF'],
+ 'from': 'system',
+ 'impact_strength_z': ['7.8'],
+ 'inherits': 'fdm_filament_q_common',
+ 'instantiation': 'false',
+ 'name': 'QIDI PLA-CF@Q2-Series',
+ 'nozzle_temperature': ['220'],
+ 'nozzle_temperature_initial_layer': ['220'],
+ 'nozzle_temperature_range_high': ['250'],
+ 'nozzle_temperature_range_low': ['210'],
+ 'overhang_fan_speed': ['100'],
+ 'overhang_fan_threshold': ['50%'],
+ 'pressure_advance': ['0.042'],
+ 'setting_id': 'GFSL98',
+ 'supertack_plate_temp': ['50'],
+ 'supertack_plate_temp_initial_layer': ['50'],
+ 'temperature_vitrification': ['45'],
+ 'type': 'filament'}

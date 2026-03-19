@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/FlyingBear/process/Ghost7/0.20mm Standard @FlyingBear Ghost7.json
+DATA = {'bottom_shell_layers': '3',
+ 'brim_width': '5',
+ 'compatible_printers': ['FlyingBear Ghost7 0.4 nozzle'],
+ 'exclude_object': '0',
+ 'from': 'system',
+ 'gap_infill_speed': '250',
+ 'inherits': 'fdm_process_common_Ghost7',
+ 'inner_wall_speed': '300',
+ 'instantiation': 'true',
+ 'internal_bridge_speed': '50',
+ 'internal_solid_infill_speed': '250',
+ 'layer_height': '0.2',
+ 'name': '0.20mm Standard @FlyingBear Ghost7',
+ 'overhang_1_4_speed': '0',
+ 'overhang_2_4_speed': '40',
+ 'overhang_3_4_speed': '30',
+ 'print_settings_id': '0.20mm Standard @FlyingBear Ghost7',
+ 'setting_id': 'GP004',
+ 'sparse_infill_speed': '270',
+ 'top_shell_layers': '5',
+ 'top_shell_thickness': '1',
+ 'top_solid_infill_flow_ratio': '1',
+ 'tree_support_wall_count': '1',
+ 'type': 'process'}

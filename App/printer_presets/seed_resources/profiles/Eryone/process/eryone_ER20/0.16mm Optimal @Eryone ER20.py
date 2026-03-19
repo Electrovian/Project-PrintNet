@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+# source: profiles/Eryone/process/eryone_ER20/0.16mm Optimal @Eryone ER20.json
+DATA = {'compatible_printers': ['Eryone ER20 0.4 nozzle'],
+ 'from': 'system',
+ 'inherits': 'fdm_process_ER20_0.16',
+ 'instantiation': 'true',
+ 'name': '0.16mm Optimal @Eryone ER20',
+ 'overhang_1_4_speed': '60',
+ 'overhang_2_4_speed': '30',
+ 'overhang_3_4_speed': '15',
+ 'overhang_4_4_speed': '10',
+ 'overhang_reverse': '0',
+ 'overhang_reverse_internal_only': '0',
+ 'overhang_reverse_threshold': '50%',
+ 'overhang_speed_classic': '0',
+ 'sparse_infill_pattern': 'gyroid',
+ 'type': 'process'}

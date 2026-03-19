@@ -1,0 +1,30 @@
+{{- if .Values.mongo.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "printnet.fullname" . }}-mongo
+  namespace: {{ include "printnet.namespace" . }}
+  labels:
+    {{- include "printnet.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mongo
+spec:
+  serviceName: {{ include "printnet.fullname" . }}-mongo
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: mongo
+  template:
+    metadata:
+      labels:
+        {{- include "printnet.labels" . | nindent 8 }}
+        app.kubernetes.io/component: mongo
+    spec:
+      containers:
+        - name: mongo
+          image: "{{ .Values.mongo.image.repository }}:{{ .Values.mongo.image.tag }}"
+          imagePullPolicy: {{ .Values.mongo.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.mongo.service.port }}
+              name: mongo
+{{- end }}

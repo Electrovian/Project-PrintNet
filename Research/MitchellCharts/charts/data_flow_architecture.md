@@ -2,27 +2,31 @@
 
 ```mermaid
 flowchart LR
-    subgraph "Input Data"
+    subgraph input_data["Input Data"]
+        direction TB
         A[STL File]
         B[User Settings]
         C[Printer Config]
     end
 
-    subgraph "Model Representation"
+    subgraph model_representation["Model Representation"]
+        direction TB
         D[Trimesh Object]
         E[MeshModel Wrapper]
         F[Vertex Data]
         G[Face Data]
     end
 
-    subgraph "2D Slicing"
+    subgraph slicing_2d["2D Slicing"]
+        direction TB
         H[Z-Height Layers]
         I[Raw Polygons]
         J[Islands with Holes]
         K[Perimeter Shells]
     end
 
-    subgraph "Feature Generation"
+    subgraph feature_generation["Feature Generation"]
+        direction TB
         L[Perimeter Paths]
         M[Infill Lines]
         N[Support Structures]
@@ -33,7 +37,8 @@ flowchart LR
         S[Ironing Paths]
     end
 
-    subgraph "Path Optimization"
+    subgraph path_optimization["Path Optimization"]
+        direction TB
         T[Travel Optimization]
         U[Seam Placement]
         V[Arc Fitting]
@@ -41,7 +46,8 @@ flowchart LR
         X[Retraction Planning]
     end
 
-    subgraph "G-Code Output"
+    subgraph gcode_output["G-Code Output"]
+        direction TB
         Y[Movement Commands]
         Z[Extrusion Commands]
         AA[Temperature Control]

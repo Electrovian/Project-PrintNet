@@ -1,0 +1,550 @@
+﻿generated_at: 2026-02-13T03:36:08.9637350Z
+app_root: C:\Users\Elect\OneDrive\Documents\GitHub\Project-PrintNet\App
+generator: scripts/generate-module-inventory.ps1
+
+App\config\performance.py:1:from __future__ import annotations
+App\config\performance.py:3:import os
+App\config\performance.py:4:import sys
+App\config\performance.py:5:from typing import Dict, Optional
+App\config\printer_config.py:1:import os
+App\config\printer_config.py:2:import os
+App\config\printer_config.py:3:from typing import List, Tuple, Dict
+App\config\printer_config.py:5:import pandas as pd
+App\config\printer_config.py:7:from .defaults import DEFAULTS
+App\config\printer_config.py:8:from .printers_catalog import PRINTER_CATALOG
+App\gui\activity_logger.py:1:import json
+App\gui\activity_logger.py:2:import logging
+App\gui\activity_logger.py:3:import os
+App\gui\activity_logger.py:4:from datetime import datetime
+App\gui\activity_logger.py:6:from PyQt5 import QtCore, QtWidgets
+App\gui\arrange_utils.py:1:from __future__ import annotations
+App\gui\arrange_utils.py:3:import math
+App\gui\arrange_utils.py:4:from typing import Dict, List, Sequence, Tuple
+App\gui\auto_orient.py:1:from __future__ import annotations
+App\gui\auto_orient.py:3:import math
+App\gui\auto_orient.py:4:from typing import Iterable, List, Tuple
+App\gui\auto_orient.py:6:import numpy as np
+App\gui\controls.py:1:from PyQt5 import QtWidgets, QtGui, QtCore
+App\gui\crash_reporter.py:1:import faulthandler
+App\gui\crash_reporter.py:10:from urllib.parse import quote
+App\gui\crash_reporter.py:12:from PyQt5 import QtCore, QtGui
+App\gui\crash_reporter.py:2:import json
+App\gui\crash_reporter.py:3:import os
+App\gui\crash_reporter.py:4:import platform
+App\gui\crash_reporter.py:5:import sys
+App\gui\crash_reporter.py:6:import threading
+App\gui\crash_reporter.py:7:import time
+App\gui\crash_reporter.py:8:import traceback
+App\gui\crash_reporter.py:9:from datetime import datetime
+App\gui\main_window.py:10:from .Windows.control import ControlView
+App\gui\main_window.py:11:from .Windows.files import FilesView
+App\gui\main_window.py:12:from .Windows.activity import ActivityView
+App\gui\main_window.py:13:from .Windows.shared_view import SharedView
+App\gui\main_window.py:14:from .resource_paths import assets_dir
+App\gui\main_window.py:15:from .Windows.controller import MainController
+App\gui\main_window.py:16:from config.defaults import DEFAULTS
+App\gui\main_window.py:17:from config.performance import resolve_performance_limits
+App\gui\main_window.py:19:from integrations.printer_manager import PrinterManager
+App\gui\main_window.py:2:import os
+App\gui\main_window.py:3:from typing import Optional, TYPE_CHECKING
+App\gui\main_window.py:5:from PyQt5 import QtWidgets, QtGui, QtCore
+App\gui\main_window.py:7:from .Windows.prepare import PrepareView
+App\gui\main_window.py:8:from .Windows.preview import PreviewView
+App\gui\main_window.py:9:from .Windows.device import DeviceView
+App\gui\model_panel.py:1:from PyQt5 import QtWidgets, QtCore
+App\gui\popups\__init__.py:1:from .move_popup import MovePopup
+App\gui\popups\__init__.py:2:from .rotate_popup import RotatePopup
+App\gui\popups\__init__.py:3:from .scale_popup import ScalePopup
+App\gui\popups\__init__.py:4:from .auto_orient_popup import AutoOrientPopup
+App\gui\popups\__init__.py:5:from .arrange_popup import ArrangePopup
+App\gui\popups\arrange_popup.py:1:from PyQt5 import QtWidgets, QtCore
+App\gui\popups\arrange_popup.py:3:from .base_popup import BasePopup
+App\gui\popups\arrange_popup.py:4:from config.defaults import DEFAULTS
+App\gui\popups\auto_orient_popup.py:1:from PyQt5 import QtWidgets, QtCore
+App\gui\popups\auto_orient_popup.py:3:from .base_popup import BasePopup
+App\gui\popups\base_popup.py:1:from PyQt5 import QtWidgets, QtCore
+App\gui\popups\base_popup.py:3:from ..theme import theme_css
+App\gui\popups\move_popup.py:1:from PyQt5 import QtWidgets, QtCore
+App\gui\popups\move_popup.py:3:from .base_popup import BasePopup
+App\gui\popups\move_popup.py:4:from ..theme import theme_css
+App\gui\popups\move_popup.py:5:from config.defaults import DEFAULTS
+App\gui\popups\rotate_popup.py:1:import math
+App\gui\popups\rotate_popup.py:2:from PyQt5 import QtWidgets, QtCore, QtGui
+App\gui\popups\rotate_popup.py:4:from .base_popup import BasePopup
+App\gui\popups\rotate_popup.py:5:from ..theme import theme_css, theme_qcolor
+App\gui\popups\rotate_popup.py:6:from config.defaults import DEFAULTS
+App\gui\popups\scale_popup.py:1:from PyQt5 import QtWidgets, QtCore
+App\gui\popups\scale_popup.py:3:from .base_popup import BasePopup
+App\gui\popups\scale_popup.py:4:from ..theme import theme_css
+App\gui\popups\scale_popup.py:5:from config.defaults import DEFAULTS
+App\gui\preview_utils.py:1:from __future__ import annotations
+App\gui\resource_paths.py:1:import os
+App\gui\resource_paths.py:2:import sys
+App\gui\selection_utils.py:1:from __future__ import annotations
+App\gui\selection_utils.py:3:from typing import Iterable, Tuple
+App\gui\settings_panel\__init__.py:1:from .panel import SettingsPanel, SettingsTooltip
+App\gui\settings_panel\multifilament.py:1:from __future__ import annotations
+App\gui\settings_panel\multifilament.py:3:from typing import TYPE_CHECKING, Any
+App\gui\settings_panel\multifilament.py:5:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\settings_panel\others.py:1:from __future__ import annotations
+App\gui\settings_panel\others.py:10:from ..theme import theme_css
+App\gui\settings_panel\others.py:3:from dataclasses import asdict
+App\gui\settings_panel\others.py:4:from typing import Any, Dict, TYPE_CHECKING, cast
+App\gui\settings_panel\others.py:6:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\settings_panel\others.py:8:from config.defaults import DEFAULTS
+App\gui\settings_panel\others.py:9:from slicer.gcode.writer import SliceSettings
+App\gui\settings_panel\panel.py:1:from __future__ import annotations
+App\gui\settings_panel\panel.py:10:from ..theme import theme_css
+App\gui\settings_panel\panel.py:11:from ..model_panel import ModelPanel
+App\gui\settings_panel\panel.py:12:from .multifilament import MultifilamentSectionMixin
+App\gui\settings_panel\panel.py:13:from .others import OtherSectionMixin
+App\gui\settings_panel\panel.py:14:from .quality import QualitySectionMixin
+App\gui\settings_panel\panel.py:15:from .strength import StrengthSectionMixin
+App\gui\settings_panel\panel.py:16:from .support import SupportSectionMixin
+App\gui\settings_panel\panel.py:3:from dataclasses import asdict
+App\gui\settings_panel\panel.py:4:from typing import Dict, List, Tuple, TYPE_CHECKING, cast
+App\gui\settings_panel\panel.py:6:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\settings_panel\panel.py:8:from slicer.gcode.writer import SliceSettings
+App\gui\settings_panel\panel.py:9:from config.defaults import DEFAULTS
+App\gui\settings_panel\quality.py:1:from __future__ import annotations
+App\gui\settings_panel\quality.py:3:from typing import Any, TYPE_CHECKING
+App\gui\settings_panel\quality.py:5:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\settings_panel\strength.py:1:from __future__ import annotations
+App\gui\settings_panel\strength.py:3:from typing import Any, TYPE_CHECKING
+App\gui\settings_panel\strength.py:5:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\settings_panel\support.py:1:from __future__ import annotations
+App\gui\settings_panel\support.py:3:from typing import Any, TYPE_CHECKING
+App\gui\settings_panel\support.py:5:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\shortcuts.py:1:from dataclasses import dataclass
+App\gui\shortcuts.py:2:from typing import Dict, List, Sequence
+App\gui\theme.py:1:from PyQt5 import QtGui
+App\gui\viewer\__init__.py:1:from .core import Viewer3D
+App\gui\viewer\core.py:1:import os
+App\gui\viewer\core.py:11:from slicer.geometry import arrange_rectangles, lowest_planar_face
+App\gui\viewer\core.py:12:from slicer.mesh_opt import simplify_mesh, wireframe_target_faces
+App\gui\viewer\core.py:14:from ..auto_orient import (
+App\gui\viewer\core.py:2:import math
+App\gui\viewer\core.py:21:from ..arrange_utils import positions_fit, spacing_candidates, spacing_with_base
+App\gui\viewer\core.py:22:from ..theme import theme_value, theme_qcolor
+App\gui\viewer\core.py:23:from config.defaults import DEFAULTS
+App\gui\viewer\core.py:24:from .gizmos import GizmoMixin
+App\gui\viewer\core.py:25:from .panels import PanelMixin
+App\gui\viewer\core.py:26:from .preview import PreviewMixin
+App\gui\viewer\core.py:27:from .selection import SelectionMixin
+App\gui\viewer\core.py:28:from .wireframe import WireframeMixin
+App\gui\viewer\core.py:3:from numbers import Real
+App\gui\viewer\core.py:4:from typing import Dict, List, Optional, Sequence, Tuple
+App\gui\viewer\core.py:5:import numpy as np
+App\gui\viewer\core.py:6:import pyqtgraph as pg
+App\gui\viewer\core.py:7:import pyqtgraph.opengl as gl
+App\gui\viewer\core.py:8:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\viewer\core.py:9:import trimesh
+App\gui\viewer\gizmos.py:1:from __future__ import annotations
+App\gui\viewer\gizmos.py:10:from ..theme import theme_value
+App\gui\viewer\gizmos.py:11:from ..widgets.nozzle_item import make_cone_mesh
+App\gui\viewer\gizmos.py:3:import math
+App\gui\viewer\gizmos.py:4:from typing import Any, Dict, TYPE_CHECKING
+App\gui\viewer\gizmos.py:6:import numpy as np
+App\gui\viewer\gizmos.py:7:import pyqtgraph.opengl as gl
+App\gui\viewer\gizmos.py:8:from PyQt5 import QtCore
+App\gui\viewer\panels.py:1:from __future__ import annotations
+App\gui\viewer\panels.py:10:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\viewer\panels.py:12:from ..theme import theme_qcolor, theme_value
+App\gui\viewer\panels.py:13:from ..widgets.view_cube_overlay import ViewCubeOverlay
+App\gui\viewer\panels.py:3:from typing import Any, Dict, List, Tuple, TYPE_CHECKING, cast
+App\gui\viewer\panels.py:5:import os
+App\gui\viewer\panels.py:7:import numpy as np
+App\gui\viewer\panels.py:8:import trimesh
+App\gui\viewer\preview.py:1:from __future__ import annotations
+App\gui\viewer\preview.py:10:from PyQt5 import QtCore, QtGui
+App\gui\viewer\preview.py:12:from ..widgets.nozzle_item import NozzleItem
+App\gui\viewer\preview.py:3:import bisect
+App\gui\viewer\preview.py:4:import math
+App\gui\viewer\preview.py:5:from collections import OrderedDict
+App\gui\viewer\preview.py:6:from typing import Any, Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING
+App\gui\viewer\preview.py:8:import numpy as np
+App\gui\viewer\preview.py:9:import pyqtgraph.opengl as gl
+App\gui\viewer\selection.py:1:from __future__ import annotations
+App\gui\viewer\selection.py:3:from typing import Any, List, Tuple, TYPE_CHECKING, cast
+App\gui\viewer\selection.py:5:import numpy as np
+App\gui\viewer\selection.py:6:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\viewer\selection.py:8:from ..selection_utils import rect_from_points, rect_intersects, rect_size
+App\gui\viewer\selection.py:9:from ..theme import theme_qcolor
+App\gui\viewer\wireframe.py:1:from __future__ import annotations
+App\gui\viewer\wireframe.py:3:from typing import Any, TYPE_CHECKING
+App\gui\viewer_3d.py:1:from .viewer.core import Viewer3D
+App\gui\widgets\__init__.py:1:from .view_cube_overlay import ViewCubeOverlay
+App\gui\widgets\__init__.py:2:from .nozzle_item import NozzleItem
+App\gui\widgets\nozzle_item.py:1:from __future__ import annotations
+App\gui\widgets\nozzle_item.py:3:import math
+App\gui\widgets\nozzle_item.py:4:from typing import Tuple
+App\gui\widgets\nozzle_item.py:6:import numpy as np
+App\gui\widgets\nozzle_item.py:7:import pyqtgraph.opengl as gl
+App\gui\widgets\view_cube_overlay.py:1:import math
+App\gui\widgets\view_cube_overlay.py:2:import numpy as np
+App\gui\widgets\view_cube_overlay.py:3:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\widgets\view_cube_overlay.py:5:from ..theme import theme_qcolor
+App\gui\Windows\activity.py:1:from PyQt5 import QtWidgets
+App\gui\Windows\activity.py:3:from ..theme import theme_css
+App\gui\Windows\control.py:1:from PyQt5 import QtWidgets, QtCore
+App\gui\Windows\control.py:3:from ..theme import theme_css
+App\gui\Windows\control.py:4:from config.defaults import DEFAULTS
+App\gui\Windows\controller\__init__.py:1:from .core import MainController
+App\gui\Windows\controller\core.py:1:from PyQt5 import QtCore
+App\gui\Windows\controller\core.py:3:from ...workers import Worker
+App\gui\Windows\controller\core.py:4:from config.defaults import DEFAULTS
+App\gui\Windows\controller\core.py:5:from .load import LoadMixin
+App\gui\Windows\controller\core.py:6:from .print import PrintMixin
+App\gui\Windows\controller\core.py:7:from .project import ProjectMixin
+App\gui\Windows\controller\core.py:8:from .ui import UiMixin
+App\gui\Windows\controller\load.py:10:import trimesh
+App\gui\Windows\controller\load.py:11:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\Windows\controller\load.py:13:from ...workers import Worker
+App\gui\Windows\controller\load.py:14:from ..simplify import SimplifyDialog
+App\gui\Windows\controller\load.py:3:from __future__ import annotations
+App\gui\Windows\controller\load.py:5:import importlib.util
+App\gui\Windows\controller\load.py:6:import os
+App\gui\Windows\controller\load.py:7:import threading
+App\gui\Windows\controller\load.py:9:import numpy as np
+App\gui\Windows\controller\print.py:1:from __future__ import annotations
+App\gui\Windows\controller\print.py:10:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\Windows\controller\print.py:12:from ...workers import Worker
+App\gui\Windows\controller\print.py:13:from slicer.ai_checks import run_ai_checks
+App\gui\Windows\controller\print.py:14:from slicer.gcode.preview import parse_gcode_preview_file
+App\gui\Windows\controller\print.py:15:from slicer.gcode.stats import estimate_gcode_file
+App\gui\Windows\controller\print.py:16:from slicer.gcode.writer import SliceSettings
+App\gui\Windows\controller\print.py:17:from slicer.slicer.emit import slice_trimesh, slice_trimesh_auto
+App\gui\Windows\controller\print.py:3:import json
+App\gui\Windows\controller\print.py:4:import os
+App\gui\Windows\controller\print.py:5:from dataclasses import asdict
+App\gui\Windows\controller\print.py:6:from typing import TYPE_CHECKING, Any
+App\gui\Windows\controller\print.py:8:import numpy as np
+App\gui\Windows\controller\print.py:9:import trimesh
+App\gui\Windows\controller\project.py:1:from __future__ import annotations
+App\gui\Windows\controller\project.py:10:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\Windows\controller\project.py:3:import json
+App\gui\Windows\controller\project.py:4:import os
+App\gui\Windows\controller\project.py:5:from dataclasses import asdict
+App\gui\Windows\controller\project.py:6:from typing import TYPE_CHECKING, Any
+App\gui\Windows\controller\project.py:8:import numpy as np
+App\gui\Windows\controller\project.py:9:import trimesh
+App\gui\Windows\controller\ui.py:11:import numpy as np
+App\gui\Windows\controller\ui.py:12:from PyQt5 import QtCore, QtGui, QtWidgets
+App\gui\Windows\controller\ui.py:14:from ...theme import export_theme, get_theme_name, register_theme, set_theme
+App\gui\Windows\controller\ui.py:15:from config.defaults import DEFAULTS
+App\gui\Windows\controller\ui.py:16:from slicer.gcode.writer import (
+App\gui\Windows\controller\ui.py:4:from __future__ import annotations
+App\gui\Windows\controller\ui.py:6:import json
+App\gui\Windows\controller\ui.py:7:import math
+App\gui\Windows\controller\ui.py:8:import os
+App\gui\Windows\controller\ui.py:9:from typing import Any, TYPE_CHECKING
+App\gui\Windows\device.py:1:from PyQt5 import QtWidgets, QtCore
+App\gui\Windows\device.py:3:from ..theme import theme_css
+App\gui\Windows\device.py:4:from config.defaults import DEFAULTS
+App\gui\Windows\files.py:1:import os
+App\gui\Windows\files.py:2:import time
+App\gui\Windows\files.py:4:from PyQt5 import QtWidgets, QtCore
+App\gui\Windows\files.py:6:from ..theme import theme_css
+App\gui\Windows\prepare.py:1:from PyQt5 import QtWidgets, QtCore
+App\gui\Windows\prepare.py:3:from ..viewer import Viewer3D
+App\gui\Windows\prepare.py:4:from ..settings_panel import SettingsPanel
+App\gui\Windows\prepare.py:5:from ..controls import TransformToolbar
+App\gui\Windows\prepare.py:6:from ..popups import MovePopup, RotatePopup, ScalePopup, AutoOrientPopup, ArrangePopup
+App\gui\Windows\prepare.py:7:from ..theme import theme_css
+App\gui\Windows\preview.py:1:import bisect
+App\gui\Windows\preview.py:2:import math
+App\gui\Windows\preview.py:3:from PyQt5 import QtWidgets, QtCore, QtGui
+App\gui\Windows\preview.py:5:from ..theme import theme_css, theme_qcolor
+App\gui\Windows\preview.py:6:from ..preview_utils import play_interval_ms
+App\gui\Windows\preview.py:7:from config.defaults import DEFAULTS
+App\gui\Windows\shared_view.py:1:import os
+App\gui\Windows\shared_view.py:3:from PyQt5 import QtWidgets, QtGui, QtCore
+App\gui\Windows\shared_view.py:5:from ..theme import THEMES, get_theme_name, theme_css, theme_qcolor
+App\gui\Windows\shared_view.py:6:from ..shortcuts import shortcut_key, shortcut_label, shortcuts_by_category
+App\gui\Windows\shared_view.py:7:from ..resource_paths import assets_dir
+App\gui\Windows\shared_view.py:8:from config.defaults import DEFAULTS
+App\gui\Windows\simplify.py:1:from __future__ import annotations
+App\gui\Windows\simplify.py:3:from dataclasses import dataclass
+App\gui\Windows\simplify.py:4:from typing import List, Tuple
+App\gui\Windows\simplify.py:6:from PyQt5 import QtCore, QtWidgets
+App\gui\Windows\simplify.py:8:from ..theme import theme_css
+App\gui\Windows\splash.py:1:from PyQt5 import QtCore, QtWidgets
+App\gui\workers.py:1:from PyQt5 import QtCore
+App\integrations\airtable_api.py:1:from typing import List, Dict
+App\integrations\airtable_api.py:3:import requests
+App\integrations\octoprint_api.py:1:import os
+App\integrations\octoprint_api.py:2:from pathlib import Path
+App\integrations\octoprint_api.py:4:import requests
+App\integrations\printer_manager.py:1:from typing import List, Dict
+App\integrations\printer_manager.py:3:from slicer.slicer.emit import slice_file
+App\integrations\printer_manager.py:4:from slicer.gcode.writer import SliceSettings
+App\integrations\printer_manager.py:5:from .octoprint_api import upload_and_print
+App\main.py:1:import sys
+App\main.py:2:from PyQt5 import QtWidgets, QtCore
+App\main.py:3:from gui.main_window import MainWindow
+App\main.py:4:from gui.Windows.splash import SplashScreen
+App\main.py:5:from config.printer_config import load_printer_config
+App\main.py:6:from gui.activity_logger import ActivityLogger
+App\main.py:7:from gui.crash_reporter import CrashReporter
+App\slicer\ai_checks.py:1:from __future__ import annotations
+App\slicer\ai_checks.py:3:from dataclasses import dataclass
+App\slicer\ai_checks.py:4:import math
+App\slicer\ai_checks.py:5:from typing import Iterable, List, Sequence
+App\slicer\ai_checks.py:7:import trimesh
+App\slicer\ai_checks.py:9:from .gcode.writer import SliceSettings
+App\slicer\gcode\__init__.py:1:from .writer import FirmwareProfile, GCodeWriter, SliceSettings, get_firmware_profile
+App\slicer\gcode\__init__.py:2:from .writer import generate_pressure_advance_pattern, generate_retraction_tower, generate_temperature_tower
+App\slicer\gcode\__init__.py:3:from .preview import GCodePreview, PreviewFeatureGroup, PreviewLayer, PreviewSegment
+App\slicer\gcode\__init__.py:4:from .preview import parse_gcode_preview, parse_gcode_preview_file
+App\slicer\gcode\__init__.py:5:from .stats import estimate_gcode_file, estimate_gcode_stats
+App\slicer\gcode\preview.py:1:from dataclasses import dataclass, field
+App\slicer\gcode\preview.py:2:import math
+App\slicer\gcode\preview.py:3:from typing import Dict, Iterable, List, Optional, Tuple
+App\slicer\gcode\preview.py:5:from .writer import SliceSettings
+App\slicer\gcode\stats.py:1:import math
+App\slicer\gcode\stats.py:2:from typing import Dict, Iterable
+App\slicer\gcode\stats.py:4:from .writer import SliceSettings
+App\slicer\gcode\stats.py:5:from .preview import _arc_center_from_radius, _arc_delta
+App\slicer\gcode\writer.py:1:from dataclasses import dataclass, field
+App\slicer\gcode\writer.py:2:import math
+App\slicer\gcode\writer.py:3:from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+App\slicer\geometry.py:12:import numpy as np
+App\slicer\geometry.py:17:import trimesh
+App\slicer\geometry.py:18:from trimesh.transformations import transform_points
+App\slicer\geometry.py:8:import math
+App\slicer\geometry.py:9:from typing import (Any, Dict, Iterable, List, Protocol, Sequence, Tuple, TYPE_CHECKING,
+App\slicer\infill.py:3:import math
+App\slicer\infill.py:4:from typing import List, Sequence, Tuple
+App\slicer\infill.py:6:from .geometry import Island2D, LineSegment2D, Point2D, clip_lines_to_island
+App\slicer\mesh.py:1:from dataclasses import dataclass, field
+App\slicer\mesh.py:2:from collections import OrderedDict
+App\slicer\mesh.py:3:import math
+App\slicer\mesh.py:4:from typing import Dict, Iterable, List, Tuple
+App\slicer\mesh.py:6:import trimesh
+App\slicer\mesh.py:7:import threading
+App\slicer\mesh.py:9:from .geometry import Island2D, slice_mesh, polygons_with_holes
+App\slicer\mesh_opt.py:1:from __future__ import annotations
+App\slicer\mesh_opt.py:3:from typing import Optional, Tuple
+App\slicer\mesh_opt.py:5:import numpy as np
+App\slicer\mesh_opt.py:6:import trimesh
+App\slicer\path_planner.py:10:from .geometry import (Island2D, LineSegment2D, Point2D, islands_difference,
+App\slicer\path_planner.py:12:from . import infill
+App\slicer\path_planner.py:3:from dataclasses import dataclass
+App\slicer\path_planner.py:4:import math
+App\slicer\path_planner.py:5:import random
+App\slicer\path_planner.py:6:from typing import List, Optional, Sequence, Tuple
+App\slicer\path_planner.py:8:import numpy as np
+App\slicer\slicer\__init__.py:1:from .plan import (
+App\slicer\slicer\__init__.py:15:from .raft import BrimPlan, RaftLayer, SkirtPlan
+App\slicer\slicer\__init__.py:16:from .supports import BridgeInfill, IroningPass
+App\slicer\slicer\__init__.py:17:from .emit import slice_file, slice_mesh_model, slice_trimesh, slice_trimesh_auto
+App\slicer\slicer\emit.py:1:from __future__ import annotations
+App\slicer\slicer\emit.py:10:from ..geometry import Island2D, LineSegment2D, Polygon2D, ensure_winding, point_in_island
+App\slicer\slicer\emit.py:11:from ..gcode.writer import GCodeWriter, SliceSettings
+App\slicer\slicer\emit.py:12:from .. import path_planner
+App\slicer\slicer\emit.py:13:from ..mesh import MeshModel
+App\slicer\slicer\emit.py:14:from config.defaults import DEFAULTS
+App\slicer\slicer\emit.py:15:from config.performance import resolve_performance_limits
+App\slicer\slicer\emit.py:16:from .plan import PrintPlan, _shells_to_islands, build_z_heights, generate_layer_plans, generate_layer_plans_multi
+App\slicer\slicer\emit.py:3:import math
+App\slicer\slicer\emit.py:4:import random
+App\slicer\slicer\emit.py:5:from pathlib import Path
+App\slicer\slicer\emit.py:6:from typing import List, Optional, Sequence, Tuple, cast
+App\slicer\slicer\emit.py:8:import trimesh
+App\slicer\slicer\plan.py:1:from dataclasses import dataclass
+App\slicer\slicer\plan.py:10:from ..geometry import (Island2D, LineSegment2D, Polygon2D, compensate_holes,
+App\slicer\slicer\plan.py:13:from ..gcode.writer import SliceSettings
+App\slicer\slicer\plan.py:14:from .. import infill as infill_generator
+App\slicer\slicer\plan.py:15:from .. import support as support_generator
+App\slicer\slicer\plan.py:16:from .raft import BrimPlan, RaftLayer, SkirtPlan, build_brim_plan, build_raft_layers, build_skirt_plan
+App\slicer\slicer\plan.py:17:from .supports import BridgeInfill, IroningPass, build_bridge_infill, build_ironing_pass
+App\slicer\slicer\plan.py:2:from concurrent.futures import ThreadPoolExecutor
+App\slicer\slicer\plan.py:3:import math
+App\slicer\slicer\plan.py:4:from typing import Iterable, List, Optional, Sequence, Tuple
+App\slicer\slicer\plan.py:6:import numpy as np
+App\slicer\slicer\plan.py:7:import trimesh
+App\slicer\slicer\plan.py:9:from ..mesh import MeshModel
+App\slicer\slicer\raft.py:1:from __future__ import annotations
+App\slicer\slicer\raft.py:3:from dataclasses import dataclass
+App\slicer\slicer\raft.py:4:import math
+App\slicer\slicer\raft.py:5:from typing import List, Optional, Sequence
+App\slicer\slicer\raft.py:7:from ..geometry import Island2D, LineSegment2D, Polygon2D, offset_islands
+App\slicer\slicer\raft.py:8:from .. import infill as infill_generator
+App\slicer\slicer\raft.py:9:from ..gcode.writer import SliceSettings
+App\slicer\slicer\supports.py:1:from __future__ import annotations
+App\slicer\slicer\supports.py:10:from ..gcode.writer import SliceSettings
+App\slicer\slicer\supports.py:3:from dataclasses import dataclass
+App\slicer\slicer\supports.py:4:import math
+App\slicer\slicer\supports.py:5:from typing import List, Optional, Sequence, Tuple
+App\slicer\slicer\supports.py:7:from ..geometry import Island2D, LineSegment2D, ensure_winding
+App\slicer\slicer\supports.py:8:from .. import infill as infill_generator
+App\slicer\slicer\supports.py:9:from .. import path_planner
+App\slicer\support.py:10:from .gcode.writer import SliceSettings
+App\slicer\support.py:11:from .mesh import MeshModel
+App\slicer\support.py:12:from . import infill
+App\slicer\support.py:3:from dataclasses import dataclass
+App\slicer\support.py:4:import math
+App\slicer\support.py:5:from typing import Dict, List, Optional, Sequence, Tuple
+App\slicer\support.py:7:from .geometry import (Island2D, LineSegment2D, Point2D, ensure_winding,
+App\Tests\harness.py:1:import contextlib
+App\Tests\harness.py:2:import math
+App\Tests\harness.py:3:import tempfile
+App\Tests\harness.py:4:import unittest
+App\Tests\harness.py:5:from typing import Iterable, Sequence, Tuple
+App\Tests\harness.py:7:import numpy as np
+App\Tests\qt_harness.py:1:import unittest
+App\Tests\run_tests.py:1:import argparse
+App\Tests\run_tests.py:2:import os
+App\Tests\run_tests.py:3:import sys
+App\Tests\run_tests.py:4:import unittest
+App\Tests\test_ai_checks.py:1:import os
+App\Tests\test_ai_checks.py:11:from slicer.ai_checks import run_ai_checks
+App\Tests\test_ai_checks.py:12:from slicer.gcode.writer import SliceSettings
+App\Tests\test_ai_checks.py:2:import sys
+App\Tests\test_ai_checks.py:3:import unittest
+App\Tests\test_ai_checks.py:5:import trimesh
+App\Tests\test_ai_checks_more.py:1:import pytest
+App\Tests\test_ai_checks_more.py:2:import trimesh
+App\Tests\test_ai_checks_more.py:4:from slicer.ai_checks import _check_mesh, _check_settings, _merge_reports, run_ai_checks, AiCheckReport
+App\Tests\test_ai_checks_more.py:5:from slicer.gcode.writer import SliceSettings
+App\Tests\test_arrange_utils.py:1:import unittest
+App\Tests\test_arrange_utils.py:3:from gui.arrange_utils import positions_fit, spacing_candidates, spacing_with_base
+App\Tests\test_auto_orient.py:1:import unittest
+App\Tests\test_auto_orient.py:3:import numpy as np
+App\Tests\test_auto_orient.py:5:from gui.auto_orient import (
+App\Tests\test_bridge.py:1:import os
+App\Tests\test_bridge.py:10:from slicer.geometry import polygons_with_holes
+App\Tests\test_bridge.py:2:import sys
+App\Tests\test_bridge.py:3:import unittest
+App\Tests\test_bridge.py:9:from slicer import path_planner
+App\Tests\test_calibration_gcode.py:1:import os
+App\Tests\test_calibration_gcode.py:2:import sys
+App\Tests\test_calibration_gcode.py:3:import unittest
+App\Tests\test_calibration_gcode.py:9:from slicer.gcode.writer import (
+App\Tests\test_device_view.py:1:import unittest
+App\Tests\test_device_view.py:3:from qt_harness import QtTestCase
+App\Tests\test_gcode.py:1:import math
+App\Tests\test_gcode.py:10:from slicer.gcode.stats import estimate_gcode_stats
+App\Tests\test_gcode.py:11:from slicer.gcode.writer import GCodeWriter, SliceSettings
+App\Tests\test_gcode.py:2:import os
+App\Tests\test_gcode.py:3:import sys
+App\Tests\test_gcode.py:4:import unittest
+App\Tests\test_gcode_extra.py:1:import os
+App\Tests\test_gcode_extra.py:12:from slicer.gcode.preview import parse_gcode_preview
+App\Tests\test_gcode_extra.py:13:from slicer.gcode.stats import estimate_gcode_stats
+App\Tests\test_gcode_extra.py:14:from harness import BaseTestCase
+App\Tests\test_gcode_extra.py:2:import sys
+App\Tests\test_gcode_extra.py:3:import unittest
+App\Tests\test_gcode_preview.py:1:import os
+App\Tests\test_gcode_preview.py:2:import sys
+App\Tests\test_gcode_preview.py:3:import unittest
+App\Tests\test_gcode_preview.py:9:from slicer.gcode.preview import parse_gcode_preview
+App\Tests\test_gcode_preview_features.py:1:import pytest
+App\Tests\test_gcode_preview_features.py:3:from slicer.gcode.preview import parse_gcode_preview
+App\Tests\test_gcode_writer_moves.py:1:from slicer.gcode.writer import GCodeWriter, SliceSettings, _normalize_gcode_lines
+App\Tests\test_geometry.py:1:import math
+App\Tests\test_geometry.py:13:from slicer import geometry
+App\Tests\test_geometry.py:2:import os
+App\Tests\test_geometry.py:3:import sys
+App\Tests\test_geometry.py:4:import unittest
+App\Tests\test_geometry.py:6:import numpy as np
+App\Tests\test_geometry.py:7:import trimesh
+App\Tests\test_geometry_clip.py:1:import os
+App\Tests\test_geometry_clip.py:12:from slicer import geometry
+App\Tests\test_geometry_clip.py:13:from harness import BaseTestCase, square_points
+App\Tests\test_geometry_clip.py:2:import sys
+App\Tests\test_geometry_clip.py:3:import unittest
+App\Tests\test_geometry_helpers.py:1:import os
+App\Tests\test_geometry_helpers.py:12:from slicer import geometry
+App\Tests\test_geometry_helpers.py:13:from harness import BaseTestCase, circle_points, square_points
+App\Tests\test_geometry_helpers.py:2:import sys
+App\Tests\test_geometry_helpers.py:3:import unittest
+App\Tests\test_gui_model_panel.py:1:import unittest
+App\Tests\test_gui_model_panel.py:3:from qt_harness import QtTestCase
+App\Tests\test_gui_popups.py:1:import unittest
+App\Tests\test_gui_popups.py:3:from qt_harness import QtTestCase
+App\Tests\test_gui_preview.py:1:import unittest
+App\Tests\test_gui_preview.py:2:from typing import TYPE_CHECKING
+App\Tests\test_gui_preview.py:4:from qt_harness import QtCore, QtTestCase, QtWidgets
+App\Tests\test_infill.py:1:import os
+App\Tests\test_infill.py:10:from slicer.geometry import polygons_with_holes
+App\Tests\test_infill.py:2:import sys
+App\Tests\test_infill.py:3:import unittest
+App\Tests\test_infill.py:9:from slicer import infill
+App\Tests\test_infill_extra.py:1:import os
+App\Tests\test_infill_extra.py:12:from slicer import geometry
+App\Tests\test_infill_extra.py:13:from slicer import infill
+App\Tests\test_infill_extra.py:14:from harness import BaseTestCase, square_points
+App\Tests\test_infill_extra.py:2:import sys
+App\Tests\test_infill_extra.py:3:import unittest
+App\Tests\test_mesh_model.py:1:import os
+App\Tests\test_mesh_model.py:13:from slicer.mesh import MeshModel
+App\Tests\test_mesh_model.py:14:from harness import BaseTestCase
+App\Tests\test_mesh_model.py:2:import sys
+App\Tests\test_mesh_model.py:3:import unittest
+App\Tests\test_mesh_model.py:4:import trimesh
+App\Tests\test_mesh_opt.py:1:import os
+App\Tests\test_mesh_opt.py:11:from slicer.mesh_opt import simplify_mesh, wireframe_target_faces
+App\Tests\test_mesh_opt.py:2:import sys
+App\Tests\test_mesh_opt.py:3:import unittest
+App\Tests\test_mesh_opt.py:5:import trimesh
+App\Tests\test_nozzle_item.py:1:import unittest
+App\Tests\test_nozzle_item.py:3:import numpy as np
+App\Tests\test_nozzle_item.py:5:from gui.widgets.nozzle_item import flip_mesh_z, make_cone_mesh, nozzle_z_offset
+App\Tests\test_path_planner.py:1:import os
+App\Tests\test_path_planner.py:10:from slicer import path_planner
+App\Tests\test_path_planner.py:11:from slicer.geometry import polygons_with_holes, point_in_island
+App\Tests\test_path_planner.py:2:import random
+App\Tests\test_path_planner.py:3:import sys
+App\Tests\test_path_planner.py:4:import unittest
+App\Tests\test_path_planner_extra.py:1:import os
+App\Tests\test_path_planner_extra.py:13:from slicer import path_planner
+App\Tests\test_path_planner_extra.py:14:from harness import BaseTestCase, circle_points
+App\Tests\test_path_planner_extra.py:2:import sys
+App\Tests\test_path_planner_extra.py:3:import unittest
+App\Tests\test_path_planner_extra.py:4:import math
+App\Tests\test_performance.py:1:import os
+App\Tests\test_performance.py:12:from config import performance
+App\Tests\test_performance.py:13:from harness import BaseTestCase
+App\Tests\test_performance.py:2:import sys
+App\Tests\test_performance.py:3:import unittest
+App\Tests\test_preview_utils.py:1:import unittest
+App\Tests\test_preview_utils.py:3:from gui.preview_utils import play_interval_ms
+App\Tests\test_selection_utils.py:1:import unittest
+App\Tests\test_selection_utils.py:3:from gui.selection_utils import rect_contains, rect_from_points, rect_intersects, rect_size
+App\Tests\test_settings_panel.py:1:import unittest
+App\Tests\test_settings_panel.py:3:from qt_harness import QtTestCase
+App\Tests\test_settings_panel.py:4:from slicer.gcode.writer import SliceSettings
+App\Tests\test_slice_settings_normalization.py:1:import pytest
+App\Tests\test_slice_settings_normalization.py:3:from slicer.gcode.writer import SliceSettings
+App\Tests\test_slicer.py:1:import math
+App\Tests\test_slicer.py:12:from slicer.mesh import MeshModel
+App\Tests\test_slicer.py:13:from slicer.gcode.writer import SliceSettings
+App\Tests\test_slicer.py:14:from slicer.slicer.plan import build_z_heights, generate_layer_perimeters, generate_layer_plans
+App\Tests\test_slicer.py:2:import os
+App\Tests\test_slicer.py:3:import sys
+App\Tests\test_slicer.py:4:import unittest
+App\Tests\test_slicer.py:6:import trimesh
+App\Tests\test_slicer_helpers.py:1:import os
+App\Tests\test_slicer_helpers.py:14:from slicer import slicer as slicer_module
+App\Tests\test_slicer_helpers.py:15:from slicer.gcode.writer import SliceSettings
+App\Tests\test_slicer_helpers.py:16:from slicer.mesh import MeshModel
+App\Tests\test_slicer_helpers.py:17:from harness import BaseTestCase
+App\Tests\test_slicer_helpers.py:2:import sys
+App\Tests\test_slicer_helpers.py:3:import unittest
+App\Tests\test_slicer_helpers.py:5:import trimesh
+App\Tests\test_support.py:1:import math
+App\Tests\test_support.py:12:from slicer.gcode.writer import SliceSettings
+App\Tests\test_support.py:13:from slicer.mesh import MeshModel
+App\Tests\test_support.py:14:from slicer import support
+App\Tests\test_support.py:2:import os
+App\Tests\test_support.py:3:import sys
+App\Tests\test_support.py:4:import unittest
+App\Tests\test_support.py:6:import trimesh
+App\Tests\test_support_extra.py:1:import os
+App\Tests\test_support_extra.py:13:from slicer import geometry
+App\Tests\test_support_extra.py:14:from slicer import support
+App\Tests\test_support_extra.py:15:from slicer.gcode.writer import SliceSettings
+App\Tests\test_support_extra.py:16:from harness import BaseTestCase, square_points
+App\Tests\test_support_extra.py:2:import sys
+App\Tests\test_support_extra.py:3:import unittest

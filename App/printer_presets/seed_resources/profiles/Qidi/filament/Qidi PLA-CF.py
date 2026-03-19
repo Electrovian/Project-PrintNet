@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Qidi/filament/Qidi PLA-CF.json
+DATA = {'compatible_printers': ['Qidi X-Plus 0.4 nozzle',
+                         'Qidi X-Max 0.4 nozzle',
+                         'Qidi X-CF Pro 0.4 nozzle',
+                         'Qidi X-Smart 3 0.4 nozzle',
+                         'Qidi X-Plus 3 0.4 nozzle',
+                         'Qidi X-Max 3 0.4 nozzle'],
+ 'enable_overhang_bridge_fan': ['1'],
+ 'filament_density': ['1.25'],
+ 'filament_flow_ratio': ['0.96'],
+ 'filament_id': 'GFL98',
+ 'filament_max_volumetric_speed': ['9'],
+ 'filament_type': ['PLA-CF'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'true',
+ 'name': 'Qidi PLA-CF',
+ 'nozzle_temperature': ['230'],
+ 'nozzle_temperature_initial_layer': ['230'],
+ 'overhang_fan_speed': ['100'],
+ 'overhang_fan_threshold': ['50%'],
+ 'pressure_advance': ['0.02'],
+ 'setting_id': 'GFSL98',
+ 'type': 'filament'}

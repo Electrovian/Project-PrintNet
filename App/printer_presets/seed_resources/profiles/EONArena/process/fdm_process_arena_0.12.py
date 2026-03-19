@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# source: profiles/EONArena/process/fdm_process_arena_0.12.json
+DATA = {'bottom_shell_layers': '5',
+ 'bridge_flow': '1',
+ 'elefant_foot_compensation': '0.15',
+ 'from': 'system',
+ 'gap_infill_speed': '350',
+ 'inherits': 'fdm_process_arena_common',
+ 'initial_layer_infill_speed': '105',
+ 'initial_layer_speed': '50',
+ 'inner_wall_speed': '350',
+ 'instantiation': 'false',
+ 'internal_solid_infill_speed': '350',
+ 'layer_height': '0.12',
+ 'name': 'fdm_process_arena_0.12',
+ 'outer_wall_speed': '200',
+ 'overhang_1_4_speed': '60',
+ 'overhang_2_4_speed': '30',
+ 'overhang_3_4_speed': '10',
+ 'overhang_4_4_speed': '10',
+ 'sparse_infill_speed': '430',
+ 'support_threshold_angle': '30',
+ 'top_shell_layers': '5',
+ 'top_shell_thickness': '0.6',
+ 'top_surface_speed': '200',
+ 'type': 'process'}

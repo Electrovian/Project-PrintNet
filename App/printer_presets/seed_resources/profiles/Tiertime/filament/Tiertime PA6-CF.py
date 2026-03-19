@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+# source: profiles/Tiertime/filament/Tiertime PA6-CF.json
+DATA = {'compatible_printers': ['Tiertime UP400 Pro 0.4 nozzle',
+                         'Tiertime UP400 Pro 0.6 nozzle',
+                         'Tiertime UP400 Pro 0.8 nozzle',
+                         'Tiertime UP310 Pro 0.4 nozzle'],
+ 'fan_cooling_layer_time': ['5'],
+ 'fan_max_speed': ['30'],
+ 'fan_min_speed': ['10'],
+ 'filament_cost': ['79.99'],
+ 'filament_density': ['1.10'],
+ 'filament_flow_ratio': ['0.96'],
+ 'filament_id': 'GFN05',
+ 'filament_type': ['PA6-CF'],
+ 'filament_vendor': ['Tiertime'],
+ 'from': 'system',
+ 'inherits': 'fdm_filament_pa',
+ 'instantiation': 'true',
+ 'name': 'Tiertime PA6-CF',
+ 'nozzle_temperature': ['275'],
+ 'nozzle_temperature_initial_layer': ['275'],
+ 'overhang_fan_speed': ['40'],
+ 'overhang_fan_threshold': ['0%'],
+ 'temperature_vitrification': ['170'],
+ 'type': 'filament'}

@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+# source: profiles/Sovol/machine/Sovol SV08 MAX 0.4 nozzle.json
+DATA = {'auxiliary_fan': '0',
+ 'before_layer_change_gcode': 'TIMELAPSE_TAKE_FRAME\nG92 E0\nSET_PRINT_STATS_INFO CURRENT_LAYER=[layer_num]\n',
+ 'change_filament_gcode': 'M600\n',
+ 'default_filament_profile': ['Generic PLA @Sovol SV08 MAX'],
+ 'default_print_profile': '0.20mm Standard @Sovol SV08 MAX 0.4 nozzle',
+ 'deretraction_speed': ['40'],
+ 'from': 'system',
+ 'gcode_flavor': 'klipper',
+ 'inherits': 'fdm_machine_common',
+ 'instantiation': 'true',
+ 'machine_end_gcode': 'END_PRINT\n',
+ 'machine_max_acceleration_e': ['20000'],
+ 'machine_max_acceleration_extruding': ['40000'],
+ 'machine_max_acceleration_retracting': ['5000'],
+ 'machine_max_acceleration_travel': ['40000'],
+ 'machine_max_acceleration_x': ['40000'],
+ 'machine_max_acceleration_y': ['40000'],
+ 'machine_max_acceleration_z': ['500'],
+ 'machine_max_jerk_e': ['5'],
+ 'machine_max_jerk_x': ['20'],
+ 'machine_max_jerk_y': ['20'],
+ 'machine_max_jerk_z': ['2.5'],
+ 'machine_max_speed_e': ['50'],
+ 'machine_max_speed_x': ['800'],
+ 'machine_max_speed_y': ['800'],
+ 'machine_max_speed_z': ['10'],
+ 'machine_pause_gcode': 'PAUSE\n',
+ 'machine_start_gcode': 'G28\n'
+                        'M140 S[bed_temperature_initial_layer_single] ;set bed temp\n'
+                        'M190 S[bed_temperature_initial_layer_single] ;wait for bed temp\n'
+                        'START_PRINT\n'
+                        'G90\n'
+                        'G1 X0 Y0 F12000\n'
+                        'G1 Z0.300 F600\n'
+                        'M104 S[nozzle_temperature_initial_layer] ;set extruder temp\n'
+                        'M109 S[nozzle_temperature_initial_layer];wait for extruder temp\n'
+                        '{if first_layer_print_min[0] - 3 > print_bed_min[0]}\n'
+                        'G90\n'
+                        'M83\n'
+                        'G1 E-0.100 F600\n'
+                        'G1 X{first_layer_print_min[0] - 3} Y{first_layer_print_min[1]} F12000\n'
+                        'G1 Z0.3 F600 ;Move to start position\n'
+                        'G1 E0.100 F600\n'
+                        'G1 Y{first_layer_print_min[1] + 5 * 6} E{5 * 0.24 * 6}  F{outer_wall_volumetric_speed * 5 * '
+                        '30}\n'
+                        'G1 Y{first_layer_print_min[1] + 5 * 6 * 2} E{5 * 0.16 * 6}  F{outer_wall_volumetric_speed * 5 '
+                        '* 30}\n'
+                        'G1 E-0.100 F600\n'
+                        'G1 Z1 F600\n'
+                        'G1 X{first_layer_print_min[0] - 2} Y{first_layer_print_min[1]} F12000\n'
+                        'G1 Z0.3 F600 ;Move to start position\n'
+                        'G1 E0.100 F600\n'
+                        'G1 Y{first_layer_print_min[1] + 5 * 6} E{5 * 0.24 * 6}  F{outer_wall_volumetric_speed * 5 * '
+                        '30}\n'
+                        'G1 Y{first_layer_print_min[1] + 5 * 6 * 2} E{5 * 0.16 * 6}  F{outer_wall_volumetric_speed * 5 '
+                        '* 30}\n'
+                        'G1 E-0.100 F600\n'
+                        '{else}\n'
+                        'G90\n'
+                        'M83\n'
+                        'G1 E-0.100 Z3 F600\n'
+                        'G1 X-1.5 Y{first_layer_print_min[1]} F{outer_wall_volumetric_speed * 5 * 30}\n'
+                        'G1 Z0.3 F600\n'
+                        'G1 E0.100 F600\n'
+                        'G1 Y{first_layer_print_min[1] + 5 * 6} E{5 * 0.24 * 6}  F{outer_wall_volumetric_speed * 5 * '
+                        '30}\n'
+                        'G1 Y{first_layer_print_min[1] + 5 * 6 * 2} E{5 * 0.16 * 6}  F{outer_wall_volumetric_speed * 5 '
+                        '* 30}\n'
+                        'G1 X-0.5 Y{first_layer_print_min[1]} F{outer_wall_volumetric_speed * 5 * 30}\n'
+                        'G1 Z0.3 F600\n'
+                        'G1 E0.100 F600\n'
+                        'G1 Y{first_layer_print_min[1] + 5 * 6} E{5 * 0.24 * 6}  F{outer_wall_volumetric_speed * 5 * '
+                        '30}\n'
+                        'G1 Y{first_layer_print_min[1] + 5 * 6 * 2} E{5 * 0.16 * 6}  F{outer_wall_volumetric_speed * 5 '
+                        '* 30}\n'
+                        'G1 E-0.100 Z3 F600\n'
+                        'M400\n'
+                        '{endif}\n'
+                        'SET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\n'
+                        '\n',
+ 'name': 'Sovol SV08 MAX 0.4 nozzle',
+ 'nozzle_diameter': ['0.4'],
+ 'printable_area': ['0x0', '500x0', '500x500', '0x500'],
+ 'printable_height': '500',
+ 'printer_model': 'Sovol SV08 MAX',
+ 'printer_structure': 'corexy',
+ 'printer_variant': '0.4',
+ 'retract_before_wipe': ['100%'],
+ 'retract_length_toolchange': ['2'],
+ 'retract_lift_below': ['498'],
+ 'retraction_length': ['0.8'],
+ 'retraction_minimum_travel': ['0'],
+ 'retraction_speed': ['40'],
+ 'setting_id': 'GM001',
+ 'thumbnails': ['32x32', '64x64', '160x160', '256x256'],
+ 'thumbnails_format': 'PNG',
+ 'travel_slope': ['2'],
+ 'type': 'machine',
+ 'wipe': ['1'],
+ 'wipe_distance': ['2'],
+ 'z_hop': ['0.6'],
+ 'z_hop_types': ['Auto Lift']}

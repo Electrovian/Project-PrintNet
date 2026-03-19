@@ -1,0 +1,17 @@
+from __future__ import annotations
+
+# source: profiles/Flashforge/machine/Flashforge Guider4 Pro.json
+DATA = {'bed_model': 'flashforge_g4pro_buildplate_model.stl',
+ 'bed_texture': 'flashforge_g4pro_buildplate_texture.png',
+ 'default_materials': 'Flashforge Generic PVA;Flashforge Generic HIPS;Flashforge Generic PETG-CF @G3U;Flashforge '
+                      'Generic PETG @G3U;Flashforge Generic PLA-CF @G3U;Flashforge Generic PLA @G3U;Flashforge Generic '
+                      'ASA @G3U;Flashforge Generic ABS @G3U;FusRock Generic PET-CF;FusRock Generic PAHT-CF;FusRock '
+                      'Generic NexPA-CF25;FusRock Generic S-Multi;FusRock Generic S-PAHT;Polymaker Generic '
+                      'CoPA;Polymaker Generic S1',
+ 'family': 'Flashforge',
+ 'hotend_model': '',
+ 'machine_tech': 'FFF',
+ 'model_id': 'Flashforge-Guider4-Pro',
+ 'name': 'Flashforge Guider4 Pro',
+ 'nozzle_diameter': '0.25;0.4;0.4HF;0.6;0.6HF;0.8HF',
+ 'type': 'machine_model'}

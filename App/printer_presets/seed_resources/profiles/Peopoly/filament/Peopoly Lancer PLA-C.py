@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/Peopoly/filament/Peopoly Lancer PLA-C.json
+DATA = {'compatible_printers': ['Peopoly Magneto X 0.4 nozzle',
+                         'Peopoly Magneto X 0.6 nozzle',
+                         'Peopoly Magneto X 0.8 nozzle'],
+ 'enable_pressure_advance': ['1'],
+ 'fan_max_speed': ['50'],
+ 'filament_flow_ratio': ['0.92'],
+ 'filament_id': 'GFL99',
+ 'filament_max_volumetric_speed': ['35'],
+ 'filament_type': ['PLA'],
+ 'filament_vendor': ['Peopoly'],
+ 'from': 'system',
+ 'hot_plate_temp': ['70'],
+ 'hot_plate_temp_initial_layer': ['70'],
+ 'inherits': 'fdm_filament_pla',
+ 'instantiation': 'true',
+ 'name': 'Peopoly Lancer PLA-C',
+ 'nozzle_temperature': ['210'],
+ 'nozzle_temperature_initial_layer': ['215'],
+ 'pressure_advance': ['0.03'],
+ 'setting_id': 'GFSL99',
+ 'slow_down_layer_time': ['6'],
+ 'type': 'filament'}

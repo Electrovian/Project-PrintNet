@@ -1,0 +1,13 @@
+{
+  "stage_count": 10,
+  "travel_speed_mm_s": 150.0,
+  "travel_move_count": 21,
+  "travel_length_mm_total": 39.78450000000001,
+  "travel_combing_enabled": true,
+  "travel_combed_move_count": 21,
+  "travel_fallback_move_count": 0,
+  "travel_retract_count": 0,
+  "travel_z_hop_count": 0,
+  "warning_count": 0,
+  "validation_ok": true
+}

@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/BBL/process/0.30mm Standard @BBL H2DP 0.6 nozzle.json
+DATA = {'bridge_speed': ['50', '50', '50', '50'],
+ 'compatible_printers': ['Bambu Lab H2D Pro 0.6 nozzle'],
+ 'default_acceleration': ['8000', '8000', '8000', '8000'],
+ 'description': 'Standard profile for 0.6mm nozzle, prioritizing speed.',
+ 'from': 'system',
+ 'gap_infill_speed': ['250', '250', '250', '250'],
+ 'inherits': 'fdm_process_dual_0.30_nozzle_0.6',
+ 'initial_layer_infill_speed': ['105', '105', '105', '105'],
+ 'initial_layer_speed': ['50', '50', '50', '50'],
+ 'inner_wall_speed': ['300', '300', '300', '300'],
+ 'instantiation': 'true',
+ 'internal_solid_infill_speed': ['250', '300', '250', '300'],
+ 'name': '0.30mm Standard @BBL H2DP 0.6 nozzle',
+ 'outer_wall_speed': ['200', '200', '200', '200'],
+ 'overhang_3_4_speed': ['30', '30', '30', '30'],
+ 'prime_tower_brim_width': '-1',
+ 'prime_tower_width': '60',
+ 'setting_id': 'GP135',
+ 'sparse_infill_speed': ['350', '600', '350', '600'],
+ 'top_surface_speed': ['200', '200', '200', '200'],
+ 'travel_speed': ['1000', '1000', '1000', '1000'],
+ 'type': 'process'}

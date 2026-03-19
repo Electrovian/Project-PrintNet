@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+# source: profiles/Sovol/machine/Sovol SV06 ACE 0.2 nozzle.json
+DATA = {'before_layer_change_gcode': 'TIMELAPSE_TAKE_FRAME\nG92 E0',
+ 'change_filament_gcode': 'M600',
+ 'default_filament_profile': ['Sovol SV06 ACE PLA'],
+ 'default_print_profile': '0.12mm Standard @Sovol SV06 ACE 0.2 nozzle',
+ 'deretraction_speed': ['35', '35'],
+ 'from': 'system',
+ 'gcode_flavor': 'klipper',
+ 'inherits': 'fdm_machine_common',
+ 'instantiation': 'true',
+ 'machine_end_gcode': 'END_PRINT\n',
+ 'machine_max_acceleration_e': ['5000', '5000'],
+ 'machine_max_acceleration_extruding': ['20000', '20000'],
+ 'machine_max_acceleration_retracting': ['5000', '5000'],
+ 'machine_max_acceleration_travel': ['20000', '20000'],
+ 'machine_max_acceleration_x': ['20000', '20000'],
+ 'machine_max_acceleration_y': ['20000', '20000'],
+ 'machine_max_acceleration_z': ['500', '500'],
+ 'machine_max_jerk_e': ['2.5'],
+ 'machine_max_jerk_x': ['9'],
+ 'machine_max_jerk_y': ['9'],
+ 'machine_max_jerk_z': ['0.5'],
+ 'machine_max_speed_e': ['25', '25'],
+ 'machine_max_speed_x': ['600', '600'],
+ 'machine_max_speed_y': ['600', '600'],
+ 'machine_max_speed_z': ['10', '10'],
+ 'machine_pause_gcode': 'PAUSE',
+ 'machine_start_gcode': 'M140 S[bed_temperature_initial_layer_single] ;set bed temp\n'
+                        'M190 S[bed_temperature_initial_layer_single] ;wait for bed temp\n'
+                        'START_PRINT\n'
+                        'G90\n'
+                        'G1 X0 F6000\n'
+                        'G1 Y20\n'
+                        'G1 Z0.200 F600\n'
+                        'G1 Y-4 F6000\n'
+                        'M400\n'
+                        'M104 S[nozzle_temperature_initial_layer] ;set extruder temp\n'
+                        'M109 S[nozzle_temperature_initial_layer];wait for extruder temp\n'
+                        'G91\n'
+                        'M83\n'
+                        'G1 E-0.100 Z5 F600\n'
+                        'G1 X{print_bed_max[1] / 3} F6000\n'
+                        'G1 Z-4.800 F600\n'
+                        'G1 X{print_bed_max[1] / 6} E{print_bed_max[1] / 6 * 0.24} F3000\n'
+                        'G1 X{print_bed_max[1] / 6} E{print_bed_max[1] / 6 * 0.16} F3000\n'
+                        'G1 Y1 E0.16 F3000\n'
+                        'G1 X-{print_bed_max[1] / 6} E{print_bed_max[1] / 6 * 0.16} F3000\n'
+                        'G1 X-{print_bed_max[1] / 6} E{print_bed_max[1] / 6 * 0.24} F3000\n'
+                        'G1 Y1 E0.24 F3000\n'
+                        'G1 X{print_bed_max[1] / 6} E{print_bed_max[1] / 6 * 0.24} F3000\n'
+                        'G1 X{print_bed_max[1] / 6} E{print_bed_max[1] / 6 * 0.16} F3000\n'
+                        'G1 E-0.200 Z1 F600\n'
+                        'M400\n'
+                        '\n',
+ 'manual_filament_change': '1',
+ 'max_layer_height': ['0.16', '0.16'],
+ 'name': 'Sovol SV06 ACE 0.2 nozzle',
+ 'nozzle_diameter': ['0.2'],
+ 'printable_area': ['0x0', '220x0', '220x220', '0x220'],
+ 'printable_height': '250',
+ 'printer_model': 'Sovol SV06 ACE',
+ 'printer_variant': '0.2',
+ 'retract_before_wipe': ['100%'],
+ 'retract_length_toolchange': ['2', '2'],
+ 'retract_lift_below': ['248', '248'],
+ 'retraction_length': ['0.6'],
+ 'retraction_minimum_travel': ['0.5'],
+ 'retraction_speed': ['35', '35'],
+ 'setting_id': 'GM001',
+ 'support_multi_bed_types': '1',
+ 'thumbnails': ['96x96', '160x160'],
+ 'thumbnails_format': 'PNG',
+ 'type': 'machine',
+ 'wipe_distance': ['1'],
+ 'z_hop': ['0.2'],
+ 'z_hop_types': ['Auto Lift']}

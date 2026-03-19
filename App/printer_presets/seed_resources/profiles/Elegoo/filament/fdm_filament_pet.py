@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/Elegoo/filament/fdm_filament_pet.json
+DATA = {'eng_plate_temp': ['0'],
+ 'eng_plate_temp_initial_layer': ['0'],
+ 'fan_cooling_layer_time': ['20'],
+ 'fan_min_speed': ['20'],
+ 'filament_cost': ['0'],
+ 'filament_density': ['1.27'],
+ 'filament_end_gcode': ['; filament end gcode \n'],
+ 'filament_max_volumetric_speed': ['12'],
+ 'filament_start_gcode': ['; Filament start gcode\n'],
+ 'filament_type': ['PETG'],
+ 'from': 'system',
+ 'hot_plate_temp': ['80'],
+ 'hot_plate_temp_initial_layer': ['80'],
+ 'inherits': 'fdm_filament_common',
+ 'instantiation': 'false',
+ 'name': 'fdm_filament_pet',
+ 'nozzle_temperature': ['250'],
+ 'nozzle_temperature_initial_layer': ['250'],
+ 'nozzle_temperature_range_high': ['260'],
+ 'nozzle_temperature_range_low': ['220'],
+ 'reduce_fan_stop_start_freq': ['1'],
+ 'temperature_vitrification': ['70'],
+ 'textured_plate_temp': ['80'],
+ 'textured_plate_temp_initial_layer': ['80'],
+ 'type': 'filament'}

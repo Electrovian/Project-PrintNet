@@ -1,0 +1,33 @@
+﻿{
+    "timestamp_utc":  "2026-02-13T03:43:37.2681876Z",
+    "success":  true,
+    "dry_run":  true,
+    "offline":  false,
+    "fatal_error":  null,
+    "config":  {
+                   "python_exe":  "python",
+                   "app_dir":  "App",
+                   "venv_dir":  "App/.venv",
+                   "requirements_path":  "App/requirements.txt",
+                   "wheel_cache_dir":  "App/wheels",
+                   "install_dependencies":  true,
+                   "verify_imports":  false,
+                   "force_recreate":  false
+               },
+    "steps":  [
+                  {
+                      "name":  "create_venv",
+                      "status":  "simulated",
+                      "command":  "python -m venv App/.venv",
+                      "duration_ms":  2.13,
+                      "message":  "Dry-run: command not executed"
+                  },
+                  {
+                      "name":  "install_requirements",
+                      "status":  "simulated",
+                      "command":  "App\\.venv\\Scripts\\python.exe -m pip install -r App/requirements.txt",
+                      "duration_ms":  0.01,
+                      "message":  "Dry-run: command not executed"
+                  }
+              ]
+}

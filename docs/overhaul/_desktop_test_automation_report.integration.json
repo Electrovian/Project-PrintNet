@@ -1,0 +1,75 @@
+{
+  "ok": true,
+  "case_count": 4,
+  "passed_case_count": 4,
+  "failed_case_count": 0,
+  "total_duration_s": 2.9273279000044568,
+  "failed_case_ids": [],
+  "results": [
+    {
+      "case_id": "desktop_plate_flow",
+      "ok": true,
+      "exit_code": 0,
+      "duration_s": 0.8643824000027962,
+      "timed_out": false,
+      "module_count": 1,
+      "command": [
+        "C:\\Users\\Elect\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "-m",
+        "unittest",
+        "App.Tests.test_desktop_plate_flow"
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case_id": "desktop_runtime_printer_state",
+      "ok": true,
+      "exit_code": 0,
+      "duration_s": 0.6845971000002464,
+      "timed_out": false,
+      "module_count": 1,
+      "command": [
+        "C:\\Users\\Elect\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "-m",
+        "unittest",
+        "App.Tests.test_runtime_printer_state"
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case_id": "connector_registry",
+      "ok": true,
+      "exit_code": 0,
+      "duration_s": 0.7094429999997374,
+      "timed_out": false,
+      "module_count": 1,
+      "command": [
+        "C:\\Users\\Elect\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "-m",
+        "unittest",
+        "App.Tests.test_connector_registry"
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case_id": "local_wifi_onboarding",
+      "ok": true,
+      "exit_code": 0,
+      "duration_s": 0.6689054000016768,
+      "timed_out": false,
+      "module_count": 1,
+      "command": [
+        "C:\\Users\\Elect\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "-m",
+        "unittest",
+        "App.Tests.test_local_wifi_onboarding"
+      ],
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "failure_summary": []
+}

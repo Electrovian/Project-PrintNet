@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+# source: profiles/EONArena/filament/Arena PAHT-CF @base.json
+DATA = {'fan_cooling_layer_time': ['5'],
+ 'fan_max_speed': ['30'],
+ 'fan_min_speed': ['10'],
+ 'filament_cost': ['94.99'],
+ 'filament_density': ['1.06'],
+ 'filament_flow_ratio': ['0.96'],
+ 'filament_id': 'GFN04',
+ 'filament_max_volumetric_speed': ['8'],
+ 'filament_type': ['PA-CF'],
+ 'filament_vendor': ['EON Arena'],
+ 'from': 'system',
+ 'full_fan_speed_layer': ['2'],
+ 'inherits': 'fdm_filament_pa',
+ 'instantiation': 'false',
+ 'name': 'Arena PAHT-CF @base',
+ 'nozzle_temperature': ['290'],
+ 'nozzle_temperature_initial_layer': ['290'],
+ 'overhang_fan_speed': ['40'],
+ 'overhang_fan_threshold': ['0%'],
+ 'required_nozzle_HRC': ['40'],
+ 'temperature_vitrification': ['180'],
+ 'type': 'filament'}

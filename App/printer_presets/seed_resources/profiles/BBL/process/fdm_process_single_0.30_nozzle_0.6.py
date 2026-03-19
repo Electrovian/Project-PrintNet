@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+# source: profiles/BBL/process/fdm_process_single_0.30_nozzle_0.6.json
+DATA = {'bridge_flow': '1',
+ 'bridge_speed': ['30'],
+ 'from': 'system',
+ 'inherits': 'fdm_process_single_common',
+ 'initial_layer_infill_speed': ['55'],
+ 'initial_layer_line_width': '0.62',
+ 'initial_layer_print_height': '0.3',
+ 'initial_layer_speed': ['35'],
+ 'inner_wall_line_width': '0.62',
+ 'instantiation': 'false',
+ 'internal_solid_infill_line_width': '0.62',
+ 'ironing_inset': '0.31',
+ 'layer_height': '0.3',
+ 'line_width': '0.62',
+ 'name': 'fdm_process_single_0.30_nozzle_0.6',
+ 'outer_wall_line_width': '0.62',
+ 'overhang_3_4_speed': ['15'],
+ 'skeleton_infill_line_width': '0.62',
+ 'skin_infill_line_width': '0.62',
+ 'sparse_infill_line_width': '0.62',
+ 'sparse_infill_speed': ['100'],
+ 'support_line_width': '0.62',
+ 'top_surface_line_width': '0.62',
+ 'top_surface_speed': ['150'],
+ 'type': 'process'}
