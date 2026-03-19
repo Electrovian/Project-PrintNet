@@ -30,6 +30,12 @@ def _probe_with_bambu_and_creality(target, _timeout_s: float) -> Mapping[str, An
     return {"ok": False}
 
 
+def _probe_creality_server_info_on_8080(target, _timeout_s: float) -> Mapping[str, Any]:
+    if target.path == "/server/info" and int(target.port) == 8080:
+        return {"ok": True, "connector_type": "creality"}
+    return {"ok": False}
+
+
 class LocalWifiOnboardingTests(unittest.TestCase):
     def test_discover_requires_hosts(self):
         onboarding = LocalWifiOnboarding(probe_hook=_probe_map_by_port)
@@ -124,6 +130,15 @@ class LocalWifiOnboardingTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         connector_types = sorted(item.get("connector_type", "") for item in result["printers"])
         self.assertEqual(connector_types, ["bambu_lan", "creality"])
+
+    def test_creality_server_info_on_non_default_port_keeps_moonraker_protocol(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_creality_server_info_on_8080)
+        result = onboarding.discover(hosts=["10.0.0.55"], ports=[8080], max_targets=32)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["printer_count"], 1)
+        printer = result["printers"][0]
+        self.assertEqual(printer.get("connector_type"), "creality")
+        self.assertEqual(printer.get("creality_protocol"), "moonraker")
 
 
 if __name__ == "__main__":

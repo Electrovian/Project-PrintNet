@@ -441,12 +441,10 @@ class ActivitySyncMixin:
             return []
         hint = str(getattr(self, "_activity_me_user", "")).strip().lower()
         if not hint:
-            return list(rows)
+            return []
         filtered = []
         for row in rows:
             user = str(row.get("user", "")).strip().lower()
             if user == hint:
                 filtered.append(row)
-        if filtered:
-            return filtered
-        return list(rows)
+        return filtered

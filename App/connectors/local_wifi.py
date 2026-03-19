@@ -82,7 +82,7 @@ class LocalWifiOnboarding:
             if not connector_type:
                 continue
             online_target_count += 1
-            candidate = self._candidate_from_probe(target, connector_type)
+            candidate = self._candidate_from_probe(target, connector_type, probe_result)
             identity = self._printer_identity(candidate)
             if identity in seen:
                 continue
@@ -343,7 +343,12 @@ class LocalWifiOnboarding:
                 return True
         return False
 
-    def _candidate_from_probe(self, target: LocalWifiProbeTarget, connector_type: str) -> dict[str, Any]:
+    def _candidate_from_probe(
+        self,
+        target: LocalWifiProbeTarget,
+        connector_type: str,
+        probe_result: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         display = {
             "octoprint": "OctoPrint",
             "moonraker": "Moonraker",
@@ -376,7 +381,13 @@ class LocalWifiOnboarding:
             candidate["bambu_serial"] = ""
         elif connector_type == "creality":
             candidate["creality_url"] = base_url
-            candidate["creality_protocol"] = "moonraker" if int(target.port) == 7125 else "octoprint"
+            protocol_hint = str((probe_result or {}).get("creality_protocol", "")).strip().lower()
+            if protocol_hint not in {"moonraker", "octoprint"}:
+                if str(target.path or "").strip().lower() == "/server/info":
+                    protocol_hint = "moonraker"
+                else:
+                    protocol_hint = "moonraker" if int(target.port) == 7125 else "octoprint"
+            candidate["creality_protocol"] = protocol_hint
             candidate["creality_token"] = ""
         return candidate
 
