@@ -146,7 +146,7 @@ export default function App() {
       return;
     }
     const currentPath = String(window.location?.pathname || "/").toLowerCase();
-    if (currentPath !== "/signin" && currentPath !== "/register" && currentPath !== "/sso" && currentPath !== "/verify") {
+    if (currentPath !== "/signin" && currentPath !== "/register" && currentPath !== "/sso") {
       window.history.replaceState({}, "", "/signin");
     }
   }, [isAuthenticated]);

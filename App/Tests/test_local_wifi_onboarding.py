@@ -148,6 +148,57 @@ class LocalWifiOnboardingTests(unittest.TestCase):
         self.assertEqual(len(manager.printers), 3)
         self.assertIsNotNone(manager.active_printer)
 
+    def test_printer_manager_discovery_refreshes_active_creality_protocol_upgrade(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_creality_server_info_on_8080)
+        existing = {
+            "name": "Creality Existing",
+            "connector_type": "creality",
+            "creality_url": "http://10.0.0.55:8080",
+            "creality_protocol": "octoprint",
+            "creality_token": "saved-token",
+        }
+        manager = PrinterManager(
+            printers=[dict(existing)],
+            airtable_cfg={},
+            wifi_onboarding=onboarding,
+        )
+        manager.set_active_printer(existing)
+        report = manager.discover_local_wifi_printers(
+            hosts=["10.0.0.55"],
+            ports=[8080],
+            max_targets=32,
+        )
+        self.assertTrue(report["ok"])
+        self.assertEqual(len(manager.printers), 1)
+        self.assertEqual(manager.printers[0].get("creality_protocol"), "moonraker")
+        self.assertEqual(manager.active_printer.get("creality_protocol"), "moonraker")
+
+    def test_printer_manager_cidr_discovery_refreshes_active_creality_protocol_upgrade(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_creality_server_info_on_8080)
+        existing = {
+            "name": "Creality Existing",
+            "connector_type": "creality",
+            "creality_url": "http://10.0.0.1:8080",
+            "creality_protocol": "octoprint",
+            "creality_token": "saved-token",
+        }
+        manager = PrinterManager(
+            printers=[dict(existing)],
+            airtable_cfg={},
+            wifi_onboarding=onboarding,
+        )
+        manager.set_active_printer(existing)
+        report = manager.discover_local_wifi_printers_from_cidr(
+            "10.0.0.0/29",
+            ports=[8080],
+            host_limit=1,
+            max_targets=32,
+        )
+        self.assertTrue(report["ok"])
+        self.assertEqual(len(manager.printers), 1)
+        self.assertEqual(manager.printers[0].get("creality_protocol"), "moonraker")
+        self.assertEqual(manager.active_printer.get("creality_protocol"), "moonraker")
+
     def test_printer_manager_discovery_returns_invalid_config(self):
         manager = PrinterManager(
             printers=[],

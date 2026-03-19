@@ -542,8 +542,42 @@ class PrintMixin:
         worker.signals.error.connect(on_err)
         self._start_worker(worker)
 
-    def slice_current_plate(self):
+    def _auto_orient_plate_default(self) -> None:
+        if not hasattr(self, "viewer"):
+            return
+        model_ids = list(self.viewer.get_model_ids())
+        if not model_ids:
+            return
+        overhang_angle = SliceSettings().overhang_angle
+        changed = False
+        for model_id in model_ids:
+            try:
+                ok = self.viewer.auto_orient_model(
+                    model_id,
+                    mode="default",
+                    overhang_angle=overhang_angle,
+                )
+            except Exception:
+                ok = False
+            if ok:
+                changed = True
+        if not changed:
+            return
+        if hasattr(self, "_sync_popups"):
+            self._sync_popups()
+        if hasattr(self, "_update_bed_warnings"):
+            self._update_bed_warnings()
+        if hasattr(self, "_schedule_undo_snapshot"):
+            self._schedule_undo_snapshot()
+
+    def _settings_with_slice_defaults(self) -> SliceSettings:
         settings = self.settings_panel.to_settings()
+        settings.support_enabled = True
+        return settings
+
+    def slice_current_plate(self):
+        self._auto_orient_plate_default()
+        settings = self._settings_with_slice_defaults()
         self._slice_model(settings, activate_preview=True, show_dialog=True, show_errors=True)
 
     def slice_current_model(self):

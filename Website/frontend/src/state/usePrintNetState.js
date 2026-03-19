@@ -472,33 +472,8 @@ export function usePrintNetState() {
           throw new Error("Cloud sign-in is blocked in this region.");
         }
         const mode = String(payload?.mode || "signin").trim().toLowerCase();
-        const step = String(payload?.step || (mode === "signup" ? "signup" : "password")).trim().toLowerCase();
         const requestedUserId = String(payload?.userId || "").trim();
         const password = String(payload?.password || "");
-        if (mode === "signin" && step === "verify") {
-          const challengeId = String(payload?.challengeId || "").trim();
-          const verificationCode = String(payload?.verificationCode || "").trim();
-          if (!challengeId) {
-            throw new Error("Verification challenge is missing.");
-          }
-          if (!verificationCode) {
-            throw new Error("Verification code is required.");
-          }
-          setStatusLine("Verifying sign-in code...");
-          const authResponse = await apiClient.verifyLoginCode({ challengeId, verificationCode });
-          const token = String(authResponse?.session?.token || "").trim();
-          const identity = await resolveIdentityFromToken(token, {
-            userId: String(authResponse?.session?.user_id || payload?.userId || ""),
-            role: String(authResponse?.session?.role || "student")
-          });
-          setAuthSession(identity);
-          setQueueSnapshotBase(null);
-          setActivityState(emptyActivityState());
-          setJobResult(null);
-          setMaintenance(defaultMaintenance());
-          setStatusLine("Signed in.");
-          return { ok: true, requiresVerification: false };
-        }
 
         if (!requestedUserId) {
           throw new Error("Username or email is required.");
@@ -525,50 +500,19 @@ export function usePrintNetState() {
         }
 
         setStatusLine("Checking credentials...");
-        try {
-          const authResponse = await apiClient.loginWithPassword({ userId: requestedUserId, password });
-          const token = String(authResponse?.session?.token || "").trim();
-          const identity = await resolveIdentityFromToken(token, {
-            userId: String(authResponse?.session?.user_id || requestedUserId),
-            role: String(authResponse?.session?.role || "student")
-          });
-          setAuthSession(identity);
-          setQueueSnapshotBase(null);
-          setActivityState(emptyActivityState());
-          setJobResult(null);
-          setMaintenance(defaultMaintenance());
-          setStatusLine("Signed in.");
-          return { ok: true, requiresVerification: false };
-        } catch (authError) {
-          const authCode = String(authError?.code || "").trim().toUpperCase();
-          const authDetail = String(authError?.message || "").trim().toUpperCase();
-          const verificationRequired =
-            authCode === "AUTH_VERIFICATION_REQUIRED" ||
-            authDetail.includes("AUTH_VERIFICATION_REQUIRED");
-          if (!verificationRequired) {
-            throw authError;
-          }
-        }
-
-        const challengeResponse = await apiClient.requestLoginCode({ userId: requestedUserId, password });
-        const challenge = challengeResponse?.challenge || {};
-        const challengeId = String(challenge.challenge_id || "").trim();
-        if (!challengeId) {
-          throw new Error("Unable to start login verification.");
-        }
-        const deliveryDestination = String(challenge?.delivery?.destination || "").trim();
-        setStatusLine(
-          deliveryDestination
-            ? `Verification code sent to ${deliveryDestination}.`
-            : "Verification code sent."
-        );
-        return {
-          ok: true,
-          requiresVerification: true,
-          challengeId,
-          delivery: challenge?.delivery || null,
-          debugCode: String(challenge.debug_code || "")
-        };
+        const authResponse = await apiClient.loginWithPassword({ userId: requestedUserId, password });
+        const token = String(authResponse?.session?.token || "").trim();
+        const identity = await resolveIdentityFromToken(token, {
+          userId: String(authResponse?.session?.user_id || requestedUserId),
+          role: String(authResponse?.session?.role || "student")
+        });
+        setAuthSession(identity);
+        setQueueSnapshotBase(null);
+        setActivityState(emptyActivityState());
+        setJobResult(null);
+        setMaintenance(defaultMaintenance());
+        setStatusLine("Signed in.");
+        return { ok: true, requiresVerification: false };
       } catch (err) {
         _setComplianceBlockedFromError(err);
         setStatusLine(`Failed: ${String(err?.message || err)}`);

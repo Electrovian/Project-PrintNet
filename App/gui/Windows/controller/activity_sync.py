@@ -55,30 +55,62 @@ def _format_when(created_at: datetime | None, fallback: str = "") -> str:
         return str(fallback or "").strip()
 
 
-def _format_age(created_at: datetime | None) -> str:
-    if created_at is None:
+def _coerce_duration_seconds(value: object) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            seconds = float(text)
+        except (TypeError, ValueError):
+            return None
+    if not seconds >= 0.0:
+        return None
+    return float(seconds)
+
+
+def _format_duration(seconds: float | None) -> str:
+    if seconds is None:
         return "n/a"
-    now = datetime.now(timezone.utc)
-    delta_seconds = int(max(0, (now - created_at.astimezone(timezone.utc)).total_seconds()))
-    if delta_seconds < 60:
-        return f"{delta_seconds}s"
-    if delta_seconds < 3600:
-        mins = delta_seconds // 60
-        secs = delta_seconds % 60
-        if secs <= 0:
-            return f"{mins}m"
-        return f"{mins}m {secs}s"
-    if delta_seconds < 86400:
-        hours = delta_seconds // 3600
-        mins = (delta_seconds % 3600) // 60
-        if mins <= 0:
-            return f"{hours}h"
-        return f"{hours}h {mins}m"
-    days = delta_seconds // 86400
-    hours = (delta_seconds % 86400) // 3600
-    if hours <= 0:
-        return f"{days}d"
-    return f"{days}d {hours}h"
+    total = int(max(0, round(float(seconds))))
+    if total < 60:
+        return f"{total}s"
+    if total < 3600:
+        mins = total // 60
+        secs = total % 60
+        return f"{mins}m" if secs <= 0 else f"{mins}m {secs}s"
+    if total < 86400:
+        hours = total // 3600
+        mins = (total % 3600) // 60
+        return f"{hours}h" if mins <= 0 else f"{hours}h {mins}m"
+    days = total // 86400
+    hours = (total % 86400) // 3600
+    return f"{days}d" if hours <= 0 else f"{days}d {hours}h"
+
+
+def _derive_print_duration_seconds(
+    *,
+    status: str,
+    created_at: datetime | None,
+    updated_at: datetime | None,
+) -> float | None:
+    normalized_status = str(status or "").strip().lower()
+    if normalized_status not in {"running", "printing", "completed", "failed", "error", "cancelled"}:
+        return None
+    if created_at is None:
+        return None
+    created_utc = created_at.astimezone(timezone.utc)
+    if normalized_status in {"completed", "failed", "error", "cancelled"}:
+        end_utc = updated_at.astimezone(timezone.utc) if updated_at is not None else created_utc
+        return max(0.0, (end_utc - created_utc).total_seconds())
+    now_utc = datetime.now(timezone.utc)
+    return max(0.0, (now_utc - created_utc).total_seconds())
 
 
 def _coerce_int(value: object, *, default: int, minimum: int, maximum: int) -> int:
@@ -162,8 +194,32 @@ def _job_to_activity_entry(job: Mapping[str, Any]) -> dict[str, Any]:
     printer_id = str(job.get("printer_id", "")).strip() or "Unassigned"
     requested_by = str(job.get("requested_by", "")).strip() or "unknown"
     created_raw = str(job.get("created_at_utc", "")).strip()
+    updated_raw = str(job.get("updated_at_utc", "")).strip()
     created_at = _parse_iso_datetime(created_raw)
-    sort_ts = float(created_at.timestamp()) if created_at is not None else 0.0
+    updated_at = _parse_iso_datetime(updated_raw)
+    explicit_duration = None
+    for key in (
+        "duration_seconds",
+        "duration_s",
+        "print_duration_seconds",
+        "print_duration_s",
+        "print_duration",
+        "time_seconds",
+    ):
+        explicit_duration = _coerce_duration_seconds(job.get(key))
+        if explicit_duration is not None:
+            break
+    duration_seconds = (
+        explicit_duration
+        if explicit_duration is not None
+        else _derive_print_duration_seconds(
+            status=status,
+            created_at=created_at,
+            updated_at=updated_at,
+        )
+    )
+    sort_dt = updated_at or created_at
+    sort_ts = float(sort_dt.timestamp()) if sort_dt is not None else 0.0
     seq = _coerce_int(job.get("_seq", 0), default=0, minimum=0, maximum=2_000_000_000)
 
     label = model_name or job_id or "job"
@@ -171,7 +227,7 @@ def _job_to_activity_entry(job: Mapping[str, Any]) -> dict[str, Any]:
         "job_id": job_id,
         "job": label,
         "status": status,
-        "duration": _format_age(created_at),
+        "duration": _format_duration(duration_seconds),
         "material": profile_id or "n/a",
         "when": _format_when(created_at, fallback=created_raw),
         "created_at_utc": created_raw,

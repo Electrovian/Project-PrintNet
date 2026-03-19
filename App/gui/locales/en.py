@@ -118,7 +118,7 @@ STRINGS = {
     "topbar.mode.project": "Project",
     "topbar.mode.calibration": "Calibration",
     "topbar.action.slice_plate": "Slice plate",
-    "topbar.action.print": "Print",
+    "topbar.action.print": "Select print",
     "device.title": "Device",
     "device.search.label": "Search printer:",
     "device.search.placeholder": "Search connected printers",

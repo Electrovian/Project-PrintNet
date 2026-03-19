@@ -103,13 +103,18 @@ class AuthAccountSecurityTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["error"]["code"], "BACKEND_AUTHENTICATION_ERROR")
 
-    def test_super_admin_password_login_requires_verification(self):
+    def test_super_admin_password_login_succeeds(self):
         response = self.client.post(
             "/api/v1/auth/login",
             json={"user_id": "owner@example.com", "password": "password-123"},
         )
-        self.assertEqual(response.status_code, 401)
-        self.assertEqual(response.json()["error"]["code"], "BACKEND_AUTHENTICATION_ERROR")
+        self.assertEqual(response.status_code, 200)
+        token = str(response.json()["session"]["token"])
+        self.assertTrue(token.startswith("session-"))
+        whoami = self.client.get(f"/api/v1/auth/whoami?auth_token={token}")
+        self.assertEqual(whoami.status_code, 200)
+        self.assertEqual(whoami.json()["identity"]["user_id"], "owner@example.com")
+        self.assertEqual(whoami.json()["identity"]["role"], "admin")
 
     def test_super_admin_two_step_login_flow(self):
         request_code = self.client.post(

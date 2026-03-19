@@ -1,3 +1,5 @@
+import json
+
 from PyQt5 import QtCore
 
 from ...workers import Worker
@@ -41,6 +43,7 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiM
         self._device_status_timer.setInterval(750)
         self._device_status_timer.timeout.connect(self._update_device_status)
         self._workers = set()
+        self._ui_settings = QtCore.QSettings("EON", "OpenSlicer")
         self.runtime_printer_state = runtime_printer_state_from_defaults(DEFAULTS.get("printer", {}))
 
     def __getattr__(self, name):
@@ -87,7 +90,14 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiM
         if hasattr(self, "_labels_action"):
             self._labels_action.setChecked(self._labels_visible)
 
-        self._activate_mode("prepare")
+        startup_mode = self._restore_persistent_ui_state()
+        if hasattr(self, "_mode_tabs"):
+            for btn in self._mode_tabs:
+                mode_key = str(btn.property("mode_key") or "").strip().lower()
+                if mode_key == startup_mode:
+                    btn.setChecked(True)
+                    break
+        self._activate_mode(startup_mode)
         self.statusBar().showMessage(tr("app.status_ready", DEFAULTS["app"]["status_ready"]))
         if hasattr(self.viewer, "set_bed_limits"):
             self.viewer.set_bed_limits(self.runtime_printer_state.bed_size, self.runtime_printer_state.bed_z)
@@ -139,6 +149,8 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiM
             self.preview_view.printer_changed.connect(
                 lambda printer: self._apply_printer_profile(printer, source="preview")
             )
+        if hasattr(self, "activity_view") and hasattr(self.activity_view, "state_changed"):
+            self.activity_view.state_changed.connect(self._on_activity_view_state_changed)
 
     def _start_worker(self, worker: Worker):
         self._workers.add(worker)
@@ -149,4 +161,51 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiM
         worker.signals.finished.connect(_cleanup)
         worker.signals.error.connect(_cleanup)
         self.pool.start(worker)
+
+    def _persist_active_mode(self, mode: str) -> None:
+        if not hasattr(self, "_ui_settings") or self._ui_settings is None:
+            return
+        value = str(mode or "").strip().lower()
+        if not value:
+            return
+        self._ui_settings.setValue("ui/active_mode", value)
+        self._ui_settings.sync()
+
+    def _on_activity_view_state_changed(self, state: dict) -> None:
+        if not hasattr(self, "_ui_settings") or self._ui_settings is None:
+            return
+        payload = dict(state or {})
+        try:
+            encoded = json.dumps(payload, ensure_ascii=True)
+        except Exception:
+            return
+        self._ui_settings.setValue("ui/activity_view_state", encoded)
+        self._ui_settings.sync()
+
+    def _restore_persistent_ui_state(self) -> str:
+        settings = getattr(self, "_ui_settings", None)
+        if settings is None:
+            return "prepare"
+
+        raw_state = settings.value("ui/activity_view_state", "")
+        state_obj = None
+        if isinstance(raw_state, dict):
+            state_obj = raw_state
+        else:
+            state_text = str(raw_state or "").strip()
+            if state_text:
+                try:
+                    parsed = json.loads(state_text)
+                except Exception:
+                    parsed = None
+                if isinstance(parsed, dict):
+                    state_obj = parsed
+        if state_obj is not None and hasattr(self, "activity_view") and hasattr(self.activity_view, "restore_view_state"):
+            self.activity_view.restore_view_state(state_obj)
+
+        mode = str(settings.value("ui/active_mode", "prepare") or "prepare").strip().lower()
+        allowed_modes = {"files", "activity", "prepare", "preview", "device", "control"}
+        if mode not in allowed_modes:
+            mode = "prepare"
+        return mode
 

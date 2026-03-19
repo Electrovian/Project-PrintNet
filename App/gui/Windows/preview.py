@@ -2,6 +2,7 @@ import bisect
 import math
 from PyQt5 import QtWidgets, QtCore, QtGui
 
+from ..i18n import tr
 from ..theme import theme_css, theme_qcolor
 from ..preview_utils import play_interval_ms
 from config.defaults import DEFAULTS
@@ -225,7 +226,7 @@ class PreviewView(QtCore.QObject):
             self._slice_btn.clicked.connect(slice_handler)
         action_layout.addWidget(self._slice_btn)
 
-        self._print_btn = QtWidgets.QPushButton("Send print", self._action_panel)
+        self._print_btn = QtWidgets.QPushButton(tr("topbar.action.print", "Select print"), self._action_panel)
         self._print_btn.clicked.connect(self.main._open_device_view)
         action_layout.addWidget(self._print_btn)
 

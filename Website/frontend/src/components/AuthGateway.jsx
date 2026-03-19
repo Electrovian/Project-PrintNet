@@ -186,10 +186,8 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
     email: "",
     org: "",
     password: "",
-    confirmPassword: "",
-    verificationCode: ""
+    confirmPassword: ""
   });
-  const [pendingVerification, setPendingVerification] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -201,10 +199,6 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
       const pathname = String(window.location?.pathname || "/").toLowerCase();
       if (pathname === "/register") {
         setMode("signup");
-        return;
-      }
-      if (pathname === "/verify") {
-        setMode("verify");
         return;
       }
       if (pathname === "/sso") {
@@ -227,8 +221,6 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
     let targetPath = "/signin";
     if (mode === "signup") {
       targetPath = "/register";
-    } else if (mode === "verify") {
-      targetPath = "/verify";
     } else if (mode === "sso") {
       targetPath = "/sso";
     }
@@ -244,15 +236,10 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
 
   function switchMode(nextMode) {
     setMode(nextMode);
-    if (nextMode !== "verify") {
-      setPendingVerification(null);
-      setField("verificationCode", "");
-    }
   }
 
   const isSignUp = mode === "signup";
-  const isVerify = mode === "verify";
-  const submitLabel = isSignUp ? "Create Account" : isVerify ? "Verify Code" : "Sign In";
+  const submitLabel = isSignUp ? "Create Account" : "Sign In";
 
   useEffect(() => {
     setMessage("");
@@ -266,61 +253,16 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
     setBusy(true);
     setMessage("");
     try {
-      if (isVerify) {
-        const challengeId = String(pendingVerification?.challengeId || "").trim();
-        const verificationCode = String(form.verificationCode || "").trim();
-        if (!challengeId) {
-          throw new Error("Verification session expired. Sign in again.");
-        }
-        if (!verificationCode) {
-          throw new Error("Verification code is required.");
-        }
-        await onAuthenticate({
-          mode: "signin",
-          step: "verify",
-          userId: String(pendingVerification?.userId || "").trim(),
-          challengeId,
-          verificationCode
-        });
-        setPendingVerification(null);
-        return;
-      }
       if (isSignUp && String(form.password || "") !== String(form.confirmPassword || "")) {
         setMessage("Passwords do not match.");
         return;
       }
-      const userId = normalizeUserId(form);
-      const result = await onAuthenticate({
+      await onAuthenticate({
         mode: isSignUp ? "signup" : "signin",
         step: isSignUp ? "signup" : "password",
-        userId,
+        userId: normalizeUserId(form),
         password: String(form.password || "")
       });
-      if (!isSignUp && result?.requiresVerification) {
-        const challengeId = String(result?.challengeId || "").trim();
-        if (!challengeId) {
-          throw new Error("Verification challenge is missing.");
-        }
-        setPendingVerification({
-          challengeId,
-          userId,
-          delivery: result?.delivery || null,
-          debugCode: String(result?.debugCode || "")
-        });
-        switchMode("verify");
-        const destination = String(result?.delivery?.destination || "").trim();
-        const debugCode = String(result?.debugCode || "").trim();
-        const pieces = [];
-        pieces.push(
-          destination
-            ? `Verification code sent to ${destination}.`
-            : "Verification code sent."
-        );
-        if (debugCode) {
-          pieces.push(`Dev code: ${debugCode}`);
-        }
-        setMessage(pieces.join(" "));
-      }
     } catch (err) {
       setMessage(String(err?.message || err || "Unable to authenticate."));
     } finally {
@@ -345,7 +287,7 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
 
         <div className="auth-tabs" role="tablist" aria-label="Authentication Modes">
           <button
-            className={mode === "signin" || mode === "verify" ? "auth-tab is-active" : "auth-tab"}
+            className={mode === "signin" ? "auth-tab is-active" : "auth-tab"}
             type="button"
             onClick={() => switchMode("signin")}
           >
@@ -381,29 +323,7 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
           </div>
         ) : (
           <form className="auth-form" onSubmit={submitAuth}>
-            {isVerify ? (
-              <>
-                <label className="auth-label">
-                  <span>Verification Destination</span>
-                  <input
-                    type="text"
-                    value={String(pendingVerification?.delivery?.destination || "")}
-                    readOnly
-                  />
-                </label>
-                <label className="auth-label">
-                  <span>Verification Code</span>
-                  <input
-                    type="text"
-                    value={form.verificationCode}
-                    onChange={(event) => setField("verificationCode", event.target.value)}
-                    autoComplete="one-time-code"
-                    placeholder="6-digit code"
-                    required
-                  />
-                </label>
-              </>
-            ) : isSignUp ? (
+            {isSignUp ? (
               <label className="auth-label">
                 <span>Display Name (Optional)</span>
                 <input
