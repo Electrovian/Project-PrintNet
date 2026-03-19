@@ -1,5 +1,6 @@
 from PyQt5 import QtWidgets, QtCore
 
+from ..i18n import tr
 from ..theme import theme_css
 from config.defaults import DEFAULTS
 
@@ -9,6 +10,8 @@ class DeviceView(QtWidgets.QWidget):
     save_requested = QtCore.pyqtSignal()
     email_requested = QtCore.pyqtSignal()
     printer_changed = QtCore.pyqtSignal(object)
+    add_printer_requested = QtCore.pyqtSignal()
+    diagnostics_requested = QtCore.pyqtSignal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -20,12 +23,12 @@ class DeviceView(QtWidgets.QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        title = QtWidgets.QLabel("Device")
+        title = QtWidgets.QLabel(tr("device.title", "Device"))
         title.setObjectName("DeviceTitle")
         layout.addWidget(title)
 
         select_row = QtWidgets.QHBoxLayout()
-        select_label = QtWidgets.QLabel("Search printer:")
+        select_label = QtWidgets.QLabel(tr("device.search.label", "Search printer:"))
         select_row.addWidget(select_label)
         self._printer_combo = QtWidgets.QComboBox(self)
         self._printer_combo.setObjectName("DeviceCombo")
@@ -36,7 +39,9 @@ class DeviceView(QtWidgets.QWidget):
         completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
         self._printer_combo.setCompleter(completer)
         if self._printer_combo.lineEdit() is not None:
-            self._printer_combo.lineEdit().setPlaceholderText("Search connected printers")
+            self._printer_combo.lineEdit().setPlaceholderText(
+                tr("device.search.placeholder", "Search connected printers")
+            )
         select_row.addWidget(self._printer_combo, 1)
         layout.addLayout(select_row)
 
@@ -56,10 +61,13 @@ class DeviceView(QtWidgets.QWidget):
         camera_layout = QtWidgets.QVBoxLayout(camera_frame)
         camera_layout.setContentsMargins(12, 12, 12, 12)
         camera_layout.setSpacing(8)
-        camera_title = QtWidgets.QLabel("Live preview", camera_frame)
+        camera_title = QtWidgets.QLabel(tr("device.camera.title", "Live preview"), camera_frame)
         camera_title.setObjectName("DeviceSectionTitle")
         camera_layout.addWidget(camera_title)
-        camera_placeholder = QtWidgets.QLabel("Camera feed not connected", camera_frame)
+        camera_placeholder = QtWidgets.QLabel(
+            tr("device.camera.placeholder", "Camera feed not connected"),
+            camera_frame,
+        )
         camera_placeholder.setObjectName("DeviceCameraPlaceholder")
         camera_placeholder.setAlignment(QtCore.Qt.AlignCenter)
         camera_layout.addWidget(camera_placeholder, 1)
@@ -71,7 +79,7 @@ class DeviceView(QtWidgets.QWidget):
         status_layout.setContentsMargins(12, 10, 12, 10)
         status_layout.setSpacing(8)
 
-        status_title = QtWidgets.QLabel("Live status", status_frame)
+        status_title = QtWidgets.QLabel(tr("device.status.title", "Live status"), status_frame)
         status_title.setObjectName("DeviceStatusTitle")
         status_layout.addWidget(status_title)
 
@@ -79,23 +87,23 @@ class DeviceView(QtWidgets.QWidget):
         grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(6)
 
-        head_label = QtWidgets.QLabel("Head position", status_frame)
+        head_label = QtWidgets.QLabel(tr("device.status.head_position", "Head position"), status_frame)
         head_label.setObjectName("DeviceStatusLabel")
-        self._head_pos_value = QtWidgets.QLabel("n/a", status_frame)
+        self._head_pos_value = QtWidgets.QLabel(tr("device.value.na", "n/a"), status_frame)
         self._head_pos_value.setObjectName("DeviceStatusValue")
         grid.addWidget(head_label, 0, 0)
         grid.addWidget(self._head_pos_value, 0, 1)
 
-        time_label = QtWidgets.QLabel("Time left", status_frame)
+        time_label = QtWidgets.QLabel(tr("device.status.time_left", "Time left"), status_frame)
         time_label.setObjectName("DeviceStatusLabel")
-        self._time_left_value = QtWidgets.QLabel("n/a", status_frame)
+        self._time_left_value = QtWidgets.QLabel(tr("device.value.na", "n/a"), status_frame)
         self._time_left_value.setObjectName("DeviceStatusValue")
         grid.addWidget(time_label, 1, 0)
         grid.addWidget(self._time_left_value, 1, 1)
 
-        pla_label = QtWidgets.QLabel("PLA status", status_frame)
+        pla_label = QtWidgets.QLabel(tr("device.status.pla", "PLA status"), status_frame)
         pla_label.setObjectName("DeviceStatusLabel")
-        self._pla_status_value = QtWidgets.QLabel("n/a", status_frame)
+        self._pla_status_value = QtWidgets.QLabel(tr("device.value.na", "n/a"), status_frame)
         self._pla_status_value.setObjectName("DeviceStatusValue")
         grid.addWidget(pla_label, 2, 0)
         grid.addWidget(self._pla_status_value, 2, 1)
@@ -104,12 +112,16 @@ class DeviceView(QtWidgets.QWidget):
         left_col.addWidget(status_frame)
 
         btn_row = QtWidgets.QHBoxLayout()
-        self._send_btn = QtWidgets.QPushButton("Send to printer")
-        self._save_btn = QtWidgets.QPushButton("Save G-code")
-        self._email_btn = QtWidgets.QPushButton("Send email")
+        self._send_btn = QtWidgets.QPushButton(tr("device.button.send", "Send to printer"))
+        self._save_btn = QtWidgets.QPushButton(tr("device.button.save_gcode", "Save G-code"))
+        self._email_btn = QtWidgets.QPushButton(tr("device.button.send_email", "Send email"))
+        self._add_printer_btn = QtWidgets.QPushButton(tr("device.button.add_printer", "Add printer"))
+        self._diagnostics_btn = QtWidgets.QPushButton(tr("device.button.diagnostics", "Diagnostics"))
         btn_row.addWidget(self._send_btn)
         btn_row.addWidget(self._save_btn)
         btn_row.addWidget(self._email_btn)
+        btn_row.addWidget(self._add_printer_btn)
+        btn_row.addWidget(self._diagnostics_btn)
         left_col.addLayout(btn_row)
         left_col.addStretch(1)
 
@@ -120,10 +132,10 @@ class DeviceView(QtWidgets.QWidget):
         queue_layout = QtWidgets.QVBoxLayout(queue_frame)
         queue_layout.setContentsMargins(12, 12, 12, 12)
         queue_layout.setSpacing(8)
-        queue_title = QtWidgets.QLabel("Queue", queue_frame)
+        queue_title = QtWidgets.QLabel(tr("device.queue.title", "Queue"), queue_frame)
         queue_title.setObjectName("DeviceSectionTitle")
         queue_layout.addWidget(queue_title)
-        queue_placeholder = QtWidgets.QLabel("No queued jobs yet.", queue_frame)
+        queue_placeholder = QtWidgets.QLabel(tr("device.queue.empty", "No queued jobs yet."), queue_frame)
         queue_placeholder.setObjectName("DeviceQueuePlaceholder")
         queue_placeholder.setAlignment(QtCore.Qt.AlignCenter)
         queue_layout.addWidget(queue_placeholder, 1)
@@ -136,7 +148,7 @@ class DeviceView(QtWidgets.QWidget):
         connected_layout = QtWidgets.QVBoxLayout(connected_frame)
         connected_layout.setContentsMargins(12, 12, 12, 12)
         connected_layout.setSpacing(8)
-        self._connected_title = QtWidgets.QLabel("Connected printers", connected_frame)
+        self._connected_title = QtWidgets.QLabel(tr("device.connected.title", "Connected printers"), connected_frame)
         self._connected_title.setObjectName("DeviceSectionTitle")
         connected_layout.addWidget(self._connected_title)
         self._connected_scroll = QtWidgets.QScrollArea(connected_frame)
@@ -159,6 +171,8 @@ class DeviceView(QtWidgets.QWidget):
         self._send_btn.clicked.connect(self._emit_send)
         self._save_btn.clicked.connect(self.save_requested.emit)
         self._email_btn.clicked.connect(self.email_requested.emit)
+        self._add_printer_btn.clicked.connect(self.add_printer_requested.emit)
+        self._diagnostics_btn.clicked.connect(self._emit_diagnostics)
 
         self.apply_theme()
 
@@ -171,14 +185,21 @@ class DeviceView(QtWidgets.QWidget):
         ]
         self._printer_combo.clear()
         if not self._printers:
-            self._printer_combo.addItem("No connected printers")
+            self._printer_combo.addItem(tr("device.connected.none", "No connected printers"))
             self._printer_combo.setEnabled(False)
         else:
             self._printer_combo.setEnabled(True)
-            default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+            default_name = ""
+            main = self.parent()
+            runtime_state = getattr(main, "runtime_printer_state", None) if main is not None else None
+            if runtime_state is not None:
+                default_name = str(getattr(runtime_state, "name", "")).strip().lower()
+            if not default_name:
+                default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
             default_index = None
             for idx, printer in enumerate(self._printers):
                 name = printer.get("name", "Printer")
+                name = name or tr("device.printer.default_name", "Printer")
                 self._printer_combo.addItem(name)
                 if default_name and str(name or "").strip().lower() == default_name:
                     default_index = idx
@@ -214,16 +235,21 @@ class DeviceView(QtWidgets.QWidget):
     def _update_details(self, emit_signal: bool = True):
         printer = self.current_printer()
         if not printer:
-            self._printer_details.setText("No printer selected.")
+            self._printer_details.setText(tr("device.printer.none_selected", "No printer selected."))
             self._send_btn.setEnabled(False)
             return
         desc = [
-            f"Name: {printer.get('name', 'Printer')}",
-            f"Bed: {printer.get('bed_x', 'n/a')} x {printer.get('bed_y', 'n/a')} x {printer.get('bed_z', 'n/a')}",
+            tr("device.printer.name", name=printer.get("name", tr("device.printer.default_name", "Printer"))),
+            tr(
+                "device.printer.bed",
+                x=printer.get("bed_x", tr("device.value.na", "n/a")),
+                y=printer.get("bed_y", tr("device.value.na", "n/a")),
+                z=printer.get("bed_z", tr("device.value.na", "n/a")),
+            ),
         ]
         url = printer.get("octoprint_url")
         if url:
-            desc.append(f"OctoPrint: {url}")
+            desc.append(tr("device.printer.octoprint", url=url))
         self._printer_details.setText("\n".join(desc))
         self._send_btn.setEnabled(True)
         if emit_signal:
@@ -250,20 +276,27 @@ class DeviceView(QtWidgets.QWidget):
 
         if hasattr(self, "_connected_title"):
             if self._printers:
-                self._connected_title.setText(f"Connected printers ({len(self._printers)})")
+                self._connected_title.setText(
+                    tr("device.connected.title_count", count=len(self._printers))
+                )
             else:
-                self._connected_title.setText("Connected printers")
+                self._connected_title.setText(tr("device.connected.title", "Connected printers"))
 
         if not self._printers:
-            placeholder = QtWidgets.QLabel("No connected printers.")
+            placeholder = QtWidgets.QLabel(tr("device.connected.none", "No connected printers."))
             placeholder.setObjectName("DeviceQueuePlaceholder")
             placeholder.setAlignment(QtCore.Qt.AlignCenter)
             self._connected_list.addWidget(placeholder)
             return
 
         for printer in self._printers:
-            name = printer.get("name", "Printer")
-            bed = f"{printer.get('bed_x', 'n/a')} x {printer.get('bed_y', 'n/a')} x {printer.get('bed_z', 'n/a')}"
+            name = printer.get("name", tr("device.printer.default_name", "Printer"))
+            bed = tr(
+                "device.printer.bed_dimensions",
+                x=printer.get("bed_x", tr("device.value.na", "n/a")),
+                y=printer.get("bed_y", tr("device.value.na", "n/a")),
+                z=printer.get("bed_z", tr("device.value.na", "n/a")),
+            )
             row = QtWidgets.QFrame(self)
             row.setObjectName("DevicePrinterItem")
             row_layout = QtWidgets.QVBoxLayout(row)
@@ -271,7 +304,7 @@ class DeviceView(QtWidgets.QWidget):
             row_layout.setSpacing(2)
             name_label = QtWidgets.QLabel(str(name), row)
             name_label.setObjectName("DevicePrinterName")
-            bed_label = QtWidgets.QLabel(f"Bed: {bed}", row)
+            bed_label = QtWidgets.QLabel(tr("device.printer.bed_short", bed=bed), row)
             bed_label.setObjectName("DevicePrinterMeta")
             row_layout.addWidget(name_label)
             row_layout.addWidget(bed_label)
@@ -284,6 +317,12 @@ class DeviceView(QtWidgets.QWidget):
             return
         self.send_requested.emit(printer)
 
+    def _emit_diagnostics(self):
+        printer = self.current_printer()
+        if printer is None:
+            return
+        self.diagnostics_requested.emit(printer)
+
     def update_live_status(
         self,
         head_pos: tuple[float, float, float] | None = None,
@@ -293,22 +332,22 @@ class DeviceView(QtWidgets.QWidget):
     ):
         if hasattr(self, "_head_pos_value"):
             if head_pos is None:
-                self._head_pos_value.setText("n/a")
+                self._head_pos_value.setText(tr("device.value.na", "n/a"))
             else:
                 x, y, z = head_pos
                 self._head_pos_value.setText(f"X: {x:.2f}  Y: {y:.2f}  Z: {z:.2f}")
         if hasattr(self, "_time_left_value"):
             if time_left_s is None:
-                self._time_left_value.setText("n/a")
+                self._time_left_value.setText(tr("device.value.na", "n/a"))
             else:
                 self._time_left_value.setText(self._format_duration(time_left_s))
         if hasattr(self, "_pla_status_value"):
             if pla_remaining_m is None or pla_low is None:
-                self._pla_status_value.setText("n/a")
+                self._pla_status_value.setText(tr("device.value.na", "n/a"))
             else:
                 remaining = max(0.0, float(pla_remaining_m))
-                state = "LOW" if pla_low else "OK"
-                self._pla_status_value.setText(f"{state} ({remaining:.2f} m left)")
+                state = tr("device.status.low", "LOW") if pla_low else tr("device.status.ok", "OK")
+                self._pla_status_value.setText(tr("device.status.remaining", state=state, meters=f"{remaining:.2f}"))
         self._apply_pla_style(pla_low)
 
     def _apply_pla_style(self, pla_low: bool | None):

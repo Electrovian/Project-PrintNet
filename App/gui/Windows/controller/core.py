@@ -1,14 +1,17 @@
 from PyQt5 import QtCore
 
 from ...workers import Worker
+from ...i18n import tr
 from config.defaults import DEFAULTS
+from config.runtime_printer_state import runtime_printer_state_from_defaults
+from .activity_sync import ActivitySyncMixin
 from .load import LoadMixin
 from .print import PrintMixin
 from .project import ProjectMixin
 from .ui import UiMixin
 
 
-class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObject):
+class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiMixin, QtCore.QObject):
     def __init__(self, main_window):
         super().__init__(main_window)
         self.main = main_window
@@ -17,6 +20,11 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
         self._last_gcode_path = None
         self._last_slice_signature = None
         self._last_gcode_stats = None
+        self._last_preview_key = None
+        self._last_preview_data = None
+        self._last_preview_text = None
+        self._last_slice_meshes = None
+        self._last_slicer_backend = None
         self._slice_in_progress = False
         self._labels_visible = True
         self._model_clipboard = []
@@ -33,6 +41,7 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
         self._device_status_timer.setInterval(750)
         self._device_status_timer.timeout.connect(self._update_device_status)
         self._workers = set()
+        self.runtime_printer_state = runtime_printer_state_from_defaults(DEFAULTS.get("printer", {}))
 
     def __getattr__(self, name):
         main = self.__dict__.get("main")
@@ -46,6 +55,7 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
     def initialize(self):
         self._apply_theme()
         self._connect_signals()
+        self._init_activity_sync()
         self.viewer.set_snap(
             DEFAULTS["viewer"]["snap_enabled"],
             DEFAULTS["viewer"]["snap_step"],
@@ -62,17 +72,28 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
         self._undo_in_progress = False
         self._bed_warning_active = False
         self._last_gcode_stats = None
+        self._last_preview_key = None
+        self._last_preview_data = None
+        self._last_preview_text = None
+        self._last_slice_meshes = None
+        self._last_slicer_backend = None
         self._undo_timer = QtCore.QTimer(self)
         self._undo_timer.setSingleShot(True)
         self._undo_timer.timeout.connect(self._finalize_undo_snapshot)
         self._pending_undo_snapshot = False
+        self.runtime_printer_state = runtime_printer_state_from_defaults(DEFAULTS.get("printer", {}))
         self._push_undo_state()
         self.viewer.set_labels_visible(self._labels_visible)
         if hasattr(self, "_labels_action"):
             self._labels_action.setChecked(self._labels_visible)
 
         self._activate_mode("prepare")
-        self.statusBar().showMessage(DEFAULTS["app"]["status_ready"])
+        self.statusBar().showMessage(tr("app.status_ready", DEFAULTS["app"]["status_ready"]))
+        if hasattr(self.viewer, "set_bed_limits"):
+            self.viewer.set_bed_limits(self.runtime_printer_state.bed_size, self.runtime_printer_state.bed_z)
+        active_printer = getattr(getattr(self, "printer_manager", None), "active_printer", None)
+        if active_printer is not None and hasattr(self, "_apply_printer_profile"):
+            self._apply_printer_profile(active_printer, source="initialize")
         if self._device_status_timer is not None:
             self._device_status_timer.start()
 
@@ -92,10 +113,24 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, UiMixin, QtCore.QObjec
             self.viewer.selectionChanged.connect(self._on_viewer_selection_changed)
         if hasattr(self.viewer, "simplifyRequested"):
             self.viewer.simplifyRequested.connect(self._open_simplify_dialog)
+        if hasattr(self.viewer, "plateAutoOrientRequested"):
+            self.viewer.plateAutoOrientRequested.connect(lambda: self._on_auto_orient_requested("default"))
+        if hasattr(self.viewer, "plateArrangeRequested"):
+            self.viewer.plateArrangeRequested.connect(self._on_arrange_requested)
+        if hasattr(self.viewer, "plateRemoveRequested"):
+            self.viewer.plateRemoveRequested.connect(self._on_plate_remove_requested)
+        if hasattr(self.viewer, "plateLockChanged"):
+            self.viewer.plateLockChanged.connect(self._on_plate_lock_changed)
+        if hasattr(self.viewer, "plateNameChanged"):
+            self.viewer.plateNameChanged.connect(self._on_plate_name_changed)
         if hasattr(self, "device_view") and hasattr(self.device_view, "printer_changed"):
             self.device_view.printer_changed.connect(
                 lambda printer: self._apply_printer_profile(printer, source="device")
             )
+        if hasattr(self, "device_view") and hasattr(self.device_view, "add_printer_requested"):
+            self.device_view.add_printer_requested.connect(self._on_device_add_printer_requested)
+        if hasattr(self, "device_view") and hasattr(self.device_view, "diagnostics_requested"):
+            self.device_view.diagnostics_requested.connect(self._on_device_diagnostics_requested)
         if hasattr(self, "control_view") and hasattr(self.control_view, "printer_changed"):
             self.control_view.printer_changed.connect(
                 lambda printer: self._apply_printer_profile(printer, source="control")

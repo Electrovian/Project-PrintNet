@@ -1,6 +1,7 @@
 DEFAULTS = {
     "app": {
         "title": "EON-OpenSlicer",
+        "language": "en",
         "size": (1280, 720),
         "status_ready": "Ready",
     },

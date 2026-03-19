@@ -13,13 +13,11 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         super().__init__(parent)
         self._azimuth = -45.0
         self._elevation = 30.0
-        self._cube_size = 90
+        self._cube_size = 84
         self._padding = 6
-        self._home_size = 18
         self._face_regions = []
         self._edge_regions = []
         self._corner_regions = []
-        self._home_rect = QtCore.QRect()
         self._corner_radius = 6
         self.invert_x = True
         self.invert_y = True
@@ -45,7 +43,7 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         self.update()
 
     def sizeHint(self):
-        return QtCore.QSize(self._cube_size, self._cube_size + self._home_size + self._padding * 2)
+        return QtCore.QSize(self._cube_size, self._cube_size)
 
     def set_camera(self, azimuth: float, elevation: float):
         if abs(self._azimuth - azimuth) < 1e-3 and abs(self._elevation - elevation) < 1e-3:
@@ -58,11 +56,6 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.Antialiasing, True)
         p.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
-
-        rect = self.rect()
-        p.setPen(QtGui.QPen(self._border_color, 1))
-        p.setBrush(QtGui.QBrush(self._panel_color))
-        p.drawRoundedRect(rect.adjusted(0, 0, -1, -1), 8, 8)
 
         faces, corners, edges = self._project_faces()
         self._face_regions = []
@@ -84,7 +77,6 @@ class ViewCubeOverlay(QtWidgets.QWidget):
 
         self._draw_edge_zones(p, edges, self._border_color)
         self._draw_corner_zones(p, corners, self._border_color)
-        self._draw_home_button(p, rect, self._accent_color, self._border_color, self._text_color)
 
     def _face_fill(self, normal_z: float, name: str) -> QtGui.QColor:
         shade = max(0.0, min(1.0, float(normal_z)))
@@ -110,31 +102,6 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         rect.moveCenter(QtCore.QPointF(0.0, 0.0))
         p.drawText(rect, QtCore.Qt.AlignCenter, label)
         p.restore()
-
-    def _draw_home_button(self, p: QtGui.QPainter, rect: QtCore.QRect, accent: QtGui.QColor, border: QtGui.QColor, text: QtGui.QColor):
-        size = self._home_size
-        x = rect.center().x() - size // 2
-        y = rect.bottom() - size - self._padding
-        self._home_rect = QtCore.QRect(x, y, size, size)
-
-        p.setPen(QtGui.QPen(border, 1))
-        p.setBrush(QtGui.QBrush(accent))
-        p.drawRoundedRect(self._home_rect, 4, 4)
-
-        p.setPen(QtGui.QPen(text))
-        path = QtGui.QPainterPath()
-        cx = self._home_rect.center().x()
-        cy = self._home_rect.center().y()
-        w = size * 0.5
-        h = size * 0.45
-        path.moveTo(cx, cy - h * 0.6)
-        path.lineTo(cx - w * 0.6, cy - h * 0.05)
-        path.lineTo(cx - w * 0.6, cy + h * 0.6)
-        path.lineTo(cx + w * 0.6, cy + h * 0.6)
-        path.lineTo(cx + w * 0.6, cy - h * 0.05)
-        path.closeSubpath()
-        p.setBrush(QtGui.QBrush(text))
-        p.drawPath(path)
 
     def _marker_color(self, name: str, default: QtGui.QColor):
         if name == self._active_name:
@@ -188,11 +155,6 @@ class ViewCubeOverlay(QtWidgets.QWidget):
             self._edge_regions.append((poly, name, edge["depth"]))
 
     def mousePressEvent(self, a0: QtGui.QMouseEvent):
-        if self._home_rect.contains(a0.pos()):
-            self.homeRequested.emit()
-            a0.accept()
-            return
-
         pos = QtCore.QPointF(a0.pos())
         name = self._hit_test_regions(self._corner_regions, pos)
         if name is None:

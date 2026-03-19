@@ -14,8 +14,8 @@ author_email = "openslicer@example.edu"
 [tool.briefcase.app.eonopenslicer]
 formal_name = "EON-OpenSlicer"
 description = "3D print lab management and slicer"
-sources = ["App"]
-app_start_module = "App.__main__"
+sources = ["."]
+app_start_module = "app_mobile"
 app_start_callable = "main"
 requires = [
     "toga>=0.4.7",

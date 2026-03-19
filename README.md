@@ -1,12 +1,12 @@
-# EON-OpenSlicer – Final Design Report
+# EON-OpenSlicer - Final Design Report
 
 ## Team Name
 EON-OpenSlicer
 
 ## Team Members
-- Mitchell Koski – Computer Science, University of Cincinnati – koskima@mail.uc.edu
-- Muhanad Al-Khasawneh – Computer Science, University of Cincinnati – alkhasmr@mail.uc.edu
-- Muneer Al-Khasawneh – Computer Science, University of Cincinnati – alkhasme@mail.uc.edu
+- Mitchell Koski - Computer Science, University of Cincinnati - koskima@mail.uc.edu
+- Muhanad Al-Khasawneh - Computer Science, University of Cincinnati - alkhasmr@mail.uc.edu
+- Muneer Al-Khasawneh - Computer Science, University of Cincinnati - alkhasme@mail.uc.edu
 
 **Advisor:** Jeremy Hill
 
@@ -30,7 +30,7 @@ EON-OpenSlicer is a centralized 3D printing lab management system designed to st
 
 3. [Self-Assessment Essays (Assignment #3)](./Classwork/assignent3)
 
-4. Project Tasks & Timeline (Assignments #5–6)
+4. Project Tasks & Timeline (Assignments #5-6)
    - [Assignment 5](./Classwork/assignment5)
    - [Assignment 6](./Classwork/assignment6)
 
@@ -47,6 +47,7 @@ EON-OpenSlicer is a centralized 3D printing lab management system designed to st
 ---
 
 ## Budget
+
 No direct expenses were required for this project. We used personal computers, free software, and university resources(professor Help with code).
 
 ---

@@ -30,6 +30,16 @@ class WireframeMixin:
             return
         enable_edges = bool(enabled)
         m["wireframe"] = enable_edges
+        if enable_edges and m.get("meshdata_wireframe") is None and hasattr(self, "_ensure_model_wireframe_meshdata"):
+            self._ensure_model_wireframe_meshdata(model_id)
+        if enable_edges and m.get("meshdata_wireframe") is not None:
+            item.setMeshData(meshdata=m["meshdata_wireframe"])
+            if hasattr(self, "_apply_model_color"):
+                self._apply_model_color(m)
+        elif m.get("meshdata_full") is not None:
+            item.setMeshData(meshdata=m["meshdata_full"])
+            if hasattr(self, "_apply_model_color"):
+                self._apply_model_color(m)
         models_visible = bool(getattr(self, "_models_visible", True))
         if models_visible:
             item.setVisible(True)
@@ -42,7 +52,10 @@ class WireframeMixin:
                 item.setVisible(False)
 
     def _apply_wireframe_to_item(self, item, enable_edges: bool, draw_faces: bool):
-        item.opts["drawEdges"] = bool(enable_edges)
+        draw_edges = bool(enable_edges)
+        if not draw_edges and draw_faces and bool(getattr(self, "_solid_mesh_edges", True)):
+            draw_edges = True
+        item.opts["drawEdges"] = draw_edges
         item.opts["drawFaces"] = bool(draw_faces)
         if enable_edges and getattr(item, "edges", None) is None:
             item.meshDataChanged()

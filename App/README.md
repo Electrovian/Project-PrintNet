@@ -1,19 +1,20 @@
-# EON-OpenSlicer (Prototype)
+﻿# EON-OpenSlicer (Prototype)
 
-EON-OpenSlicer is a **prototype** open‑source 3D printing slicer and print manager.
+EON-OpenSlicer is a **prototype** openâ€‘source 3D printing slicer and print manager.
 
 This version is intentionally lightweight: it has a functional PyQt GUI,
-STL preview, a very simple demo slicer that generates a single‑layer
+STL preview, a very simple demo slicer that generates a singleâ€‘layer
 outline, and stubs for Airtable and OctoPrint integration.  
 It is meant as a starting point and architecture reference, **not** a
 production slicer.
 
 ## Features
 
-- Dark UI inspired by modern slicers (Bambu style).
-- Drag‑and‑drop STL loading.
+- Dark UI inspired by modern professional slicer workflows.
+- Dragâ€‘andâ€‘drop STL loading.
 - 3D preview of the model.
-- Basic slicing demo that writes a simple square outline G‑code.
+- Basic slicing demo that writes a simple square outline Gâ€‘code.
+- Core local workflows are designed to run offline after dependencies are installed.
 - Settings panel for layer height, infill %, etc. (currently used only
   by the demo slicer).
 - Job queue panel (local only by default).
@@ -25,8 +26,8 @@ production slicer.
 ## Limitations
 
 - The slicing engine is **minimal** and only generates a single outline
-  at the model’s bounding box as a proof‑of‑concept.
-- Real infill, supports, multi‑layer path planning, etc. are **not**
+  at the modelâ€™s bounding box as a proofâ€‘ofâ€‘concept.
+- Real infill, supports, multiâ€‘layer path planning, etc. are **not**
   implemented yet.
 - Airtable and OctoPrint calls are safe stubs until you add real
   credentials in config.
@@ -36,7 +37,7 @@ production slicer.
 ## Installation (Windows + Visual Studio Code)
 
 1. **Install Python 3.10+**  
-   Download from python.org and check **“Add Python to PATH”** during
+   Download from python.org and check **â€œAdd Python to PATHâ€** during
    installation.
 
 2. **Install Git (optional but recommended)**  
@@ -101,7 +102,7 @@ production slicer.
      ```
 
    A window titled **EON-OpenSlicer** should appear.  
-   Drag an STL file onto the build plate area or use **File → Open STL**.
+   Drag an STL file onto the build plate area or use **File â†’ Open STL**.
 
 ---
 
@@ -111,13 +112,13 @@ production slicer.
 - **Inspect**: rotate (left mouse), pan (right mouse), zoom (wheel).
 - **Settings**: adjust layer height / infill on the right panel.
 - **Slice**: click the **Slice** button in the toolbar.
-- **Preview**: the G‑code outline appears as a wireframe square.
+- **Preview**: the Gâ€‘code outline appears as a wireframe square.
 - **Print**:
   - Configure OctoPrint URL and API key in `config/printer_config.py`
     or your Excel.
-  - Click **Send to Printer** (demo prints the G‑code path to console
+  - Click **Send to Printer** (demo prints the Gâ€‘code path to console
     unless fully wired).
 
 This codebase is intentionally small and heavily commented so you can
-grow it into a full slicer (multi‑layer geometry, real infill, supports,
+grow it into a full slicer (multiâ€‘layer geometry, real infill, supports,
 Airtable workflow, etc.).

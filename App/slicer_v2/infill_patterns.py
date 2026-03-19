@@ -11,6 +11,7 @@ from .geometry import EPSILON, Island, Point2
 from .island_graph import LayerIslandGraph
 from .infill_rotation import calculate_infill_rotation_angles
 from .line_split import split_line
+from .polygon_pipeline import offset_polygon
 
 
 INFILL_PATTERN_RECTILINEAR = "rectilinear"
@@ -64,6 +65,7 @@ class LayerInfillPlan:
     z_height_mm: float
     pattern: str
     density_ratio: float
+    overlap_multiplier: float
     angle_deg: float
     anchor_angle_deg: float
     combined_layer_count: int
@@ -76,6 +78,10 @@ class LayerInfillPlan:
     effective_infill_area_mm2: float
     path_count: int
     path_length_mm: float
+    overlap_geometric_offset_mm: float = 0.0
+    overlap_top_bottom_geometric_offset_mm: float = 0.0
+    overlap_geometric_applied: bool = False
+    overlap_geometric_fallback_used: bool = False
     combine_target_layer_index: int | None = None
     combine_thickness_layers: int = 1
     combine_void_depth_layers: int = 1
@@ -299,6 +305,49 @@ def _layer_support_surface_ratio(
     return max(0.0, min(1.0, float(ratio)))
 
 
+def _layer_overlap_multiplier(
+    *,
+    layer_index: int,
+    layer_count: int,
+    bottom_shell_layers: int,
+    top_shell_layers: int,
+    infill_wall_overlap_percent: float,
+    top_bottom_infill_wall_overlap_percent: float,
+) -> float:
+    base = max(0.0, float(infill_wall_overlap_percent)) * 0.01
+    shell_extra = 0.0
+    index = int(layer_index)
+    count = max(0, int(layer_count))
+    in_bottom_shell = index < max(0, int(bottom_shell_layers))
+    in_top_shell = count > 0 and index >= max(0, count - max(0, int(top_shell_layers)))
+    if in_bottom_shell or in_top_shell:
+        shell_extra = max(0.0, float(top_bottom_infill_wall_overlap_percent)) * 0.01
+    return max(1.0, 1.0 + base + shell_extra)
+
+
+def _layer_overlap_offsets_mm(
+    *,
+    layer_index: int,
+    layer_count: int,
+    bottom_shell_layers: int,
+    top_shell_layers: int,
+    infill_wall_overlap_percent: float,
+    top_bottom_infill_wall_overlap_percent: float,
+    extrusion_width_mm: float,
+) -> tuple[float, float]:
+    base_overlap_mm = max(0.0, float(extrusion_width_mm)) * max(0.0, float(infill_wall_overlap_percent)) * 0.01
+    index = int(layer_index)
+    count = max(0, int(layer_count))
+    in_bottom_shell = index < max(0, int(bottom_shell_layers))
+    in_top_shell = count > 0 and index >= max(0, count - max(0, int(top_shell_layers)))
+    top_bottom_overlap_mm = 0.0
+    if in_bottom_shell or in_top_shell:
+        top_bottom_overlap_mm = (
+            max(0.0, float(extrusion_width_mm)) * max(0.0, float(top_bottom_infill_wall_overlap_percent)) * 0.01
+        )
+    return float(base_overlap_mm + top_bottom_overlap_mm), float(top_bottom_overlap_mm)
+
+
 def _scanline_segment_lengths(island: Island, angle_deg: float, spacing_mm: float) -> tuple[int, list[float]]:
     step = max(float(spacing_mm), EPSILON)
     angle_rad = radians(_normalize_angle(angle_deg))
@@ -453,6 +502,8 @@ def build_infill_patterns(
     angle_start_deg: float = 45.0,
     angle_step_deg: float = 90.0,
     angle_template: str = "",
+    infill_wall_overlap_percent: float = 15.0,
+    top_bottom_infill_wall_overlap_percent: float = 15.0,
     infill_anchor: object = 0.0,
     infill_anchor_max: object = 1000.0,
     combine_infill_enabled: bool = False,
@@ -474,6 +525,8 @@ def build_infill_patterns(
 
     density_ratio = percent / 100.0
     spacing = _line_spacing(width, density_ratio)
+    wall_overlap_percent = max(0.0, min(100.0, float(infill_wall_overlap_percent)))
+    top_bottom_overlap_percent = max(0.0, min(100.0, float(top_bottom_infill_wall_overlap_percent)))
 
     warnings: list[str] = []
 
@@ -513,6 +566,23 @@ def build_infill_patterns(
         layer_warnings: list[str] = []
         layer_index = int(layer_graph.layer_index)
         island_area_mm2 = _layer_island_area_mm2(layer_graph)
+        overlap_multiplier = _layer_overlap_multiplier(
+            layer_index=layer_index,
+            layer_count=len(graphs),
+            bottom_shell_layers=bottom_shell_layers,
+            top_shell_layers=top_shell_layers,
+            infill_wall_overlap_percent=wall_overlap_percent,
+            top_bottom_infill_wall_overlap_percent=top_bottom_overlap_percent,
+        )
+        geometric_overlap_offset_mm, top_bottom_geometric_offset_mm = _layer_overlap_offsets_mm(
+            layer_index=layer_index,
+            layer_count=len(graphs),
+            bottom_shell_layers=bottom_shell_layers,
+            top_shell_layers=top_shell_layers,
+            infill_wall_overlap_percent=wall_overlap_percent,
+            top_bottom_infill_wall_overlap_percent=top_bottom_overlap_percent,
+            extrusion_width_mm=width,
+        )
         combined_into = int(combined_into_layers.get(layer_index, layer_index))
         thickness_layers = max(
             1,
@@ -532,6 +602,9 @@ def build_infill_patterns(
             layer_angle = _normalize_angle(angle_start_deg + (layer_index * angle_step_deg))
         paths: list[InfillPathPlan] = []
         combined_count = max(1, int(combined_layer_counts.get(layer_index, thickness_layers)))
+        geometric_attempt_count = 0
+        geometric_success_count = 0
+        area_for_effective_mm2 = 0.0
 
         if is_void_layer:
             layer_warnings.append(f"layer_{layer_index}:infill_combined_into_upper_layer")
@@ -542,6 +615,7 @@ def build_infill_patterns(
                     z_height_mm=float(layer_graph.z_height_mm),
                     pattern=pattern,
                     density_ratio=density_ratio,
+                    overlap_multiplier=overlap_multiplier,
                     angle_deg=layer_angle,
                     anchor_angle_deg=layer_angle,
                     combined_layer_count=0,
@@ -554,6 +628,10 @@ def build_infill_patterns(
                     effective_infill_area_mm2=0.0,
                     path_count=0,
                     path_length_mm=0.0,
+                    overlap_geometric_offset_mm=float(geometric_overlap_offset_mm),
+                    overlap_top_bottom_geometric_offset_mm=float(top_bottom_geometric_offset_mm),
+                    overlap_geometric_applied=False,
+                    overlap_geometric_fallback_used=bool(geometric_overlap_offset_mm > EPSILON),
                     combine_target_layer_index=combined_into,
                     combine_thickness_layers=thickness_layers,
                     combine_void_depth_layers=void_depth_layers,
@@ -579,14 +657,38 @@ def build_infill_patterns(
                 }
             )
             for island_index, island in enumerate(layer_graph.islands):
-                span_major = max(float(island.bounds.width), float(island.bounds.height))
-                span_minor = min(float(island.bounds.width), float(island.bounds.height))
+                effective_island = island
+                island_overlap_multiplier = overlap_multiplier
+                if geometric_overlap_offset_mm > EPSILON:
+                    geometric_attempt_count += 1
+                    expanded_outer = offset_polygon(
+                        island.outer,
+                        geometric_overlap_offset_mm,
+                        min_area=1e-8,
+                    )
+                    if expanded_outer is not None:
+                        effective_island = Island(outer=expanded_outer, holes=island.holes)
+                        island_overlap_multiplier = 1.0
+                        geometric_success_count += 1
+                        area_for_effective_mm2 += float(max(0.0, effective_island.area))
+                    else:
+                        area_for_effective_mm2 += float(max(0.0, island.area) * overlap_multiplier)
+                else:
+                    area_for_effective_mm2 += float(max(0.0, island.area) * overlap_multiplier)
+
+                span_major = max(float(effective_island.bounds.width), float(effective_island.bounds.height))
+                span_minor = min(float(effective_island.bounds.width), float(effective_island.bounds.height))
                 if span_major <= EPSILON or span_minor <= EPSILON:
                     layer_warnings.append(f"layer_{layer_graph.layer_index}:island_{island_index}:degenerate_bounds")
                     continue
 
-                island_spacing = spacing * _pattern_spacing_scale(pattern_for_generation, layer_index)
-                line_count = max(1, int(ceil(span_minor / max(island_spacing, EPSILON))))
+                island_spacing = (
+                    spacing * _pattern_spacing_scale(pattern_for_generation, layer_index)
+                ) / max(EPSILON, island_overlap_multiplier)
+                line_count = max(
+                    1,
+                    int(ceil((span_minor * island_overlap_multiplier) / max(island_spacing, EPSILON))),
+                )
                 for pass_index in range(passes):
                     pass_angle = _pattern_pass_angle(
                         pattern_for_generation,
@@ -594,7 +696,7 @@ def build_infill_patterns(
                         pass_index=pass_index,
                         layer_index=layer_index,
                     )
-                    scan_lines, line_lengths = _scanline_segment_lengths(island, pass_angle, island_spacing)
+                    scan_lines, line_lengths = _scanline_segment_lengths(effective_island, pass_angle, island_spacing)
                     filtered_lengths = _apply_antivibration_filter(
                         line_lengths,
                         enabled=anti_vibration_enabled_for_layer,
@@ -602,11 +704,16 @@ def build_infill_patterns(
                         max_skips_allowed=anti_vibration_max_skips_allowed,
                         min_depth_for_line_removing=anti_vibration_min_depth_for_line_removing,
                     )
-                    pass_path_count = len(filtered_lengths)
+                    pass_path_count = int(max(0, round(len(filtered_lengths) * island_overlap_multiplier)))
                     if pass_path_count <= 0:
                         continue
 
-                    pass_length = float(sum(filtered_lengths)) * length_factor * max(0.2, pattern_segment_scale)
+                    pass_length = (
+                        float(sum(filtered_lengths))
+                        * length_factor
+                        * max(0.2, pattern_segment_scale)
+                        * island_overlap_multiplier
+                    )
                     anchor_length = _resolve_anchor_length(infill_anchor, island_spacing, 0.0)
                     anchor_max = _resolve_anchor_length(infill_anchor_max, island_spacing, 1000.0)
                     if anchor_max > EPSILON and anchor_length > EPSILON:
@@ -627,6 +734,10 @@ def build_infill_patterns(
 
         layer_path_count = sum(path.path_count for path in paths)
         layer_path_length = float(sum(path.path_length_mm for path in paths))
+        overlap_geometric_applied = bool(geometric_overlap_offset_mm > EPSILON and geometric_success_count > 0)
+        overlap_geometric_fallback_used = bool(geometric_attempt_count > geometric_success_count)
+        if overlap_geometric_fallback_used:
+            layer_warnings.append(f"layer_{layer_index}:overlap_geometric_fallback")
         void_depth_layers = 1
         if combine_infill_enabled and thickness_layers > 1:
             void_depth_layers = max(1, thickness_layers - 1)
@@ -638,7 +749,8 @@ def build_infill_patterns(
         )
         if layer_path_count <= 0:
             layer_support_surface_ratio = 0.0
-        effective_infill_area_mm2 = float(island_area_mm2 * layer_support_surface_ratio)
+        area_source_mm2 = area_for_effective_mm2 if area_for_effective_mm2 > 0.0 else (island_area_mm2 * overlap_multiplier)
+        effective_infill_area_mm2 = float(area_source_mm2 * layer_support_surface_ratio)
         layer_anchor_angle = layer_angle
         if paths:
             angle_weights: dict[float, float] = {}
@@ -654,6 +766,7 @@ def build_infill_patterns(
                 z_height_mm=float(layer_graph.z_height_mm),
                 pattern=pattern,
                 density_ratio=density_ratio,
+                overlap_multiplier=overlap_multiplier,
                 angle_deg=layer_angle,
                 anchor_angle_deg=layer_anchor_angle,
                 combined_layer_count=combined_count,
@@ -666,6 +779,10 @@ def build_infill_patterns(
                 effective_infill_area_mm2=effective_infill_area_mm2,
                 path_count=layer_path_count,
                 path_length_mm=layer_path_length,
+                overlap_geometric_offset_mm=float(geometric_overlap_offset_mm),
+                overlap_top_bottom_geometric_offset_mm=float(top_bottom_geometric_offset_mm),
+                overlap_geometric_applied=bool(overlap_geometric_applied),
+                overlap_geometric_fallback_used=bool(overlap_geometric_fallback_used),
                 combine_target_layer_index=combined_into,
                 combine_thickness_layers=thickness_layers,
                 combine_void_depth_layers=void_depth_layers,

@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 from datetime import datetime
 
 from PyQt5 import QtCore, QtWidgets
@@ -93,6 +94,19 @@ class ActivityLogger:
         self._tracked_ids = set()
         self.last_record = None
         self.last_record_ts = None
+        self._log_mouse_move = self._read_bool_env("EON_ACTIVITY_LOG_MOUSE_MOVE", False)
+        self._mouse_move_interval_s = self._read_interval_env(
+            "EON_ACTIVITY_MOUSE_MOVE_INTERVAL_MS",
+            default_ms=120,
+        )
+        self._last_mouse_move_ts = 0.0
+        self._last_mouse_move_pos = None
+        self._stdout_enabled = self._read_bool_env("EON_ACTIVITY_LOG_STDOUT", False)
+        self._stdout_pretty = self._read_bool_env("EON_ACTIVITY_LOG_STDOUT_PRETTY", False)
+        self._stdout_events = self._read_event_filter_env(
+            "EON_ACTIVITY_LOG_STDOUT_EVENTS",
+            default="action,mouse_press,mouse_release,mouse_double_click,mouse_wheel,key_press,key_release",
+        )
 
     def install(self, app):
         if app is None or self._event_filter is not None:
@@ -126,6 +140,8 @@ class ActivityLogger:
         button.clicked.connect(_on_clicked)
 
     def log_mouse_event(self, event_name, obj, event):
+        if event_name == "mouse_move" and not self._should_log_mouse_move(event):
+            return
         pos = event.pos()
         global_pos = event.globalPos()
         record = {
@@ -223,8 +239,24 @@ class ActivityLogger:
 
     def _write(self, record):
         self._logger.info(json.dumps(record, ensure_ascii=True))
+        self._emit_stdout(record)
         self.last_record = record
         self.last_record_ts = record.get("ts")
+
+    def _emit_stdout(self, record):
+        if not self._stdout_enabled:
+            return
+        event_name = str(record.get("event", "")).strip().lower()
+        if self._stdout_events is not None and event_name not in self._stdout_events:
+            return
+        try:
+            if self._stdout_pretty:
+                payload = json.dumps(record, ensure_ascii=True, sort_keys=True)
+            else:
+                payload = json.dumps(record, ensure_ascii=True)
+            print(payload, flush=True)
+        except Exception:
+            return
 
     def _widget_context(self, obj):
         if not isinstance(obj, QtCore.QObject):
@@ -261,3 +293,47 @@ class ActivityLogger:
     def _default_log_dir(self):
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         return os.path.join(base_dir, "logs")
+
+    def _read_bool_env(self, key, default):
+        raw = str(os.environ.get(key, "1" if default else "0")).strip().lower()
+        if raw in ("1", "true", "yes", "on"):
+            return True
+        if raw in ("0", "false", "no", "off"):
+            return False
+        return bool(default)
+
+    def _read_interval_env(self, key, default_ms=120):
+        raw = str(os.environ.get(key, str(int(default_ms)))).strip()
+        try:
+            value_ms = int(raw)
+        except (TypeError, ValueError):
+            value_ms = int(default_ms)
+        value_ms = max(16, min(1000, value_ms))
+        return float(value_ms) / 1000.0
+
+    def _read_event_filter_env(self, key, default):
+        raw = str(os.environ.get(key, default)).strip().lower()
+        if not raw:
+            raw = str(default).strip().lower()
+        if raw in ("all", "*"):
+            return None
+        values = set()
+        for item in raw.split(","):
+            text = item.strip().lower()
+            if text:
+                values.add(text)
+        return values if values else None
+
+    def _should_log_mouse_move(self, event):
+        if not self._log_mouse_move:
+            return False
+        now = time.monotonic()
+        global_pos = event.globalPos()
+        point = (int(global_pos.x()), int(global_pos.y()))
+        if self._last_mouse_move_pos == point:
+            return False
+        if now - self._last_mouse_move_ts < self._mouse_move_interval_s:
+            return False
+        self._last_mouse_move_ts = now
+        self._last_mouse_move_pos = point
+        return True

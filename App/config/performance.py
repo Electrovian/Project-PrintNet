@@ -9,6 +9,19 @@ _CACHED_LIMITS: Optional[Dict[str, int]] = None
 _CACHED_TOTAL_MB: Optional[int] = None
 
 
+def _env_int(name: str) -> Optional[int]:
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except (TypeError, ValueError):
+        return None
+
+
 def detect_total_memory_mb() -> Optional[int]:
     global _CACHED_TOTAL_MB
     if _CACHED_TOTAL_MB is not None:
@@ -98,11 +111,20 @@ def resolve_performance_limits(overrides: Optional[dict] = None) -> Dict[str, in
     cpu_count = os.cpu_count() or 2
 
     max_threads = overrides.get("max_threads")
+    env_max_threads = _env_int("EON_MAX_THREADS")
+    if max_threads is None and env_max_threads is not None:
+        max_threads = env_max_threads
     if max_threads is None:
         max_threads = _recommend_threads(total_mb, cpu_count)
     max_threads = max(1, int(max_threads))
+    if cpu_count > 2 and max_threads != 1:
+        max_threads = max(2, max_threads)
+        max_threads = min(max_threads, cpu_count)
 
     cache_mb = overrides.get("max_slice_cache_mb")
+    env_cache_mb = _env_int("EON_MAX_SLICE_CACHE_MB")
+    if cache_mb is None and env_cache_mb is not None:
+        cache_mb = env_cache_mb
     if cache_mb is None:
         cache_mb = _recommend_cache_mb(total_mb)
     cache_mb = max(16, int(cache_mb))

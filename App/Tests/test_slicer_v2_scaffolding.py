@@ -95,6 +95,62 @@ class TestSlicerV2Scaffolding(unittest.TestCase):
             self.assertIn("export_time", payload)
             self.assertIsInstance(payload["sliced_plates"], list)
 
+    def test_pipeline_smoke_with_overlap_and_support_semantic_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            mesh = Path(tmp) / "part.stl"
+            _write_minimal_stl(mesh)
+            context = create_context(
+                job_id="job-overlap-support",
+                mesh_path=str(mesh),
+                resolved_settings={
+                    "infill_wall_overlap_percent": 18.0,
+                    "top_bottom_infill_wall_overlap_percent": 26.0,
+                    "support_enabled": True,
+                    "support_type": "tree",
+                    "support_style": "organic",
+                    "support_threshold_angle_deg": 55.0,
+                    "support_threshold_overlap_percent": 35.0,
+                    "support_critical_regions_only": True,
+                    "support_remove_small_overhang": True,
+                    "support_build_plate_only": True,
+                    "support_bottom_z_gap_mm": 0.2,
+                    "support_interface_top_layers": 3,
+                    "support_interface_bottom_layers": -1,
+                    "support_base_spacing_mm": 2.2,
+                    "support_interface_spacing_mm": 1.2,
+                    "support_bottom_interface_spacing_mm": 1.0,
+                    "tree_support_branch_angle_deg": 30.0,
+                    "tree_support_wall_count": 3,
+                    "tree_support_branch_diameter_mm": 0.9,
+                    "tree_support_tip_diameter_mm": 0.45,
+                    "tree_support_branch_distance_mm": 2.8,
+                    "tree_support_branch_distance_organic_mm": 3.6,
+                    "tree_support_top_rate_percent": 70.0,
+                    "tree_support_branch_diameter_angle_deg": 12.0,
+                    "tree_support_branch_angle_organic_deg": 24.0,
+                    "tree_support_branch_diameter_organic_mm": 1.0,
+                    "tree_support_auto_brim": True,
+                    "tree_support_brim_width_mm": 4.0,
+                },
+            )
+            result = run_pipeline(context)
+            self.assertTrue(result.validation.ok)
+            infill_artifact = result.context.stage_artifacts.get("infill", {})
+            support_artifact = result.context.stage_artifacts.get("supports", {})
+            self.assertIn("infill_wall_overlap_percent", infill_artifact)
+            self.assertIn("top_bottom_infill_wall_overlap_percent", infill_artifact)
+            self.assertIn("support_threshold_overlap_percent", support_artifact)
+            self.assertIn("support_build_plate_only", support_artifact)
+            self.assertIn("tree_support_branch_diameter_mm", support_artifact)
+            self.assertIn("support_threshold_angle_deg", support_artifact)
+            self.assertIn("support_critical_regions_only", support_artifact)
+            self.assertIn("support_remove_small_overhang", support_artifact)
+            self.assertIn("support_interface_bottom_layers", support_artifact)
+            self.assertIn("support_interface_bottom_layers_effective", support_artifact)
+            self.assertIn("support_bottom_interface_spacing_mm", support_artifact)
+            self.assertIn("tree_support_branch_distance_mm", support_artifact)
+            self.assertIn("tree_support_top_rate_percent", support_artifact)
+
 
 if __name__ == "__main__":
     unittest.main()

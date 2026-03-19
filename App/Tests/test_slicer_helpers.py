@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import unittest
 
@@ -11,9 +11,9 @@ TESTS = os.path.abspath(os.path.dirname(__file__))
 if TESTS not in sys.path:
     sys.path.insert(0, TESTS)
 
-from slicer import slicer as slicer_module
-from slicer.gcode.writer import SliceSettings
-from slicer.mesh import MeshModel
+from slicer_v2 import legacy_slicer as slicer_module
+from slicer_v2.legacy_gcode_writer import SliceSettings
+from slicer_v2.legacy_mesh import MeshModel
 from harness import BaseTestCase
 
 
@@ -46,3 +46,4 @@ class SlicerHelperTests(BaseTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

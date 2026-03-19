@@ -72,6 +72,7 @@ class TestSlicerV2SettingsNormalization(unittest.TestCase):
         self.assertEqual(normalized["infill_pattern"], "triangle")
         self.assertTrue(normalized["support_enabled"])
         self.assertEqual(normalized["support_type"], "tree")
+        self.assertEqual(normalized["support_style"], "organic")
         self.assertEqual(normalized["seam_position"], "rear")
         self.assertFalse(normalized["bridge_enabled"])
         self.assertEqual(normalized["infill_angle_template"], "0,90")
@@ -109,6 +110,109 @@ class TestSlicerV2SettingsNormalization(unittest.TestCase):
         self.assertIn("custom_vendor_flag", normalized)
         self.assertIn("custom_vendor_flag", report.unknown_keys)
         self.assertEqual(report.unknown_key_count, 1)
+
+    def test_overlap_and_support_aliases_with_percent_distance_conversion(self) -> None:
+        normalized = normalize_settings(
+            {
+                "extrusion_width": 0.6,
+                "infill_overlap": "22%",
+                "top_bottom_infill_wall_overlap": "35%",
+                "support_on_build_plate_only": "true",
+                "support_object_xy_distance": "50%",
+                "support_top_z_distance": "25%",
+                "support_bottom_z_distance": "50%",
+                "support_interface_top_layers": "3",
+                "support_interface_bottom_layers": "1",
+                "support_base_pattern_spacing": "200%",
+                "support_interface_spacing": "150%",
+                "support_bottom_interface_spacing": "120%",
+                "support_threshold_overlap": "45%",
+                "support_threshold_angle": "58",
+                "support_critical_regions_only": "true",
+                "support_remove_small_overhang": "1",
+                "tree_support_branch_angle": "32",
+                "tree_support_wall_count": "2",
+                "support_tree_branch_distance": "250%",
+                "support_tree_branch_distance_organic": "300%",
+                "support_tree_top_rate": "65%",
+                "support_tree_branch_diameter_angle": "12",
+                "support_tree_angle_organic": "28",
+                "tree_support_branch_diameter": "200%",
+                "support_tree_branch_diameter_organic": "175%",
+                "tree_support_tip_diameter": "100%",
+                "tree_support_auto_brim": "yes",
+                "tree_support_brim_width": "50%",
+            }
+        )
+        self.assertEqual(normalized["infill_wall_overlap_percent"], 22.0)
+        self.assertEqual(normalized["top_bottom_infill_wall_overlap_percent"], 35.0)
+        self.assertTrue(normalized["support_build_plate_only"])
+        self.assertAlmostEqual(float(normalized["support_xy_gap_mm"]), 0.30, places=3)
+        self.assertAlmostEqual(float(normalized["support_z_gap_mm"]), 0.15, places=3)
+        self.assertAlmostEqual(float(normalized["support_bottom_z_gap_mm"]), 0.30, places=3)
+        self.assertEqual(normalized["support_interface_top_layers"], 3)
+        self.assertEqual(normalized["support_interface_bottom_layers"], 1)
+        self.assertAlmostEqual(float(normalized["support_base_spacing_mm"]), 1.2, places=3)
+        self.assertAlmostEqual(float(normalized["support_interface_spacing_mm"]), 0.9, places=3)
+        self.assertAlmostEqual(float(normalized["support_bottom_interface_spacing_mm"]), 0.72, places=3)
+        self.assertEqual(normalized["support_threshold_angle_deg"], 58.0)
+        self.assertEqual(normalized["support_threshold_overlap_percent"], 45.0)
+        self.assertTrue(normalized["support_critical_regions_only"])
+        self.assertTrue(normalized["support_remove_small_overhang"])
+        self.assertEqual(normalized["tree_support_branch_angle_deg"], 32.0)
+        self.assertEqual(normalized["tree_support_wall_count"], 2)
+        self.assertAlmostEqual(float(normalized["tree_support_branch_distance_mm"]), 1.5, places=3)
+        self.assertAlmostEqual(float(normalized["tree_support_branch_distance_organic_mm"]), 1.8, places=3)
+        self.assertEqual(normalized["tree_support_top_rate_percent"], 65.0)
+        self.assertEqual(normalized["tree_support_branch_diameter_angle_deg"], 12.0)
+        self.assertEqual(normalized["tree_support_branch_angle_organic_deg"], 28.0)
+        self.assertAlmostEqual(float(normalized["tree_support_branch_diameter_mm"]), 1.2, places=3)
+        self.assertAlmostEqual(float(normalized["tree_support_branch_diameter_organic_mm"]), 1.05, places=3)
+        self.assertAlmostEqual(float(normalized["tree_support_tip_diameter_mm"]), 0.6, places=3)
+        self.assertTrue(normalized["tree_support_auto_brim"])
+        self.assertAlmostEqual(float(normalized["tree_support_brim_width_mm"]), 0.3, places=3)
+
+    def test_percent_distance_uses_final_extrusion_width_even_when_key_order_varies(self) -> None:
+        normalized = normalize_settings(
+            {
+                "support_object_xy_distance": "100%",
+                "support_top_z_distance": "50%",
+                "extrusion_width": 0.8,
+            }
+        )
+        self.assertAlmostEqual(float(normalized["support_xy_gap_mm"]), 0.8, places=3)
+        self.assertAlmostEqual(float(normalized["support_z_gap_mm"]), 0.4, places=3)
+
+    def test_legacy_interface_and_z_gap_aliases_sync_to_new_fields(self) -> None:
+        normalized = normalize_settings(
+            {
+                "interface_layers": 4,
+                "support_z_gap": 0.35,
+            }
+        )
+        self.assertEqual(normalized["support_interface_layers"], 4)
+        self.assertEqual(normalized["support_interface_top_layers"], 4)
+        self.assertAlmostEqual(float(normalized["support_bottom_z_gap_mm"]), 0.35, places=3)
+
+    def test_support_interface_bottom_layers_preserves_negative_one_sentinel(self) -> None:
+        normalized = normalize_settings(
+            {
+                "support_interface_layers": 3,
+                "support_interface_bottom_layers": -1,
+            }
+        )
+        self.assertEqual(normalized["support_interface_layers"], 3)
+        self.assertEqual(normalized["support_interface_top_layers"], 3)
+        self.assertEqual(normalized["support_interface_bottom_layers"], -1)
+
+    def test_support_style_derives_support_type_only_when_type_missing(self) -> None:
+        style_only = normalize_settings({"support_style": "organic"})
+        self.assertEqual(style_only["support_style"], "organic")
+        self.assertEqual(style_only["support_type"], "tree")
+
+        explicit_type = normalize_settings({"support_style": "organic", "support_type": "normal"})
+        self.assertEqual(explicit_type["support_style"], "organic")
+        self.assertEqual(explicit_type["support_type"], "normal")
 
     def test_strict_mode_fails_on_warning(self) -> None:
         with self.assertRaises(SlicerV2SettingsNormalizationError):

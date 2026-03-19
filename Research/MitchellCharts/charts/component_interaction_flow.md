@@ -2,65 +2,50 @@
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    actor User
+    participant User
+    participant AppMain as main.py
+    participant Splash as SplashScreen
+    participant PresetCheck as validate_preset_python_files
     participant MainWindow
     participant MainController
-    participant Viewer3D
     participant Worker
-    participant SlicerEmit
-    participant LayerPlan
-    participant Geometry
-    participant Infill
-    participant PathPlanner
-    participant GCodeWriter
+    participant V2Context as slicer_v2.context.create_context
+    participant Pipeline as slicer_v2.pipeline.run_pipeline
+    participant Validators as slicer_v2.validators
+    participant GCodeStage as slicer_v2.gcode.run
     participant PreviewView
 
-    User->>MainWindow: Load STL file
-    MainWindow->>Viewer3D: load_model()
-    Viewer3D->>Viewer3D: Create MeshModel
-    Viewer3D-->>MainWindow: Model Loaded
+    AppMain->>Splash: show()
+    AppMain->>PresetCheck: validate preset Python files
+    PresetCheck-->>AppMain: PresetValidationReport
+    AppMain->>MainWindow: initialize()
 
-    User->>MainWindow: Adjust Settings
-    MainWindow->>MainController: Update SliceSettings
+    User->>MainWindow: Load STL / Meshes
+    MainWindow->>MainController: import model data
 
-    User->>MainWindow: Click Slice
-    MainController->>Worker: Create Worker Thread
-    Worker->>SlicerEmit: slice_trimesh()
+    User->>MainWindow: Click Slice / Export / Print
+    MainController->>Worker: _slice_with_selected_engine()
 
-    SlicerEmit->>LayerPlan: generate_layer_plans()
-    LayerPlan->>Geometry: slice_at_z()
-    Geometry-->>LayerPlan: 2D Polygons
+    Worker->>V2Context: create_context(mesh_path, settings, runtime)
+    V2Context-->>Worker: SlicerContext
+    Worker->>Pipeline: run_pipeline(context)
+    Pipeline->>Validators: validate_context()
 
-    LayerPlan->>Geometry: offset_islands()
-    LayerPlan->>Geometry: gap_fill_lines()
-    LayerPlan->>Geometry: thin_wall_lines()
+    loop Stage order
+        Pipeline->>Pipeline: mesh -> slice_grid -> regions -> islands
+        Pipeline->>Pipeline: perimeters -> infill -> supports
+        Pipeline->>Pipeline: bridges -> travel
+        Pipeline->>GCodeStage: gcode.run()
+        Pipeline->>Validators: validate_stage_artifact()
+    end
 
-    LayerPlan->>Infill: generate_infill()
-    Infill->>Geometry: clip_lines_to_island()
-    Infill-->>LayerPlan: Infill Lines
+    Pipeline->>Validators: validate_stage_sequence()
+    Pipeline-->>Worker: PipelineResult(stage_artifacts)
 
-    LayerPlan->>PathPlanner: optimize_travel()
-    PathPlanner->>PathPlanner: detect_bridges()
-    PathPlanner->>PathPlanner: apply_seam_placement()
-    PathPlanner->>PathPlanner: fit_arc()
-    PathPlanner-->>LayerPlan: Optimized Paths
-
-    LayerPlan-->>SlicerEmit: PrintPlan
-
-    SlicerEmit->>GCodeWriter: write_header()
-    SlicerEmit->>GCodeWriter: write_layer()
-    GCodeWriter->>GCodeWriter: perimeter_loop()
-    GCodeWriter->>GCodeWriter: infill_lines()
-    GCodeWriter->>GCodeWriter: retract()
-    GCodeWriter->>GCodeWriter: travel()
-    SlicerEmit->>GCodeWriter: write_footer()
-    GCodeWriter-->>SlicerEmit: G-Code file path
-
-    SlicerEmit-->>Worker: Success
+    Worker->>Worker: write .gcode from stage lines
     Worker-->>MainController: Slice Complete
-    MainController->>PreviewView: Load G-Code Preview
-    PreviewView->>PreviewView: parse_gcode_preview_file()
+    MainController->>PreviewView: parse_gcode_preview_file()
+    MainController->>PreviewView: estimate stats + AI checks
     PreviewView-->>MainWindow: Preview Ready
     MainWindow-->>User: Display Preview
 ```

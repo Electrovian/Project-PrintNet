@@ -43,3 +43,19 @@ class StrengthSectionMixin:
                       "Infill pattern for non-solid regions.")
         layout.insertWidget(layout.count() - 1, section)
 
+        section, section_layout = self._section("Infill overlap", advanced=True)
+        infill_overlap_default = getattr(self._defaults, "infill_wall_overlap_percent", 15.0)
+        self.infill_wall_overlap_spin = self._make_double_spin(infill_overlap_default, 0.0, 100.0, 1.0,
+                                                               "%")
+        self._add_row("strength", section, section_layout, "Infill-wall overlap",
+                      self.infill_wall_overlap_spin,
+                      "Expand sparse infill into wall footprint.")
+
+        top_bottom_overlap_default = getattr(self._defaults, "top_bottom_infill_wall_overlap_percent", 15.0)
+        self.top_bottom_infill_wall_overlap_spin = self._make_double_spin(top_bottom_overlap_default,
+                                                                           0.0, 100.0, 1.0, "%")
+        self._add_row("strength", section, section_layout, "Top/bottom infill-wall overlap",
+                      self.top_bottom_infill_wall_overlap_spin,
+                      "Extra overlap applied near top and bottom shells.")
+        layout.insertWidget(layout.count() - 1, section)
+

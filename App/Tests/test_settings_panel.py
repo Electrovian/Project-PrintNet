@@ -1,7 +1,7 @@
-import unittest
+﻿import unittest
 
 from qt_harness import QtTestCase
-from slicer.gcode.writer import SliceSettings
+from slicer_v2.legacy_gcode_writer import SliceSettings
 
 
 class SettingsPanelTests(QtTestCase):
@@ -36,14 +36,49 @@ class SettingsPanelTests(QtTestCase):
             top_layers=4,
             bottom_layers=2,
             infill_percent=22.0,
+            infill_wall_overlap_percent=18.0,
+            top_bottom_infill_wall_overlap_percent=26.0,
             infill_pattern="grid",
             support_enabled=True,
             support_type="tree",
-            support_style="tree",
+            support_style="organic",
             overhang_angle=50.0,
+            support_threshold_angle_deg=52.0,
             support_build_plate_only=True,
+            support_z_gap=0.35,
+            support_bottom_z_gap_mm=0.25,
+            support_xy_gap=0.45,
+            interface_layers=3,
+            support_interface_top_layers=3,
+            support_interface_bottom_layers=-1,
+            support_critical_regions_only=True,
+            support_remove_small_overhang=True,
+            interface_density=0.75,
+            support_spacing=2.5,
+            support_base_spacing_mm=2.5,
+            support_interface_spacing_mm=1.4,
+            support_bottom_interface_spacing_mm=1.1,
+            support_threshold_overlap_percent=35.0,
+            support_speed=70.0,
+            support_interface_speed=55.0,
+            support_pattern="grid",
+            support_interface_pattern="triangle",
             support_filament_base="support",
             support_filament_interface="support",
+            tree_branch_angle=35.0,
+            tree_support_branch_angle_deg=35.0,
+            tree_support_wall_count=3,
+            tree_support_branch_diameter_mm=0.9,
+            tree_support_tip_diameter_mm=0.45,
+            tree_support_branch_distance_mm=3.1,
+            tree_support_top_rate_percent=65.0,
+            tree_support_branch_diameter_angle_deg=14.0,
+            tree_support_branch_angle_organic_deg=29.0,
+            tree_support_branch_diameter_organic_mm=1.05,
+            tree_support_branch_distance_organic_mm=3.8,
+            tree_support_auto_brim=True,
+            tree_support_brim_width_mm=4.0,
+            tree_merge_distance=3.5,
             prime_tower_enabled=True,
             prime_tower_width=40.0,
             prime_tower_square=False,
@@ -76,14 +111,49 @@ class SettingsPanelTests(QtTestCase):
         self.assertEqual(updated.top_layers, 4)
         self.assertEqual(updated.bottom_layers, 2)
         self.assertEqual(updated.infill_percent, 22.0)
+        self.assertEqual(updated.infill_wall_overlap_percent, 18.0)
+        self.assertEqual(updated.top_bottom_infill_wall_overlap_percent, 26.0)
         self.assertEqual(updated.infill_pattern, "grid")
         self.assertTrue(updated.support_enabled)
         self.assertEqual(updated.support_type, "tree")
-        self.assertEqual(updated.support_style, "tree")
+        self.assertEqual(updated.support_style, "organic")
         self.assertAlmostEqual(updated.overhang_angle, 50.0, places=1)
+        self.assertAlmostEqual(updated.support_threshold_angle_deg, 52.0, places=1)
         self.assertTrue(updated.support_build_plate_only)
+        self.assertAlmostEqual(updated.support_z_gap, 0.35, places=2)
+        self.assertAlmostEqual(updated.support_bottom_z_gap_mm, 0.25, places=2)
+        self.assertAlmostEqual(updated.support_xy_gap, 0.45, places=2)
+        self.assertEqual(updated.interface_layers, 3)
+        self.assertEqual(updated.support_interface_top_layers, 3)
+        self.assertEqual(updated.support_interface_bottom_layers, -1)
+        self.assertTrue(updated.support_critical_regions_only)
+        self.assertTrue(updated.support_remove_small_overhang)
+        self.assertAlmostEqual(updated.interface_density, 0.75, places=2)
+        self.assertAlmostEqual(updated.support_spacing, 2.5, places=2)
+        self.assertAlmostEqual(updated.support_base_spacing_mm, 2.5, places=2)
+        self.assertAlmostEqual(updated.support_interface_spacing_mm, 1.4, places=2)
+        self.assertAlmostEqual(updated.support_bottom_interface_spacing_mm, 1.1, places=2)
+        self.assertAlmostEqual(updated.support_threshold_overlap_percent, 35.0, places=2)
+        self.assertAlmostEqual(updated.support_speed, 70.0, places=2)
+        self.assertAlmostEqual(updated.support_interface_speed, 55.0, places=2)
+        self.assertEqual(updated.support_pattern, "grid")
+        self.assertEqual(updated.support_interface_pattern, "triangle")
         self.assertEqual(updated.support_filament_base, "support")
         self.assertEqual(updated.support_filament_interface, "support")
+        self.assertAlmostEqual(updated.tree_branch_angle, 35.0, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_angle_deg, 35.0, places=2)
+        self.assertEqual(updated.tree_support_wall_count, 3)
+        self.assertAlmostEqual(updated.tree_support_branch_diameter_mm, 0.9, places=2)
+        self.assertAlmostEqual(updated.tree_support_tip_diameter_mm, 0.45, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_distance_mm, 3.1, places=2)
+        self.assertAlmostEqual(updated.tree_support_top_rate_percent, 65.0, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_diameter_angle_deg, 14.0, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_angle_organic_deg, 29.0, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_diameter_organic_mm, 1.05, places=2)
+        self.assertAlmostEqual(updated.tree_support_branch_distance_organic_mm, 3.8, places=2)
+        self.assertTrue(updated.tree_support_auto_brim)
+        self.assertAlmostEqual(updated.tree_support_brim_width_mm, 4.0, places=2)
+        self.assertAlmostEqual(updated.tree_merge_distance, 3.5, places=2)
         self.assertTrue(updated.prime_tower_enabled)
         self.assertAlmostEqual(updated.prime_tower_width, 40.0, places=2)
         self.assertFalse(updated.prime_tower_square)
@@ -102,6 +172,84 @@ class SettingsPanelTests(QtTestCase):
         self.assertEqual(updated.filament_name, "Test PLA")
         self.assertEqual(updated.filament_color.lower(), "#00ff00")
 
+    def test_engine_only_fields_are_preserved_through_roundtrip(self):
+        from gui.settings_panel import SettingsPanel
+
+        panel = SettingsPanel()
+        panel.apply_settings(
+            SliceSettings(
+                print_speed=93.0,
+                travel_speed=165.0,
+                min_layer_height=0.12,
+                max_layer_height=0.28,
+                infill_angle=33.0,
+                nozzle_diameter=0.6,
+            )
+        )
+        panel.layer_height_spin.setValue(0.21)
+
+        updated = panel.to_settings()
+        self.assertAlmostEqual(updated.layer_height, 0.21, places=3)
+        self.assertAlmostEqual(updated.print_speed, 93.0, places=2)
+        self.assertAlmostEqual(updated.travel_speed, 165.0, places=2)
+        self.assertAlmostEqual(updated.min_layer_height, 0.12, places=3)
+        self.assertAlmostEqual(updated.max_layer_height, 0.28, places=3)
+        self.assertAlmostEqual(updated.infill_angle, 33.0, places=2)
+        self.assertAlmostEqual(updated.nozzle_diameter, 0.6, places=3)
+
+    def test_partial_apply_settings_keeps_existing_engine_only_fields(self):
+        from gui.settings_panel import SettingsPanel
+
+        panel = SettingsPanel()
+        panel.apply_settings({"print_speed": 77.0, "travel_speed": 140.0})
+        panel.apply_settings({"layer_height": 0.26})
+
+        updated = panel.to_settings()
+        self.assertAlmostEqual(updated.layer_height, 0.26, places=3)
+        self.assertAlmostEqual(updated.print_speed, 77.0, places=2)
+        self.assertAlmostEqual(updated.travel_speed, 140.0, places=2)
+
+    def test_profile_preset_dropdown_uses_data_source(self):
+        from gui.settings_panel import SettingsPanel
+
+        panel = SettingsPanel()
+        panel.set_profile_presets(
+            [
+                {
+                    "id": "preset_a",
+                    "name": "Preset A",
+                    "vendor": "VendorX",
+                    "mapped_settings": {
+                        "layer_height": 0.32,
+                        "infill_percent": 25.0,
+                    },
+                },
+                {
+                    "id": "preset_b",
+                    "name": "Preset B",
+                    "vendor": "VendorY",
+                    "mapped_settings": {
+                        "layer_height": 0.18,
+                        "infill_percent": 42.0,
+                    },
+                },
+            ],
+            apply_default=True,
+        )
+
+        self.assertEqual(panel._profile_combo.count(), 2)
+        self.assertEqual(panel._profile_combo.currentData(), "preset_a")
+        self.assertAlmostEqual(panel.layer_height_spin.value(), 0.32, places=2)
+        self.assertAlmostEqual(panel.infill_density_spin.value(), 25.0, places=2)
+
+        idx = panel._profile_combo.findData("preset_b")
+        self.assertGreaterEqual(idx, 0)
+        panel._profile_combo.setCurrentIndex(idx)
+
+        self.assertAlmostEqual(panel.layer_height_spin.value(), 0.18, places=2)
+        self.assertAlmostEqual(panel.infill_density_spin.value(), 42.0, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()
+

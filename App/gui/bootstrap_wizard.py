@@ -10,6 +10,9 @@ from .i18n import tr
 _LANGUAGE_ITEMS: tuple[tuple[str, str], ...] = (
     ("en", "English"),
     ("es", "Espanol"),
+    ("fr", "Francais"),
+    ("de", "Deutsch"),
+    ("ru", "Русский"),
 )
 
 _REGION_ITEMS: tuple[str, ...] = (

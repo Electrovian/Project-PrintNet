@@ -201,6 +201,49 @@ class TestSlicerV2InfillPatterns(unittest.TestCase):
         )
         self.assertGreater(anchored[0].path_length_mm, no_anchor[0].path_length_mm)
 
+    def test_overlap_settings_increase_infill_path_estimates(self) -> None:
+        graph = build_layer_island_graph([_square(0.0, 0.0, 20.0)], layer_index=0, z_height_mm=0.2)
+        base_layers, _base_report = build_infill_patterns(
+            [graph],
+            infill_pattern=INFILL_PATTERN_RECTILINEAR,
+            infill_percent=20.0,
+            extrusion_width_mm=0.4,
+            infill_wall_overlap_percent=0.0,
+            top_bottom_infill_wall_overlap_percent=0.0,
+        )
+        overlap_layers, _overlap_report = build_infill_patterns(
+            [graph],
+            infill_pattern=INFILL_PATTERN_RECTILINEAR,
+            infill_percent=20.0,
+            extrusion_width_mm=0.4,
+            infill_wall_overlap_percent=30.0,
+            top_bottom_infill_wall_overlap_percent=0.0,
+        )
+        self.assertGreaterEqual(overlap_layers[0].path_count, base_layers[0].path_count)
+        self.assertGreater(overlap_layers[0].path_length_mm, base_layers[0].path_length_mm)
+        self.assertGreater(overlap_layers[0].effective_infill_area_mm2, base_layers[0].effective_infill_area_mm2)
+        self.assertGreater(overlap_layers[0].overlap_geometric_offset_mm, 0.0)
+        self.assertTrue(overlap_layers[0].overlap_geometric_applied)
+
+    def test_top_bottom_overlap_applies_extra_multiplier_on_shell_layers(self) -> None:
+        graphs = [
+            build_layer_island_graph([_square(0.0, 0.0, 20.0)], layer_index=0, z_height_mm=0.2),
+            build_layer_island_graph([_square(0.0, 0.0, 20.0)], layer_index=1, z_height_mm=0.4),
+            build_layer_island_graph([_square(0.0, 0.0, 20.0)], layer_index=2, z_height_mm=0.6),
+        ]
+        layer_plans, _report = build_infill_patterns(
+            graphs,
+            infill_pattern=INFILL_PATTERN_RECTILINEAR,
+            infill_percent=20.0,
+            extrusion_width_mm=0.4,
+            infill_wall_overlap_percent=10.0,
+            top_bottom_infill_wall_overlap_percent=20.0,
+            bottom_shell_layers=1,
+            top_shell_layers=1,
+        )
+        self.assertGreater(layer_plans[0].overlap_multiplier, layer_plans[1].overlap_multiplier)
+        self.assertGreater(layer_plans[2].overlap_multiplier, layer_plans[1].overlap_multiplier)
+
     def test_infill_combination_zeros_non_top_layers(self) -> None:
         graphs = [
             build_layer_island_graph([_square(0.0, 0.0, 20.0)], layer_index=0, z_height_mm=0.2),
@@ -251,6 +294,13 @@ class TestSlicerV2InfillPatterns(unittest.TestCase):
         self.assertEqual(artifact["infill_pattern"], INFILL_PATTERN_GRID)
         self.assertGreater(artifact["infill_path_count"], 0)
         self.assertEqual(artifact["layer_infill_angles_deg"], [15.0])
+        self.assertIn("infill_wall_overlap_percent", artifact)
+        self.assertIn("top_bottom_infill_wall_overlap_percent", artifact)
+        self.assertIn("layer_infill_overlap_multipliers", artifact)
+        self.assertIn("layer_infill_overlap_geometric_offsets_mm", artifact)
+        self.assertIn("layer_infill_overlap_top_bottom_offsets_mm", artifact)
+        self.assertIn("layer_infill_overlap_geometric_applied", artifact)
+        self.assertIn("layer_infill_overlap_geometric_fallback_used", artifact)
         self.assertEqual(len(artifact["layer_infill_anchor_angles_deg"]), 1)
         self.assertEqual(artifact["layer_infill_void_flags"], [False])
         self.assertEqual(artifact["layer_infill_void_depth_layers"], [1])

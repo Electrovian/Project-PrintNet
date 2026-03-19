@@ -65,11 +65,92 @@ def _to_int(value: object, default: int) -> int:
 def run(context: SlicerContext) -> dict:
     support_enabled = bool(context.resolved_settings.get("support_enabled", False))
     support_type = str(context.resolved_settings.get("support_type", "normal"))
+    support_style = str(context.resolved_settings.get("support_style", "pillars")).strip().lower() or "pillars"
     support_density_percent = _to_float(context.resolved_settings.get("support_density_percent", 15.0), 15.0)
     support_spacing_mm = _to_float(context.resolved_settings.get("support_spacing_mm", 2.5), 2.5)
+    support_base_spacing_mm = _to_float(
+        context.resolved_settings.get("support_base_spacing_mm", support_spacing_mm),
+        support_spacing_mm,
+    )
+    support_interface_spacing_mm = _to_float(
+        context.resolved_settings.get("support_interface_spacing_mm", support_spacing_mm),
+        support_spacing_mm,
+    )
+    support_bottom_interface_spacing_mm = _to_float(
+        context.resolved_settings.get("support_bottom_interface_spacing_mm", support_interface_spacing_mm),
+        support_interface_spacing_mm,
+    )
     support_xy_gap_mm = _to_float(context.resolved_settings.get("support_xy_gap_mm", 0.25), 0.25)
     support_z_gap_mm = _to_float(context.resolved_settings.get("support_z_gap_mm", 0.2), 0.2)
+    support_bottom_z_gap_mm = _to_float(
+        context.resolved_settings.get("support_bottom_z_gap_mm", support_z_gap_mm),
+        support_z_gap_mm,
+    )
+    support_build_plate_only = bool(context.resolved_settings.get("support_build_plate_only", False))
+    support_threshold_angle_deg = _to_float(
+        context.resolved_settings.get("support_threshold_angle_deg", 45.0),
+        45.0,
+    )
+    support_threshold_overlap_percent = _to_float(
+        context.resolved_settings.get("support_threshold_overlap_percent", 0.0),
+        0.0,
+    )
+    support_critical_regions_only = bool(context.resolved_settings.get("support_critical_regions_only", False))
+    support_remove_small_overhang = bool(context.resolved_settings.get("support_remove_small_overhang", False))
     support_interface_layers = _to_int(context.resolved_settings.get("support_interface_layers", 2), 2)
+    support_interface_top_layers = _to_int(
+        context.resolved_settings.get("support_interface_top_layers", support_interface_layers),
+        support_interface_layers,
+    )
+    support_interface_bottom_layers = _to_int(
+        context.resolved_settings.get("support_interface_bottom_layers", 0),
+        0,
+    )
+    tree_support_branch_angle_deg = _to_float(
+        context.resolved_settings.get("tree_support_branch_angle_deg", 45.0),
+        45.0,
+    )
+    tree_support_wall_count = _to_int(
+        context.resolved_settings.get("tree_support_wall_count", 1),
+        1,
+    )
+    tree_support_branch_diameter_mm = _to_float(
+        context.resolved_settings.get("tree_support_branch_diameter_mm", 0.6),
+        0.6,
+    )
+    tree_support_tip_diameter_mm = _to_float(
+        context.resolved_settings.get("tree_support_tip_diameter_mm", 0.3),
+        0.3,
+    )
+    tree_support_branch_distance_mm = _to_float(
+        context.resolved_settings.get("tree_support_branch_distance_mm", 2.0),
+        2.0,
+    )
+    tree_support_branch_distance_organic_mm = _to_float(
+        context.resolved_settings.get("tree_support_branch_distance_organic_mm", tree_support_branch_distance_mm),
+        tree_support_branch_distance_mm,
+    )
+    tree_support_top_rate_percent = _to_float(
+        context.resolved_settings.get("tree_support_top_rate_percent", 30.0),
+        30.0,
+    )
+    tree_support_branch_diameter_angle_deg = _to_float(
+        context.resolved_settings.get("tree_support_branch_diameter_angle_deg", 5.0),
+        5.0,
+    )
+    tree_support_branch_angle_organic_deg = _to_float(
+        context.resolved_settings.get("tree_support_branch_angle_organic_deg", tree_support_branch_angle_deg),
+        tree_support_branch_angle_deg,
+    )
+    tree_support_branch_diameter_organic_mm = _to_float(
+        context.resolved_settings.get("tree_support_branch_diameter_organic_mm", tree_support_branch_diameter_mm),
+        tree_support_branch_diameter_mm,
+    )
+    tree_support_auto_brim = bool(context.resolved_settings.get("tree_support_auto_brim", False))
+    tree_support_brim_width_mm = _to_float(
+        context.resolved_settings.get("tree_support_brim_width_mm", 0.0),
+        0.0,
+    )
     tree_branch_merge_distance_ratio = _to_float(
         context.resolved_settings.get("tree_support_branch_merge_distance_ratio", 1.2),
         1.2,
@@ -122,12 +203,36 @@ def run(context: SlicerContext) -> dict:
             vertical_edges=vertical_edges if isinstance(vertical_edges, tuple) or isinstance(vertical_edges, list) else (),
             support_enabled=support_enabled,
             support_type=support_type,
+            support_style=support_style,
             support_density_percent=support_density_percent,
             support_spacing_mm=support_spacing_mm,
+            support_base_spacing_mm=support_base_spacing_mm,
+            support_interface_spacing_mm=support_interface_spacing_mm,
+            support_bottom_interface_spacing_mm=support_bottom_interface_spacing_mm,
             support_xy_gap_mm=support_xy_gap_mm,
             support_z_gap_mm=support_z_gap_mm,
+            support_bottom_z_gap_mm=support_bottom_z_gap_mm,
+            support_build_plate_only=support_build_plate_only,
+            support_threshold_angle_deg=support_threshold_angle_deg,
+            support_threshold_overlap_percent=support_threshold_overlap_percent,
+            support_critical_regions_only=support_critical_regions_only,
+            support_remove_small_overhang=support_remove_small_overhang,
             support_interface_layers=support_interface_layers,
+            support_interface_top_layers=support_interface_top_layers,
+            support_interface_bottom_layers=support_interface_bottom_layers,
             extrusion_width_mm=extrusion_width,
+            tree_support_branch_angle_deg=tree_support_branch_angle_deg,
+            tree_support_wall_count=tree_support_wall_count,
+            tree_support_branch_diameter_mm=tree_support_branch_diameter_mm,
+            tree_support_tip_diameter_mm=tree_support_tip_diameter_mm,
+            tree_support_branch_distance_mm=tree_support_branch_distance_mm,
+            tree_support_branch_distance_organic_mm=tree_support_branch_distance_organic_mm,
+            tree_support_top_rate_percent=tree_support_top_rate_percent,
+            tree_support_branch_diameter_angle_deg=tree_support_branch_diameter_angle_deg,
+            tree_support_branch_angle_organic_deg=tree_support_branch_angle_organic_deg,
+            tree_support_branch_diameter_organic_mm=tree_support_branch_diameter_organic_mm,
+            tree_support_auto_brim=tree_support_auto_brim,
+            tree_support_brim_width_mm=tree_support_brim_width_mm,
             tree_branch_merge_distance_ratio=tree_branch_merge_distance_ratio,
             tree_branch_growth_ratio=tree_branch_growth_ratio,
             tree_min_branch_radius_mm=tree_min_branch_radius_mm,
@@ -141,12 +246,37 @@ def run(context: SlicerContext) -> dict:
         )
         artifact = {
             "support_enabled": support_enabled,
-            "support_type": support_type,
+            "support_type": report.support_type,
+            "support_style": report.support_style,
             "support_density_percent": support_density_percent,
             "support_spacing_mm": support_spacing_mm,
+            "support_base_spacing_mm": support_base_spacing_mm,
+            "support_interface_spacing_mm": support_interface_spacing_mm,
+            "support_bottom_interface_spacing_mm": support_bottom_interface_spacing_mm,
             "support_xy_gap_mm": support_xy_gap_mm,
             "support_z_gap_mm": support_z_gap_mm,
+            "support_bottom_z_gap_mm": support_bottom_z_gap_mm,
+            "support_build_plate_only": support_build_plate_only,
+            "support_threshold_angle_deg": support_threshold_angle_deg,
+            "support_threshold_overlap_percent": support_threshold_overlap_percent,
+            "support_critical_regions_only": support_critical_regions_only,
+            "support_remove_small_overhang": support_remove_small_overhang,
             "support_interface_layers": support_interface_layers,
+            "support_interface_top_layers": support_interface_top_layers,
+            "support_interface_bottom_layers": support_interface_bottom_layers,
+            "support_interface_bottom_layers_effective": int(report.support_interface_bottom_layers_effective),
+            "tree_support_branch_angle_deg": tree_support_branch_angle_deg,
+            "tree_support_wall_count": tree_support_wall_count,
+            "tree_support_branch_diameter_mm": tree_support_branch_diameter_mm,
+            "tree_support_tip_diameter_mm": tree_support_tip_diameter_mm,
+            "tree_support_branch_distance_mm": tree_support_branch_distance_mm,
+            "tree_support_branch_distance_organic_mm": tree_support_branch_distance_organic_mm,
+            "tree_support_top_rate_percent": tree_support_top_rate_percent,
+            "tree_support_branch_diameter_angle_deg": tree_support_branch_diameter_angle_deg,
+            "tree_support_branch_angle_organic_deg": tree_support_branch_angle_organic_deg,
+            "tree_support_branch_diameter_organic_mm": tree_support_branch_diameter_organic_mm,
+            "tree_support_auto_brim": tree_support_auto_brim,
+            "tree_support_brim_width_mm": tree_support_brim_width_mm,
             "tree_support_branch_merge_distance_ratio": tree_branch_merge_distance_ratio,
             "tree_support_branch_growth_ratio": tree_branch_growth_ratio,
             "tree_support_min_branch_radius_mm": tree_min_branch_radius_mm,
@@ -192,6 +322,13 @@ def run(context: SlicerContext) -> dict:
                 "support_region_count": int(report.support_region_count_total),
                 "support_path_count": int(report.support_path_count_total),
                 "support_path_length_mm_total": float(report.support_path_length_mm_total),
+                "support_threshold_angle_deg": float(support_threshold_angle_deg),
+                "support_threshold_overlap_percent": float(support_threshold_overlap_percent),
+                "support_critical_regions_only": bool(support_critical_regions_only),
+                "support_remove_small_overhang": bool(support_remove_small_overhang),
+                "support_build_plate_only": bool(support_build_plate_only),
+                "support_interface_bottom_layers": int(support_interface_bottom_layers),
+                "support_interface_bottom_layers_effective": int(report.support_interface_bottom_layers_effective),
                 "tree_branch_count_total": int(report.tree_branch_count_total),
                 "tree_trunk_count_total": int(report.tree_trunk_count_total),
             },
@@ -211,11 +348,40 @@ def run(context: SlicerContext) -> dict:
     artifact = {
         "support_enabled": support_enabled,
         "support_type": support_type,
+        "support_style": support_style,
         "support_density_percent": support_density_percent,
         "support_spacing_mm": support_spacing_mm,
+        "support_base_spacing_mm": support_base_spacing_mm,
+        "support_interface_spacing_mm": support_interface_spacing_mm,
+        "support_bottom_interface_spacing_mm": support_bottom_interface_spacing_mm,
         "support_xy_gap_mm": support_xy_gap_mm,
         "support_z_gap_mm": support_z_gap_mm,
+        "support_bottom_z_gap_mm": support_bottom_z_gap_mm,
+        "support_build_plate_only": support_build_plate_only,
+        "support_threshold_angle_deg": support_threshold_angle_deg,
+        "support_threshold_overlap_percent": support_threshold_overlap_percent,
+        "support_critical_regions_only": support_critical_regions_only,
+        "support_remove_small_overhang": support_remove_small_overhang,
         "support_interface_layers": support_interface_layers,
+        "support_interface_top_layers": support_interface_top_layers,
+        "support_interface_bottom_layers": support_interface_bottom_layers,
+        "support_interface_bottom_layers_effective": (
+            int(support_interface_top_layers)
+            if int(support_interface_bottom_layers) == -1
+            else int(support_interface_bottom_layers)
+        ),
+        "tree_support_branch_angle_deg": tree_support_branch_angle_deg,
+        "tree_support_wall_count": tree_support_wall_count,
+        "tree_support_branch_diameter_mm": tree_support_branch_diameter_mm,
+        "tree_support_tip_diameter_mm": tree_support_tip_diameter_mm,
+        "tree_support_branch_distance_mm": tree_support_branch_distance_mm,
+        "tree_support_branch_distance_organic_mm": tree_support_branch_distance_organic_mm,
+        "tree_support_top_rate_percent": tree_support_top_rate_percent,
+        "tree_support_branch_diameter_angle_deg": tree_support_branch_diameter_angle_deg,
+        "tree_support_branch_angle_organic_deg": tree_support_branch_angle_organic_deg,
+        "tree_support_branch_diameter_organic_mm": tree_support_branch_diameter_organic_mm,
+        "tree_support_auto_brim": tree_support_auto_brim,
+        "tree_support_brim_width_mm": tree_support_brim_width_mm,
         "tree_support_branch_merge_distance_ratio": tree_branch_merge_distance_ratio,
         "tree_support_branch_growth_ratio": tree_branch_growth_ratio,
         "tree_support_min_branch_radius_mm": tree_min_branch_radius_mm,
@@ -259,6 +425,17 @@ def run(context: SlicerContext) -> dict:
             "support_region_count": int(path_count),
             "support_path_count": int(path_count),
             "support_path_length_mm_total": 0.0,
+            "support_threshold_angle_deg": float(support_threshold_angle_deg),
+            "support_threshold_overlap_percent": float(support_threshold_overlap_percent),
+            "support_critical_regions_only": bool(support_critical_regions_only),
+            "support_remove_small_overhang": bool(support_remove_small_overhang),
+            "support_build_plate_only": bool(support_build_plate_only),
+            "support_interface_bottom_layers": int(support_interface_bottom_layers),
+            "support_interface_bottom_layers_effective": (
+                int(support_interface_top_layers)
+                if int(support_interface_bottom_layers) == -1
+                else int(support_interface_bottom_layers)
+            ),
             "tree_branch_count_total": 0,
             "tree_trunk_count_total": 0,
         },
