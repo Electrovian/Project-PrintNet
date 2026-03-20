@@ -293,7 +293,7 @@ class SharedView(QtCore.QObject):
             slice_btn.clicked.connect(slice_handler)
         mode_layout.addWidget(slice_btn)
 
-        print_btn = QtWidgets.QPushButton(self._t("topbar.action.print", "Print"), mode_row)
+        print_btn = QtWidgets.QPushButton(self._t("topbar.action.print", "Select print"), mode_row)
         print_btn.setObjectName("TopbarActionButton")
         print_btn.setProperty("kind", "secondary")
         print_btn.clicked.connect(self.main._open_device_view)

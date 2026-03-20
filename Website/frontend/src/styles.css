@@ -690,13 +690,22 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .tab-strip {
+    flex-wrap: wrap;
+  }
+
   .header-meta {
     flex-wrap: wrap;
+    gap: 8px;
   }
 
   .session-pill {
     max-width: 100%;
     flex: 1 1 100%;
+  }
+
+  .status-chip {
+    width: 100%;
   }
 
   .field-grid,
@@ -724,6 +733,11 @@ textarea {
 
   .compliance-meta {
     grid-template-columns: 1fr;
+  }
+
+  .queue-row-meta {
+    grid-template-columns: 1fr;
+    gap: 3px;
   }
 }
 

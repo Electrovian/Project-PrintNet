@@ -175,3 +175,5 @@ docs/_observability_security_release_readiness_summary*.txt
 **/.packages
 **/ios/Pods/
 **/android/.gradle/
+.codex_tmp_playwright
+/.codex_tmp_playwright

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { HeaderBar } from "./components/HeaderBar.jsx";
 import { ContactFields } from "./components/ContactFields.jsx";
 import { UploadPanel } from "./components/UploadPanel.jsx";
@@ -93,6 +93,11 @@ function PrintersPage() {
 
 export default function App() {
   const state = usePrintNetState();
+  const routeRef = useRef(state.route);
+  const setRoute = state.actions.setRoute;
+  const signOut = state.actions.signOut;
+  const setRouteRef = useRef(setRoute);
+  const signOutRef = useRef(signOut);
   const allTabs = useMemo(
     () => [
       { key: "submit", label: "Submit Job" },
@@ -107,11 +112,20 @@ export default function App() {
   const isAuthenticated = Boolean(String(state.authSession?.token || "").trim());
 
   useEffect(() => {
+    routeRef.current = state.route;
+  }, [state.route]);
+
+  useEffect(() => {
+    setRouteRef.current = setRoute;
+    signOutRef.current = signOut;
+  }, [setRoute, signOut]);
+
+  useEffect(() => {
     if (!allowed.includes(state.route)) {
       const fallback = allowed.length > 0 ? allowed[0] : "submit";
-      state.actions.setRoute(fallback);
+      setRouteRef.current(fallback);
     }
-  }, [allowed, state.route, state.actions]);
+  }, [allowed, state.route]);
 
   useEffect(() => {
     if (!isAuthenticated || typeof window === "undefined") {
@@ -122,7 +136,7 @@ export default function App() {
       const sessionUser = normalizeUserKey(state.authSession?.userId || "");
       const pathUser = normalizeUserKey(parsed.pathUser || "");
       if (pathUser && sessionUser && pathUser !== sessionUser) {
-        state.actions.signOut("Session invalid for requested account path. Please sign in again.");
+        signOutRef.current("Session invalid for requested account path. Please sign in again.");
         window.history.replaceState({}, "", "/signin");
         return;
       }
@@ -130,8 +144,8 @@ export default function App() {
       if (!allowed.includes(requested)) {
         return;
       }
-      if (requested !== state.route) {
-        state.actions.setRoute(requested);
+      if (requested !== routeRef.current) {
+        setRouteRef.current(requested);
       }
     };
     syncRouteFromUrl();
@@ -139,7 +153,7 @@ export default function App() {
     return () => {
       window.removeEventListener("popstate", syncRouteFromUrl);
     };
-  }, [isAuthenticated, allowed, state.route, state.actions, state.authSession?.userId]);
+  }, [isAuthenticated, allowed, state.authSession?.userId]);
 
   useEffect(() => {
     if (isAuthenticated || typeof window === "undefined") {

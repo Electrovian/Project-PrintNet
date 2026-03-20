@@ -92,7 +92,7 @@ class PrepareView(QtCore.QObject):
         action_layout.setContentsMargins(10, 8, 10, 8)
         action_layout.setSpacing(6)
 
-        self._slice_btn = QtWidgets.QPushButton("Slice plate", self._action_panel)
+        self._slice_btn = QtWidgets.QPushButton(tr("topbar.action.slice_plate", "Slice plate"), self._action_panel)
         slice_handler = getattr(self.main, "slice_current_plate", None)
         if not callable(slice_handler):
             slice_handler = getattr(self.main, "slice_current_model", None)
