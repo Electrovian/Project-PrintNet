@@ -576,7 +576,6 @@ class PrintMixin:
         return settings
 
     def slice_current_plate(self):
-        self._auto_orient_plate_default()
         settings = self._settings_with_slice_defaults()
         self._slice_model(settings, activate_preview=True, show_dialog=True, show_errors=True)
 

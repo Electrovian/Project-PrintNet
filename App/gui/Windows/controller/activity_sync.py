@@ -98,19 +98,21 @@ def _derive_print_duration_seconds(
     *,
     status: str,
     created_at: datetime | None,
+    print_started_at: datetime | None,
     updated_at: datetime | None,
 ) -> float | None:
     normalized_status = str(status or "").strip().lower()
     if normalized_status not in {"running", "printing", "completed", "failed", "error", "cancelled"}:
         return None
-    if created_at is None:
+    anchor = print_started_at if print_started_at is not None else created_at
+    if anchor is None:
         return None
-    created_utc = created_at.astimezone(timezone.utc)
+    anchor_utc = anchor.astimezone(timezone.utc)
     if normalized_status in {"completed", "failed", "error", "cancelled"}:
-        end_utc = updated_at.astimezone(timezone.utc) if updated_at is not None else created_utc
-        return max(0.0, (end_utc - created_utc).total_seconds())
+        end_utc = updated_at.astimezone(timezone.utc) if updated_at is not None else anchor_utc
+        return max(0.0, (end_utc - anchor_utc).total_seconds())
     now_utc = datetime.now(timezone.utc)
-    return max(0.0, (now_utc - created_utc).total_seconds())
+    return max(0.0, (now_utc - anchor_utc).total_seconds())
 
 
 def _coerce_int(value: object, *, default: int, minimum: int, maximum: int) -> int:
@@ -128,6 +130,7 @@ def _coerce_int(value: object, *, default: int, minimum: int, maximum: int) -> i
 def _normalize_job_payload(value: Mapping[str, Any]) -> dict[str, Any]:
     created = str(value.get("created_at_utc", "")).strip()
     updated = str(value.get("updated_at_utc", "")).strip() or created
+    print_started = str(value.get("print_started_at_utc", "")).strip()
     seq = _coerce_int(value.get("latest_seq", value.get("_seq", 0)), default=0, minimum=0, maximum=2_000_000_000)
     return {
         "job_id": str(value.get("job_id", "")).strip(),
@@ -139,6 +142,7 @@ def _normalize_job_payload(value: Mapping[str, Any]) -> dict[str, Any]:
         "queue": str(value.get("queue", "")).strip(),
         "created_at_utc": created,
         "updated_at_utc": updated,
+        "print_started_at_utc": print_started,
         "_seq": seq,
     }
 
@@ -165,22 +169,35 @@ def _merge_feed_items(
             existing_seq = _coerce_int(existing.get("_seq", 0), default=0, minimum=0, maximum=2_000_000_000)
             if seq < existing_seq:
                 continue
+        status_raw = str(item.get("status", "")).strip() or "unknown"
+        status_key = status_raw.lower()
         created_raw = str(item.get("created_at_utc", "")).strip()
         updated_raw = str(item.get("ts_utc", "")).strip()
+        started_raw = str(item.get("print_started_at_utc", "")).strip()
+        existing_started_raw = str(existing.get("print_started_at_utc", "")).strip() if existing is not None else ""
         if not created_raw and existing is not None:
             created_raw = str(existing.get("created_at_utc", "")).strip()
         if not created_raw:
             created_raw = updated_raw
+        if status_key in {"running", "printing"}:
+            if not started_raw:
+                started_raw = existing_started_raw or updated_raw or created_raw
+        elif status_key in {"completed", "failed", "error", "cancelled"}:
+            if not started_raw:
+                started_raw = existing_started_raw
+        else:
+            started_raw = ""
         merged[job_id] = {
             "job_id": job_id,
             "model_name": str(item.get("model_name", "")).strip(),
-            "status": str(item.get("status", "")).strip() or "unknown",
+            "status": status_raw,
             "profile_id": str(item.get("profile_id", "")).strip(),
             "printer_id": str(item.get("printer_id", "")).strip(),
             "requested_by": str(item.get("requested_by", "")).strip(),
             "queue": str(item.get("queue", "")).strip(),
             "created_at_utc": created_raw,
             "updated_at_utc": updated_raw or created_raw,
+            "print_started_at_utc": started_raw,
             "_seq": seq,
         }
     return merged
@@ -195,8 +212,10 @@ def _job_to_activity_entry(job: Mapping[str, Any]) -> dict[str, Any]:
     requested_by = str(job.get("requested_by", "")).strip() or "unknown"
     created_raw = str(job.get("created_at_utc", "")).strip()
     updated_raw = str(job.get("updated_at_utc", "")).strip()
+    print_started_raw = str(job.get("print_started_at_utc", "")).strip()
     created_at = _parse_iso_datetime(created_raw)
     updated_at = _parse_iso_datetime(updated_raw)
+    print_started_at = _parse_iso_datetime(print_started_raw)
     explicit_duration = None
     for key in (
         "duration_seconds",
@@ -215,6 +234,7 @@ def _job_to_activity_entry(job: Mapping[str, Any]) -> dict[str, Any]:
         else _derive_print_duration_seconds(
             status=status,
             created_at=created_at,
+            print_started_at=print_started_at,
             updated_at=updated_at,
         )
     )
