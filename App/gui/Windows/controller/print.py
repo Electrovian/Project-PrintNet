@@ -572,7 +572,6 @@ class PrintMixin:
 
     def _settings_with_slice_defaults(self) -> SliceSettings:
         settings = self.settings_panel.to_settings()
-        settings.support_enabled = True
         return settings
 
     def slice_current_plate(self):

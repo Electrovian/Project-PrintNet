@@ -7,6 +7,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from gui.Windows.controller.print import PrintMixin  # noqa: E402
+from slicer_v2.legacy_gcode_writer import SliceSettings  # noqa: E402
 
 
 class _SliceController(PrintMixin):
@@ -31,6 +32,16 @@ class _SliceController(PrintMixin):
         )
 
 
+class _SettingsDefaultsController(PrintMixin):
+    def __init__(self, settings):
+        self._settings = settings
+        self.settings_panel = type(
+            "_SettingsPanelStub",
+            (),
+            {"to_settings": lambda panel_self: self._settings},
+        )()
+
+
 class SlicePlateBehaviorTests(unittest.TestCase):
     def test_slice_current_plate_uses_current_transforms_without_auto_orient(self):
         controller = _SliceController()
@@ -42,6 +53,13 @@ class SlicePlateBehaviorTests(unittest.TestCase):
         self.assertTrue(controller.slice_calls[0]["activate_preview"])
         self.assertTrue(controller.slice_calls[0]["show_dialog"])
         self.assertTrue(controller.slice_calls[0]["show_errors"])
+
+    def test_settings_with_slice_defaults_preserves_support_toggle(self):
+        settings = SliceSettings(support_enabled=False)
+        controller = _SettingsDefaultsController(settings)
+        resolved = controller._settings_with_slice_defaults()
+        self.assertIs(resolved, settings)
+        self.assertFalse(resolved.support_enabled)
 
 
 if __name__ == "__main__":

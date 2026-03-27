@@ -87,8 +87,12 @@ class LocalWifiOnboarding:
             existing_index = seen.get(identity)
             if existing_index is not None:
                 existing = printers[existing_index]
-                if self._prefer_discovered_candidate(existing, candidate):
-                    printers[existing_index] = candidate
+                prefer_candidate = self._prefer_discovered_candidate(existing, candidate)
+                printers[existing_index] = self._merge_printer_rows(
+                    existing,
+                    candidate,
+                    prefer_candidate=prefer_candidate,
+                )
                 continue
             seen[identity] = len(printers)
             printers.append(candidate)
@@ -167,8 +171,12 @@ class LocalWifiOnboarding:
             existing_index = seen.get(identity)
             if existing_index is not None:
                 existing = merged[existing_index]
-                if self._prefer_discovered_candidate(existing, item):
-                    merged[existing_index] = self._merge_printer_rows(existing, item)
+                prefer_candidate = self._prefer_discovered_candidate(existing, item)
+                merged[existing_index] = self._merge_printer_rows(
+                    existing,
+                    item,
+                    prefer_candidate=prefer_candidate,
+                )
                 continue
             seen[identity] = len(merged)
             merged.append(item)
@@ -181,8 +189,12 @@ class LocalWifiOnboarding:
             existing_index = seen.get(identity)
             if existing_index is not None:
                 existing = merged[existing_index]
-                if self._prefer_discovered_candidate(existing, item):
-                    merged[existing_index] = self._merge_printer_rows(existing, item)
+                prefer_candidate = self._prefer_discovered_candidate(existing, item)
+                merged[existing_index] = self._merge_printer_rows(
+                    existing,
+                    item,
+                    prefer_candidate=prefer_candidate,
+                )
                 continue
             seen[identity] = len(merged)
             merged.append(item)
@@ -394,9 +406,12 @@ class LocalWifiOnboarding:
         elif connector_type == "creality":
             candidate["creality_url"] = base_url
             protocol_hint = str((probe_result or {}).get("creality_protocol", "")).strip().lower()
+            normalized_path = str(target.path or "").strip().lower()
             if protocol_hint not in {"moonraker", "octoprint"}:
-                if str(target.path or "").strip().lower() == "/server/info":
+                if normalized_path == "/server/info":
                     protocol_hint = "moonraker"
+                elif normalized_path == "/api/printer":
+                    protocol_hint = "octoprint"
                 else:
                     protocol_hint = "moonraker" if int(target.port) == 7125 else "octoprint"
             candidate["creality_protocol"] = protocol_hint
@@ -453,13 +468,38 @@ class LocalWifiOnboarding:
         return False
 
     @staticmethod
-    def _merge_printer_rows(existing: Mapping[str, Any], candidate: Mapping[str, Any]) -> dict[str, Any]:
+    def _merge_printer_rows(
+        existing: Mapping[str, Any],
+        candidate: Mapping[str, Any],
+        *,
+        prefer_candidate: bool = False,
+    ) -> dict[str, Any]:
         merged = dict(existing)
+        preserve_existing_fields = {
+            "name",
+            "octoprint_api_key",
+            "prusalink_api_key",
+            "moonraker_token",
+            "creality_token",
+            "creality_api_key",
+            "bambu_access_code",
+            "bambu_serial",
+        }
         for key, value in candidate.items():
-            if isinstance(value, str):
-                if value.strip():
-                    merged[key] = value
+            if value is None:
                 continue
-            if value is not None:
+            existing_value = merged.get(key)
+            if isinstance(value, str):
+                candidate_text = value.strip()
+                if not candidate_text:
+                    continue
+                existing_text = existing_value.strip() if isinstance(existing_value, str) else ""
+                if key in preserve_existing_fields and existing_text:
+                    continue
+                if existing_text and not prefer_candidate:
+                    continue
+                merged[key] = value
+                continue
+            if existing_value is None or prefer_candidate:
                 merged[key] = value
         return merged

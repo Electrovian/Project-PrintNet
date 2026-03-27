@@ -30,6 +30,10 @@ def build_auth_router(state: BackendState) -> APIRouter:
         body = dict(payload or {})
         user_id, password = parse_login_payload(body)
         account = state.authenticate_account(user_id=user_id, password=password)
+        if account.role == "admin":
+            raise BackendAuthenticationError(
+                "AUTH_VERIFICATION_REQUIRED: admin login requires /auth/login/request-code and /auth/login/verify-code."
+            )
         session = state.create_session(user_id=account.user_id, role=account.role, trusted_role=True)
         return {"ok": True, "account": account.to_public_dict(), "session": session.to_dict()}
 
