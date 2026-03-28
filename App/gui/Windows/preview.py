@@ -2,6 +2,7 @@ import bisect
 import math
 from PyQt5 import QtWidgets, QtCore, QtGui
 
+from ..i18n import tr
 from ..theme import theme_css, theme_qcolor
 from ..preview_utils import play_interval_ms
 from config.defaults import DEFAULTS
@@ -217,7 +218,7 @@ class PreviewView(QtCore.QObject):
         action_layout.setContentsMargins(10, 8, 10, 8)
         action_layout.setSpacing(6)
 
-        self._slice_btn = QtWidgets.QPushButton("Slice plate", self._action_panel)
+        self._slice_btn = QtWidgets.QPushButton(tr("topbar.action.slice_plate", "Slice plate"), self._action_panel)
         slice_handler = getattr(self.main, "slice_current_plate", None)
         if not callable(slice_handler):
             slice_handler = getattr(self.main, "slice_current_model", None)
@@ -225,7 +226,7 @@ class PreviewView(QtCore.QObject):
             self._slice_btn.clicked.connect(slice_handler)
         action_layout.addWidget(self._slice_btn)
 
-        self._print_btn = QtWidgets.QPushButton("Send print", self._action_panel)
+        self._print_btn = QtWidgets.QPushButton(tr("topbar.action.print", "Select print"), self._action_panel)
         self._print_btn.clicked.connect(self.main._open_device_view)
         action_layout.addWidget(self._print_btn)
 
@@ -1106,24 +1107,116 @@ class PreviewView(QtCore.QObject):
 
     def position_panels(self):
         margin = 16
+        gap = 10
         self._autosize_panel()
+
+        viewer_w = max(0, self.viewer.width())
+        viewer_h = max(0, self.viewer.height())
+        viewer_rect = QtCore.QRect(0, 0, viewer_w, viewer_h)
+
+        def _clamp_point(x, y, width, height):
+            max_x = max(0, viewer_w - width)
+            max_y = max(0, viewer_h - height)
+            return max(0, min(int(x), max_x)), max(0, min(int(y), max_y))
+
+        def _place_rect(width, height, preferred_x, preferred_y, occupied, candidates=None):
+            check_candidates = []
+            if candidates:
+                check_candidates.extend(candidates)
+            check_candidates.append((preferred_x, preferred_y))
+
+            for cand_x, cand_y in check_candidates:
+                px, py = _clamp_point(cand_x, cand_y, width, height)
+                rect = QtCore.QRect(px, py, width, height)
+                if viewer_rect.contains(rect) and not any(rect.intersects(other) for other in occupied):
+                    return rect
+
+            pref_x, pref_y = _clamp_point(preferred_x, preferred_y, width, height)
+            return QtCore.QRect(pref_x, pref_y, width, height)
+
+        def _right_edge_slot(width, height, occupied, preferred_y):
+            x = max(0, viewer_w - width - margin)
+            min_y = margin
+            max_y = max(min_y, viewer_h - height - margin)
+            preferred = max(min_y, min(int(preferred_y), max_y))
+
+            candidates = [(x, preferred), (x, min_y), (x, max_y)]
+            for other in occupied:
+                candidates.append((x, other.top() - height - gap))
+                candidates.append((x, other.bottom() + gap))
+
+            seen = set()
+            ordered = []
+            for cand_x, cand_y in sorted(candidates, key=lambda p: abs(p[1] - preferred)):
+                clamped_y = max(min_y, min(int(cand_y), max_y))
+                key = (int(cand_x), clamped_y)
+                if key in seen:
+                    continue
+                seen.add(key)
+                ordered.append(key)
+
+            for cand_x, cand_y in ordered:
+                rect = QtCore.QRect(cand_x, cand_y, width, height)
+                if viewer_rect.contains(rect) and not any(rect.intersects(other) for other in occupied):
+                    return rect
+
+            for y in range(min_y, max_y + 1, 4):
+                rect = QtCore.QRect(x, y, width, height)
+                if viewer_rect.contains(rect) and not any(rect.intersects(other) for other in occupied):
+                    return rect
+
+            return QtCore.QRect(x, preferred, width, height)
+
+        occupied = []
+
         self._preview_panel.adjustSize()
-        self._preview_panel.move(margin, margin + 6)
+        preview_w = self._preview_panel.width()
+        preview_h = self._preview_panel.height()
+        preview_rect = _place_rect(preview_w, preview_h, margin, margin + 6, occupied)
+        self._preview_panel.move(preview_rect.topLeft())
+        occupied.append(preview_rect)
 
         self._action_panel.adjustSize()
-        x = max(0, self.viewer.width() - self._action_panel.width() - margin)
-        y = max(0, self.viewer.height() - self._action_panel.height() - margin)
-        self._action_panel.move(x, y)
+        action_w = self._action_panel.width()
+        action_h = self._action_panel.height()
+        action_pref_x = max(0, viewer_w - action_w - margin)
+        action_pref_y = max(0, viewer_h - action_h - margin)
+        action_rect = _place_rect(action_w, action_h, action_pref_x, action_pref_y, occupied)
+        self._action_panel.move(action_rect.topLeft())
+        occupied.append(action_rect)
 
         self._timeline_panel.adjustSize()
-        t_x = max(0, (self.viewer.width() - self._timeline_panel.width()) // 2)
-        t_y = max(0, self.viewer.height() - self._timeline_panel.height() - margin)
-        self._timeline_panel.move(t_x, t_y)
+        timeline_w = self._timeline_panel.width()
+        timeline_h = self._timeline_panel.height()
+        timeline_pref_x = max(0, (viewer_w - timeline_w) // 2)
+        timeline_pref_y = max(0, viewer_h - timeline_h - margin)
+        timeline_candidates = []
+        if action_rect.intersects(QtCore.QRect(timeline_pref_x, timeline_pref_y, timeline_w, timeline_h)):
+            timeline_candidates.append((timeline_pref_x, action_rect.top() - timeline_h - gap))
+            timeline_candidates.append((margin, timeline_pref_y))
+        timeline_rect = _place_rect(
+            timeline_w,
+            timeline_h,
+            timeline_pref_x,
+            timeline_pref_y,
+            occupied,
+            candidates=timeline_candidates,
+        )
+        self._timeline_panel.move(timeline_rect.topLeft())
+        occupied.append(timeline_rect)
+
+        if action_rect.intersects(timeline_rect):
+            occupied_without_action = [preview_rect, timeline_rect]
+            action_rect = _right_edge_slot(action_w, action_h, occupied_without_action, action_rect.y())
+            self._action_panel.move(action_rect.topLeft())
+            occupied = [preview_rect, action_rect, timeline_rect]
 
         self._layer_panel.adjustSize()
-        l_x = max(0, self.viewer.width() - self._layer_panel.width() - margin)
-        l_y = max(0, (self.viewer.height() - self._layer_panel.height()) // 2)
-        self._layer_panel.move(l_x, l_y)
+        layer_w = self._layer_panel.width()
+        layer_h = self._layer_panel.height()
+        layer_pref_y = max(0, (viewer_h - layer_h) // 2)
+        layer_rect = _right_edge_slot(layer_w, layer_h, occupied, layer_pref_y)
+        self._layer_panel.move(layer_rect.topLeft())
         self._autosize_panel()
 
     def _autosize_panel(self):

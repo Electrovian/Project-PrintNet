@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import Mapping
 
 from PyQt5 import QtCore, QtWidgets
 
@@ -8,6 +9,7 @@ from ..theme import theme_css
 
 class ActivityView(QtWidgets.QWidget):
     """Activity dashboard with only Me/Printers tabs."""
+    state_changed = QtCore.pyqtSignal(dict)
 
     _DATE_FILTER_KEYS = (
         "activity.filter.any_time",
@@ -29,6 +31,7 @@ class ActivityView(QtWidgets.QWidget):
         self._me_entries = []
         self._printer_entries = []
         self._stats_values: dict[str, QtWidgets.QLabel] = {}
+        self._restoring_state = False
         self._build_ui()
 
     def _build_ui(self):
@@ -127,8 +130,8 @@ class ActivityView(QtWidgets.QWidget):
         self._stack.setCurrentWidget(self._me_table)
 
         tabs_group.buttonClicked.connect(self._on_tab_changed)
-        self._search_input.textChanged.connect(self._refresh_tables)
-        self._date_filter.currentIndexChanged.connect(self._refresh_tables)
+        self._search_input.textChanged.connect(self._on_controls_changed)
+        self._date_filter.currentIndexChanged.connect(self._on_controls_changed)
         self._refresh_btn.clicked.connect(self._refresh_tables)
 
         self.apply_theme()
@@ -288,6 +291,59 @@ class ActivityView(QtWidgets.QWidget):
         elif button is self._printers_btn:
             self._stack.setCurrentWidget(self._printer_table)
         self._refresh_tables()
+        self._emit_state_changed()
+
+    def _on_controls_changed(self, *_args):
+        self._refresh_tables()
+        self._emit_state_changed()
+
+    def export_view_state(self) -> dict:
+        tab = "me"
+        if self._stack.currentWidget() is self._printer_table:
+            tab = "printers"
+        return {
+            "tab": tab,
+            "date_filter_index": int(self._date_filter.currentIndex()),
+            "search_query": str(self._search_input.text() or ""),
+        }
+
+    def restore_view_state(self, state: Mapping[str, object] | None) -> None:
+        if not isinstance(state, Mapping):
+            return
+        tab = str(state.get("tab", "") or "").strip().lower()
+        query = str(state.get("search_query", "") or "")
+        try:
+            date_index = int(state.get("date_filter_index", 0))
+        except (TypeError, ValueError):
+            date_index = 0
+        date_index = max(0, min(self._date_filter.count() - 1, date_index))
+
+        self._restoring_state = True
+        date_block = self._date_filter.blockSignals(True)
+        search_block = self._search_input.blockSignals(True)
+        me_block = self._me_btn.blockSignals(True)
+        printers_block = self._printers_btn.blockSignals(True)
+        try:
+            self._date_filter.setCurrentIndex(date_index)
+            self._search_input.setText(query)
+            if tab == "printers":
+                self._printers_btn.setChecked(True)
+                self._stack.setCurrentWidget(self._printer_table)
+            else:
+                self._me_btn.setChecked(True)
+                self._stack.setCurrentWidget(self._me_table)
+        finally:
+            self._date_filter.blockSignals(date_block)
+            self._search_input.blockSignals(search_block)
+            self._me_btn.blockSignals(me_block)
+            self._printers_btn.blockSignals(printers_block)
+            self._restoring_state = False
+        self._refresh_tables()
+
+    def _emit_state_changed(self) -> None:
+        if self._restoring_state:
+            return
+        self.state_changed.emit(self.export_view_state())
 
     def apply_theme(self):
         self.setStyleSheet(

@@ -57,6 +57,7 @@ class ActivitySyncDeltaTests(unittest.TestCase):
         self.assertEqual(merged["job-1"]["status"], "running")
         self.assertEqual(merged["job-1"]["model_name"], "new.stl")
         self.assertEqual(int(merged["job-1"]["_seq"]), 3)
+        self.assertEqual(merged["job-1"]["print_started_at_utc"], "2026-01-01T00:00:02+00:00")
 
 
 if __name__ == "__main__":

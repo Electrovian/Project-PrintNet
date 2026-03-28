@@ -44,6 +44,7 @@ class ActivityStore:
         queue: object,
         ts_utc: object | None = None,
         created_at_utc: object | None = None,
+        print_started_at_utc: object | None = None,
     ) -> dict[str, Any]:
         normalized_job_id = _normalize_job_value(job_id)
         if not normalized_job_id:
@@ -51,7 +52,19 @@ class ActivityStore:
         event_ts = _normalize_job_value(ts_utc, fallback=_utc_now_iso())
         created_ts = _normalize_job_value(created_at_utc, fallback=event_ts)
         normalized_status = _normalize_job_value(status, fallback="unknown")
+        status_key = normalized_status.lower()
         normalized_user = _normalize_job_value(requested_by)
+        existing = self._jobs_by_id.get(normalized_job_id)
+        existing_started = str(existing.get("print_started_at_utc", "")).strip() if existing else ""
+        explicit_started = _normalize_job_value(print_started_at_utc)
+        if explicit_started:
+            started_ts = explicit_started
+        elif status_key in {"running", "printing"}:
+            started_ts = existing_started or event_ts
+        elif status_key in {"completed", "failed", "error", "cancelled"}:
+            started_ts = existing_started
+        else:
+            started_ts = ""
 
         self._seq += 1
         item = {
@@ -66,6 +79,7 @@ class ActivityStore:
             "requested_by": normalized_user,
             "queue": _normalize_job_value(queue),
             "created_at_utc": created_ts,
+            "print_started_at_utc": started_ts,
         }
         self._events.append(item)
         while len(self._events) > self.max_events:
@@ -81,11 +95,24 @@ class ActivityStore:
         existing = self._jobs_by_id.get(job_id)
         existing_user = str(existing.get("requested_by", "")).strip() if existing else ""
         existing_status = str(existing.get("status", "")).strip() if existing else ""
+        existing_started = str(existing.get("print_started_at_utc", "")).strip() if existing else ""
         created_ts = str(item.get("created_at_utc", "")).strip()
         if not created_ts and existing is not None:
             created_ts = str(existing.get("created_at_utc", "")).strip()
         if not created_ts:
             created_ts = str(item.get("ts_utc", "")).strip()
+        status = str(item.get("status", "")).strip() or "unknown"
+        status_key = status.lower()
+        event_ts = str(item.get("ts_utc", "")).strip()
+        started_ts = str(item.get("print_started_at_utc", "")).strip()
+        if status_key in {"running", "printing"}:
+            if not started_ts:
+                started_ts = existing_started or event_ts
+        elif status_key in {"completed", "failed", "error", "cancelled"}:
+            if not started_ts:
+                started_ts = existing_started
+        else:
+            started_ts = ""
 
         row = {
             "job_id": job_id,
@@ -94,9 +121,10 @@ class ActivityStore:
             "printer_id": str(item.get("printer_id", "")).strip(),
             "requested_by": str(item.get("requested_by", "")).strip(),
             "queue": str(item.get("queue", "")).strip(),
-            "status": str(item.get("status", "")).strip() or "unknown",
+            "status": status,
             "created_at_utc": created_ts,
             "updated_at_utc": str(item.get("ts_utc", "")).strip(),
+            "print_started_at_utc": started_ts,
             "latest_seq": int(item.get("seq", 0) or 0),
         }
         self._jobs_by_id[job_id] = row

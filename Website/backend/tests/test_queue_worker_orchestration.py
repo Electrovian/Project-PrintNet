@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from datetime import datetime
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
@@ -103,6 +104,42 @@ class QueueWorkerOrchestrationTests(unittest.TestCase):
         events = self.client.get(f"/api/v1/jobs/events?job_id={job_id}&auth_token={self.student_1_token}")
         self.assertEqual(events.status_code, 200)
         self.assertGreaterEqual(events.json()["count"], 3)
+
+        snapshot = self.client.get(f"/api/v1/queue/snapshot?auth_token={self.operator_token}")
+        self.assertEqual(snapshot.status_code, 200)
+        jobs = list(snapshot.json()["snapshot"].get("jobs", []))
+        row = next((item for item in jobs if str(item.get("job_id", "")).strip() == job_id), None)
+        self.assertIsNotNone(row)
+        assert row is not None
+
+        created_raw = str(row.get("created_at_utc", "")).strip()
+        started_raw = str(row.get("print_started_at_utc", "")).strip()
+        updated_raw = str(row.get("updated_at_utc", "")).strip()
+        self.assertTrue(created_raw)
+        self.assertTrue(started_raw)
+        self.assertTrue(updated_raw)
+
+        created_at = datetime.fromisoformat(created_raw)
+        started_at = datetime.fromisoformat(started_raw)
+        updated_at = datetime.fromisoformat(updated_raw)
+        self.assertGreaterEqual(started_at, created_at)
+        self.assertGreaterEqual(updated_at, started_at)
+
+        feed = self.client.get(f"/api/v1/activity/feed?auth_token={self.operator_token}&cursor=0&limit=50")
+        self.assertEqual(feed.status_code, 200)
+        items = list(feed.json()["feed"].get("items", []))
+        completed = next(
+            (
+                item
+                for item in items
+                if str(item.get("job_id", "")).strip() == job_id
+                and str(item.get("status", "")).strip().lower() == "completed"
+            ),
+            None,
+        )
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertTrue(str(completed.get("print_started_at_utc", "")).strip())
 
     def test_student_cannot_tick_or_heartbeat_worker(self):
         heartbeat = self.client.post(

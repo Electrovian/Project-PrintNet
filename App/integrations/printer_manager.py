@@ -49,6 +49,39 @@ class PrinterManager:
     def set_active_printer(self, printer: Mapping[str, Any] | None):
         self.active_printer = dict(printer) if isinstance(printer, Mapping) else None
 
+    def _discovery_identity(self, printer: Mapping[str, Any]) -> str:
+        # Use the same identity contract as local Wi-Fi merge logic when available.
+        resolver = getattr(self.wifi_onboarding, "_discovery_identity", None)
+        if callable(resolver):
+            try:
+                return str(resolver(printer))
+            except Exception:
+                pass
+        connector_type = str(printer.get("connector_type", "")).strip().lower()
+        host = str(printer.get("host", "")).strip().lower()
+        port = int(printer.get("port", 0) or 0)
+        if connector_type and host and port > 0:
+            return f"{connector_type}|{host}:{port}"
+        name = str(printer.get("name", "")).strip().lower()
+        return f"{connector_type}|{name}"
+
+    def _apply_merged_printers(self, merged: List[Dict[str, Any]]) -> None:
+        selected = dict(self.active_printer) if isinstance(self.active_printer, Mapping) else None
+        self.printers = [dict(item) for item in merged if isinstance(item, Mapping)]
+        if not self.printers:
+            self.active_printer = None
+            return
+        if selected is None:
+            self.active_printer = self.printers[0]
+            return
+
+        selected_identity = self._discovery_identity(selected)
+        for printer in self.printers:
+            if self._discovery_identity(printer) == selected_identity:
+                self.active_printer = dict(printer)
+                return
+        self.active_printer = self.printers[0]
+
     def slice_and_print(self, stl_path: str, settings: SliceSettings) -> str:
         gcode_path = slice_file(stl_path, settings=settings)
         return self.print_gcode(gcode_path, printer=self.active_printer)
@@ -116,9 +149,7 @@ class PrinterManager:
 
         discovered_printers = report.get("printers", [])
         merged = self.wifi_onboarding.merge_printers(self.printers, discovered_printers)
-        self.printers = merged
-        if self.active_printer is None and self.printers:
-            self.active_printer = self.printers[0]
+        self._apply_merged_printers(merged)
 
         result = dict(report)
         result["merged_printer_count"] = len(self.printers)
@@ -146,9 +177,7 @@ class PrinterManager:
 
         discovered_printers = report.get("printers", [])
         merged = self.wifi_onboarding.merge_printers(self.printers, discovered_printers)
-        self.printers = merged
-        if self.active_printer is None and self.printers:
-            self.active_printer = self.printers[0]
+        self._apply_merged_printers(merged)
 
         result = dict(report)
         result["merged_printer_count"] = len(self.printers)
@@ -246,9 +275,7 @@ class PrinterManager:
         self.store_printer_credentials(identifier, candidate)
         sanitized = self._without_secret_keys(candidate)
         merged = self.wifi_onboarding.merge_printers(self.printers, [sanitized])
-        self.printers = merged
-        if self.active_printer is None and self.printers:
-            self.active_printer = self.printers[0]
+        self._apply_merged_printers(merged)
         return {
             "ok": True,
             "state": "saved",

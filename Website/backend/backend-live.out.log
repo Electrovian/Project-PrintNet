@@ -1,0 +1,20 @@
+INFO:     127.0.0.1:52241 - "GET /health/live HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52246 - "GET /api/v1/health/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52249 - "POST /api/v1/auth/register HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52249 - "GET /api/v1/profiles/catalog?filament=PLA&nozzle=0.4&auth_token=session-000001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52249 - "POST /api/v1/jobs/upload-model HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52249 - "POST /api/v1/jobs/submit HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62183 - "POST /api/v1/auth/session HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62184 - "POST /api/v1/auth/register HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62184 - "POST /api/v1/printers/register HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:57397 - "POST /api/v1/auth/register HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57397 - "GET /api/v1/profiles/catalog?filament=PLA&nozzle=0.4&auth_token=session-000003 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57397 - "POST /api/v1/jobs/upload-model HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57397 - "POST /api/v1/jobs/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57397 - "GET /api/v1/queue/snapshot?auth_token=session-000003 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56847 - "OPTIONS /api/v1/compliance/region HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53851 - "OPTIONS /api/v1/compliance/region HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56847 - "GET /api/v1/compliance/region HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56847 - "GET /api/v1/compliance/region HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56847 - "GET /api/v1/compliance/region HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56847 - "GET /api/v1/compliance/region HTTP/1.1" 200 OK

@@ -55,30 +55,64 @@ def _format_when(created_at: datetime | None, fallback: str = "") -> str:
         return str(fallback or "").strip()
 
 
-def _format_age(created_at: datetime | None) -> str:
-    if created_at is None:
+def _coerce_duration_seconds(value: object) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            seconds = float(text)
+        except (TypeError, ValueError):
+            return None
+    if not seconds >= 0.0:
+        return None
+    return float(seconds)
+
+
+def _format_duration(seconds: float | None) -> str:
+    if seconds is None:
         return "n/a"
-    now = datetime.now(timezone.utc)
-    delta_seconds = int(max(0, (now - created_at.astimezone(timezone.utc)).total_seconds()))
-    if delta_seconds < 60:
-        return f"{delta_seconds}s"
-    if delta_seconds < 3600:
-        mins = delta_seconds // 60
-        secs = delta_seconds % 60
-        if secs <= 0:
-            return f"{mins}m"
-        return f"{mins}m {secs}s"
-    if delta_seconds < 86400:
-        hours = delta_seconds // 3600
-        mins = (delta_seconds % 3600) // 60
-        if mins <= 0:
-            return f"{hours}h"
-        return f"{hours}h {mins}m"
-    days = delta_seconds // 86400
-    hours = (delta_seconds % 86400) // 3600
-    if hours <= 0:
-        return f"{days}d"
-    return f"{days}d {hours}h"
+    total = int(max(0, round(float(seconds))))
+    if total < 60:
+        return f"{total}s"
+    if total < 3600:
+        mins = total // 60
+        secs = total % 60
+        return f"{mins}m" if secs <= 0 else f"{mins}m {secs}s"
+    if total < 86400:
+        hours = total // 3600
+        mins = (total % 3600) // 60
+        return f"{hours}h" if mins <= 0 else f"{hours}h {mins}m"
+    days = total // 86400
+    hours = (total % 86400) // 3600
+    return f"{days}d" if hours <= 0 else f"{days}d {hours}h"
+
+
+def _derive_print_duration_seconds(
+    *,
+    status: str,
+    created_at: datetime | None,
+    print_started_at: datetime | None,
+    updated_at: datetime | None,
+) -> float | None:
+    normalized_status = str(status or "").strip().lower()
+    if normalized_status not in {"running", "printing", "completed", "failed", "error", "cancelled"}:
+        return None
+    anchor = print_started_at if print_started_at is not None else created_at
+    if anchor is None:
+        return None
+    anchor_utc = anchor.astimezone(timezone.utc)
+    if normalized_status in {"completed", "failed", "error", "cancelled"}:
+        end_utc = updated_at.astimezone(timezone.utc) if updated_at is not None else anchor_utc
+        return max(0.0, (end_utc - anchor_utc).total_seconds())
+    now_utc = datetime.now(timezone.utc)
+    return max(0.0, (now_utc - anchor_utc).total_seconds())
 
 
 def _coerce_int(value: object, *, default: int, minimum: int, maximum: int) -> int:
@@ -96,6 +130,7 @@ def _coerce_int(value: object, *, default: int, minimum: int, maximum: int) -> i
 def _normalize_job_payload(value: Mapping[str, Any]) -> dict[str, Any]:
     created = str(value.get("created_at_utc", "")).strip()
     updated = str(value.get("updated_at_utc", "")).strip() or created
+    print_started = str(value.get("print_started_at_utc", "")).strip()
     seq = _coerce_int(value.get("latest_seq", value.get("_seq", 0)), default=0, minimum=0, maximum=2_000_000_000)
     return {
         "job_id": str(value.get("job_id", "")).strip(),
@@ -107,6 +142,7 @@ def _normalize_job_payload(value: Mapping[str, Any]) -> dict[str, Any]:
         "queue": str(value.get("queue", "")).strip(),
         "created_at_utc": created,
         "updated_at_utc": updated,
+        "print_started_at_utc": print_started,
         "_seq": seq,
     }
 
@@ -133,22 +169,35 @@ def _merge_feed_items(
             existing_seq = _coerce_int(existing.get("_seq", 0), default=0, minimum=0, maximum=2_000_000_000)
             if seq < existing_seq:
                 continue
+        status_raw = str(item.get("status", "")).strip() or "unknown"
+        status_key = status_raw.lower()
         created_raw = str(item.get("created_at_utc", "")).strip()
         updated_raw = str(item.get("ts_utc", "")).strip()
+        started_raw = str(item.get("print_started_at_utc", "")).strip()
+        existing_started_raw = str(existing.get("print_started_at_utc", "")).strip() if existing is not None else ""
         if not created_raw and existing is not None:
             created_raw = str(existing.get("created_at_utc", "")).strip()
         if not created_raw:
             created_raw = updated_raw
+        if status_key in {"running", "printing"}:
+            if not started_raw:
+                started_raw = existing_started_raw or updated_raw or created_raw
+        elif status_key in {"completed", "failed", "error", "cancelled"}:
+            if not started_raw:
+                started_raw = existing_started_raw
+        else:
+            started_raw = ""
         merged[job_id] = {
             "job_id": job_id,
             "model_name": str(item.get("model_name", "")).strip(),
-            "status": str(item.get("status", "")).strip() or "unknown",
+            "status": status_raw,
             "profile_id": str(item.get("profile_id", "")).strip(),
             "printer_id": str(item.get("printer_id", "")).strip(),
             "requested_by": str(item.get("requested_by", "")).strip(),
             "queue": str(item.get("queue", "")).strip(),
             "created_at_utc": created_raw,
             "updated_at_utc": updated_raw or created_raw,
+            "print_started_at_utc": started_raw,
             "_seq": seq,
         }
     return merged
@@ -162,8 +211,35 @@ def _job_to_activity_entry(job: Mapping[str, Any]) -> dict[str, Any]:
     printer_id = str(job.get("printer_id", "")).strip() or "Unassigned"
     requested_by = str(job.get("requested_by", "")).strip() or "unknown"
     created_raw = str(job.get("created_at_utc", "")).strip()
+    updated_raw = str(job.get("updated_at_utc", "")).strip()
+    print_started_raw = str(job.get("print_started_at_utc", "")).strip()
     created_at = _parse_iso_datetime(created_raw)
-    sort_ts = float(created_at.timestamp()) if created_at is not None else 0.0
+    updated_at = _parse_iso_datetime(updated_raw)
+    print_started_at = _parse_iso_datetime(print_started_raw)
+    explicit_duration = None
+    for key in (
+        "duration_seconds",
+        "duration_s",
+        "print_duration_seconds",
+        "print_duration_s",
+        "print_duration",
+        "time_seconds",
+    ):
+        explicit_duration = _coerce_duration_seconds(job.get(key))
+        if explicit_duration is not None:
+            break
+    duration_seconds = (
+        explicit_duration
+        if explicit_duration is not None
+        else _derive_print_duration_seconds(
+            status=status,
+            created_at=created_at,
+            print_started_at=print_started_at,
+            updated_at=updated_at,
+        )
+    )
+    sort_dt = updated_at or created_at
+    sort_ts = float(sort_dt.timestamp()) if sort_dt is not None else 0.0
     seq = _coerce_int(job.get("_seq", 0), default=0, minimum=0, maximum=2_000_000_000)
 
     label = model_name or job_id or "job"
@@ -171,7 +247,7 @@ def _job_to_activity_entry(job: Mapping[str, Any]) -> dict[str, Any]:
         "job_id": job_id,
         "job": label,
         "status": status,
-        "duration": _format_age(created_at),
+        "duration": _format_duration(duration_seconds),
         "material": profile_id or "n/a",
         "when": _format_when(created_at, fallback=created_raw),
         "created_at_utc": created_raw,
@@ -447,6 +523,4 @@ class ActivitySyncMixin:
             user = str(row.get("user", "")).strip().lower()
             if user == hint:
                 filtered.append(row)
-        if filtered:
-            return filtered
-        return list(rows)
+        return filtered

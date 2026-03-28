@@ -71,7 +71,7 @@ class LocalWifiOnboarding:
 
         online_target_count = 0
         printers: list[dict[str, Any]] = []
-        seen = set()
+        seen: dict[str, int] = {}
 
         for target in targets:
             probe_result = self._run_probe(target, timeout_value)
@@ -82,11 +82,19 @@ class LocalWifiOnboarding:
             if not connector_type:
                 continue
             online_target_count += 1
-            candidate = self._candidate_from_probe(target, connector_type)
-            identity = self._printer_identity(candidate)
-            if identity in seen:
+            candidate = self._candidate_from_probe(target, connector_type, probe_result)
+            identity = self._discovery_identity(candidate)
+            existing_index = seen.get(identity)
+            if existing_index is not None:
+                existing = printers[existing_index]
+                prefer_candidate = self._prefer_discovered_candidate(existing, candidate)
+                printers[existing_index] = self._merge_printer_rows(
+                    existing,
+                    candidate,
+                    prefer_candidate=prefer_candidate,
+                )
                 continue
-            seen.add(identity)
+            seen[identity] = len(printers)
             printers.append(candidate)
 
         printers.sort(key=lambda item: str(item.get("name", "")).lower())
@@ -153,26 +161,42 @@ class LocalWifiOnboarding:
         discovered_printers: Sequence[Mapping[str, Any]] | None,
     ) -> list[dict[str, Any]]:
         merged: list[dict[str, Any]] = []
-        seen: set[str] = set()
+        seen: dict[str, int] = {}
 
         for row in existing_printers or []:
             if not isinstance(row, Mapping):
                 continue
             item = dict(row)
-            identity = self._printer_identity(item)
-            if identity in seen:
+            identity = self._discovery_identity(item)
+            existing_index = seen.get(identity)
+            if existing_index is not None:
+                existing = merged[existing_index]
+                prefer_candidate = self._prefer_discovered_candidate(existing, item)
+                merged[existing_index] = self._merge_printer_rows(
+                    existing,
+                    item,
+                    prefer_candidate=prefer_candidate,
+                )
                 continue
-            seen.add(identity)
+            seen[identity] = len(merged)
             merged.append(item)
 
         for row in discovered_printers or []:
             if not isinstance(row, Mapping):
                 continue
             item = dict(row)
-            identity = self._printer_identity(item)
-            if identity in seen:
+            identity = self._discovery_identity(item)
+            existing_index = seen.get(identity)
+            if existing_index is not None:
+                existing = merged[existing_index]
+                prefer_candidate = self._prefer_discovered_candidate(existing, item)
+                merged[existing_index] = self._merge_printer_rows(
+                    existing,
+                    item,
+                    prefer_candidate=prefer_candidate,
+                )
                 continue
-            seen.add(identity)
+            seen[identity] = len(merged)
             merged.append(item)
 
         return merged
@@ -343,7 +367,12 @@ class LocalWifiOnboarding:
                 return True
         return False
 
-    def _candidate_from_probe(self, target: LocalWifiProbeTarget, connector_type: str) -> dict[str, Any]:
+    def _candidate_from_probe(
+        self,
+        target: LocalWifiProbeTarget,
+        connector_type: str,
+        probe_result: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         display = {
             "octoprint": "OctoPrint",
             "moonraker": "Moonraker",
@@ -376,7 +405,16 @@ class LocalWifiOnboarding:
             candidate["bambu_serial"] = ""
         elif connector_type == "creality":
             candidate["creality_url"] = base_url
-            candidate["creality_protocol"] = "moonraker" if int(target.port) == 7125 else "octoprint"
+            protocol_hint = str((probe_result or {}).get("creality_protocol", "")).strip().lower()
+            normalized_path = str(target.path or "").strip().lower()
+            if protocol_hint not in {"moonraker", "octoprint"}:
+                if normalized_path == "/server/info":
+                    protocol_hint = "moonraker"
+                elif normalized_path == "/api/printer":
+                    protocol_hint = "octoprint"
+                else:
+                    protocol_hint = "moonraker" if int(target.port) == 7125 else "octoprint"
+            candidate["creality_protocol"] = protocol_hint
             candidate["creality_token"] = ""
         return candidate
 
@@ -406,3 +444,62 @@ class LocalWifiOnboarding:
 
         name = str(printer.get("name", "")).strip().lower()
         return f"{connector_type}|{name}"
+
+    def _discovery_identity(self, printer: Mapping[str, Any]) -> str:
+        connector_type = str(printer.get("connector_type", "")).strip().lower()
+        if connector_type == "creality":
+            url = str(printer.get("creality_url", "") or printer.get("endpoint", "")).strip().rstrip("/").lower()
+            if url:
+                return f"creality|{url}"
+            host = str(printer.get("host", "")).strip().lower()
+            port = int(printer.get("port", 0) or 0)
+            if host and port > 0:
+                return f"creality|{host}:{port}"
+        return self._printer_identity(printer)
+
+    @staticmethod
+    def _prefer_discovered_candidate(existing: Mapping[str, Any], candidate: Mapping[str, Any]) -> bool:
+        existing_type = str(existing.get("connector_type", "")).strip().lower()
+        candidate_type = str(candidate.get("connector_type", "")).strip().lower()
+        if existing_type == "creality" and candidate_type == "creality":
+            existing_protocol = str(existing.get("creality_protocol", "")).strip().lower()
+            candidate_protocol = str(candidate.get("creality_protocol", "")).strip().lower()
+            return existing_protocol != "moonraker" and candidate_protocol == "moonraker"
+        return False
+
+    @staticmethod
+    def _merge_printer_rows(
+        existing: Mapping[str, Any],
+        candidate: Mapping[str, Any],
+        *,
+        prefer_candidate: bool = False,
+    ) -> dict[str, Any]:
+        merged = dict(existing)
+        preserve_existing_fields = {
+            "name",
+            "octoprint_api_key",
+            "prusalink_api_key",
+            "moonraker_token",
+            "creality_token",
+            "creality_api_key",
+            "bambu_access_code",
+            "bambu_serial",
+        }
+        for key, value in candidate.items():
+            if value is None:
+                continue
+            existing_value = merged.get(key)
+            if isinstance(value, str):
+                candidate_text = value.strip()
+                if not candidate_text:
+                    continue
+                existing_text = existing_value.strip() if isinstance(existing_value, str) else ""
+                if key in preserve_existing_fields and existing_text:
+                    continue
+                if existing_text and not prefer_candidate:
+                    continue
+                merged[key] = value
+                continue
+            if existing_value is None or prefer_candidate:
+                merged[key] = value
+        return merged

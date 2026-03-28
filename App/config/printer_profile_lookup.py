@@ -117,9 +117,9 @@ def _pick_record(candidates: list[MachinePresetRecord], preferred_kind: str | No
     if not candidates:
         return None
     if preferred_kind:
-        filtered = [record for record in candidates if record.kind == preferred_kind]
-        if filtered:
-            candidates = filtered
+        candidates = [record for record in candidates if record.kind == preferred_kind]
+        if not candidates:
+            return None
     # Prefer explicit nozzle presets for dimensions.
     return sorted(
         candidates,

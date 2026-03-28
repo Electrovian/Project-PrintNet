@@ -30,6 +30,30 @@ def _probe_with_bambu_and_creality(target, _timeout_s: float) -> Mapping[str, An
     return {"ok": False}
 
 
+def _probe_creality_server_info_on_8080(target, _timeout_s: float) -> Mapping[str, Any]:
+    if target.path == "/server/info" and int(target.port) == 8080:
+        return {"ok": True, "connector_type": "creality"}
+    return {"ok": False}
+
+
+def _probe_creality_on_server_info_and_api_printer(target, _timeout_s: float) -> Mapping[str, Any]:
+    if int(target.port) != 8080:
+        return {"ok": False}
+    if target.path == "/server/info":
+        return {"ok": True, "connector_type": "creality"}
+    if target.path == "/api/printer":
+        return {"ok": True, "connector_type": "creality"}
+    return {"ok": False}
+
+
+def _probe_creality_api_printer_on_7125(target, _timeout_s: float) -> Mapping[str, Any]:
+    if int(target.port) != 7125:
+        return {"ok": False}
+    if target.path == "/api/printer":
+        return {"ok": True, "connector_type": "creality"}
+    return {"ok": False}
+
+
 class LocalWifiOnboardingTests(unittest.TestCase):
     def test_discover_requires_hosts(self):
         onboarding = LocalWifiOnboarding(probe_hook=_probe_map_by_port)
@@ -89,6 +113,61 @@ class LocalWifiOnboardingTests(unittest.TestCase):
         self.assertEqual(merged[0]["name"], "Existing Octo")
         self.assertEqual(merged[1]["connector_type"], "moonraker")
 
+    def test_merge_printers_reuses_creality_entry_and_upgrades_protocol(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_map_by_port)
+        existing = [
+            {
+                "name": "Creality Existing",
+                "connector_type": "creality",
+                "creality_url": "http://10.0.0.55:8080",
+                "creality_protocol": "octoprint",
+                "creality_token": "saved-token",
+            }
+        ]
+        discovered = [
+            {
+                "name": "Creality 10.0.0.55:8080",
+                "connector_type": "creality",
+                "creality_url": "http://10.0.0.55:8080",
+                "creality_protocol": "moonraker",
+                "creality_token": "",
+            }
+        ]
+        merged = onboarding.merge_printers(existing, discovered)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0].get("name"), "Creality Existing")
+        self.assertEqual(merged[0].get("creality_protocol"), "moonraker")
+        self.assertEqual(merged[0].get("creality_token"), "saved-token")
+
+    def test_merge_printers_backfills_existing_connector_metadata(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_map_by_port)
+        existing = [
+            {
+                "name": "Lab Octo",
+                "connector_type": "octoprint",
+                "octoprint_url": "http://10.0.0.11:80",
+                "octoprint_api_key": "abc",
+            }
+        ]
+        discovered = [
+            {
+                "name": "OctoPrint 10.0.0.11:80",
+                "connector_type": "octoprint",
+                "octoprint_url": "http://10.0.0.11:80",
+                "host": "10.0.0.11",
+                "port": 80,
+                "discovered_via": "local_wifi_scan",
+                "octoprint_api_key": "",
+            }
+        ]
+        merged = onboarding.merge_printers(existing, discovered)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0].get("name"), "Lab Octo")
+        self.assertEqual(merged[0].get("octoprint_api_key"), "abc")
+        self.assertEqual(merged[0].get("host"), "10.0.0.11")
+        self.assertEqual(merged[0].get("port"), 80)
+        self.assertEqual(merged[0].get("discovered_via"), "local_wifi_scan")
+
     def test_printer_manager_discovery_merges_into_runtime_list(self):
         onboarding = LocalWifiOnboarding(probe_hook=_probe_map_by_port)
         manager = PrinterManager(
@@ -107,6 +186,57 @@ class LocalWifiOnboardingTests(unittest.TestCase):
         self.assertEqual(len(manager.printers), 3)
         self.assertIsNotNone(manager.active_printer)
 
+    def test_printer_manager_discovery_refreshes_active_creality_protocol_upgrade(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_creality_server_info_on_8080)
+        existing = {
+            "name": "Creality Existing",
+            "connector_type": "creality",
+            "creality_url": "http://10.0.0.55:8080",
+            "creality_protocol": "octoprint",
+            "creality_token": "saved-token",
+        }
+        manager = PrinterManager(
+            printers=[dict(existing)],
+            airtable_cfg={},
+            wifi_onboarding=onboarding,
+        )
+        manager.set_active_printer(existing)
+        report = manager.discover_local_wifi_printers(
+            hosts=["10.0.0.55"],
+            ports=[8080],
+            max_targets=32,
+        )
+        self.assertTrue(report["ok"])
+        self.assertEqual(len(manager.printers), 1)
+        self.assertEqual(manager.printers[0].get("creality_protocol"), "moonraker")
+        self.assertEqual(manager.active_printer.get("creality_protocol"), "moonraker")
+
+    def test_printer_manager_cidr_discovery_refreshes_active_creality_protocol_upgrade(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_creality_server_info_on_8080)
+        existing = {
+            "name": "Creality Existing",
+            "connector_type": "creality",
+            "creality_url": "http://10.0.0.1:8080",
+            "creality_protocol": "octoprint",
+            "creality_token": "saved-token",
+        }
+        manager = PrinterManager(
+            printers=[dict(existing)],
+            airtable_cfg={},
+            wifi_onboarding=onboarding,
+        )
+        manager.set_active_printer(existing)
+        report = manager.discover_local_wifi_printers_from_cidr(
+            "10.0.0.0/29",
+            ports=[8080],
+            host_limit=1,
+            max_targets=32,
+        )
+        self.assertTrue(report["ok"])
+        self.assertEqual(len(manager.printers), 1)
+        self.assertEqual(manager.printers[0].get("creality_protocol"), "moonraker")
+        self.assertEqual(manager.active_printer.get("creality_protocol"), "moonraker")
+
     def test_printer_manager_discovery_returns_invalid_config(self):
         manager = PrinterManager(
             printers=[],
@@ -124,6 +254,33 @@ class LocalWifiOnboardingTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         connector_types = sorted(item.get("connector_type", "") for item in result["printers"])
         self.assertEqual(connector_types, ["bambu_lan", "creality"])
+
+    def test_creality_server_info_on_non_default_port_keeps_moonraker_protocol(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_creality_server_info_on_8080)
+        result = onboarding.discover(hosts=["10.0.0.55"], ports=[8080], max_targets=32)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["printer_count"], 1)
+        printer = result["printers"][0]
+        self.assertEqual(printer.get("connector_type"), "creality")
+        self.assertEqual(printer.get("creality_protocol"), "moonraker")
+
+    def test_creality_probes_across_paths_are_deduplicated_with_moonraker_preference(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_creality_on_server_info_and_api_printer)
+        result = onboarding.discover(hosts=["10.0.0.55"], ports=[8080], max_targets=32)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["printer_count"], 1)
+        printer = result["printers"][0]
+        self.assertEqual(printer.get("connector_type"), "creality")
+        self.assertEqual(printer.get("creality_protocol"), "moonraker")
+
+    def test_creality_api_printer_on_7125_uses_octoprint_protocol_hint(self):
+        onboarding = LocalWifiOnboarding(probe_hook=_probe_creality_api_printer_on_7125)
+        result = onboarding.discover(hosts=["10.0.0.55"], ports=[7125], max_targets=32)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["printer_count"], 1)
+        printer = result["printers"][0]
+        self.assertEqual(printer.get("connector_type"), "creality")
+        self.assertEqual(printer.get("creality_protocol"), "octoprint")
 
 
 if __name__ == "__main__":

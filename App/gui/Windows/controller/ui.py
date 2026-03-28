@@ -1079,6 +1079,7 @@ class UiMixin(UiMixinBase):
         mode = {
             "project": "files",
             "calibration": "control",
+            "layout": "prepare",
         }.get(mode, mode)
         if mode != "preview":
             prev = getattr(self, "_preview_wireframe_prev", None)
@@ -1211,6 +1212,8 @@ class UiMixin(UiMixinBase):
         else:
             return
         self._active_mode = mode
+        if hasattr(self, "_persist_active_mode"):
+            self._persist_active_mode(mode)
 
     def _refresh_files_view(self):
         if hasattr(self, "files_view") and hasattr(self.files_view, "refresh_from_viewer"):
@@ -1219,7 +1222,10 @@ class UiMixin(UiMixinBase):
     def _auto_slice_prepare(self):
         if not self.viewer.get_model_ids():
             return
-        settings = self.settings_panel.to_settings()
+        if hasattr(self, "_settings_with_slice_defaults"):
+            settings = self._settings_with_slice_defaults()
+        else:
+            settings = self.settings_panel.to_settings()
         reusable = None
         if hasattr(self, "_resolve_reusable_gcode_path"):
             reusable = self._resolve_reusable_gcode_path(settings)

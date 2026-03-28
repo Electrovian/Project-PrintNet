@@ -1,0 +1,289 @@
+\documentclass[
+  25pt,
+  landscape,
+  margin=0.45in,
+  innermargin=0.28in,
+  blockverticalspace=0.20in,
+  colspace=0.24in
+]{tikzposter}
+\geometry{paperwidth=36in,paperheight=48in}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{textcomp}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{array}
+
+% ---------------- COLORS ----------------
+\definecolor{UCred}{HTML}{E3B1BA}
+\definecolor{UCdark}{HTML}{111111}
+\definecolor{UCgray}{HTML}{EAEAEA}
+\definecolor{UCmidgray}{HTML}{BDBDBD}
+\definecolor{UCblue}{HTML}{1E5A96}
+\definecolor{BannerRed}{HTML}{E00122}
+
+% ---------------- STYLE ----------------
+\definecolorstyle{UCStyle}
+{
+    \colorlet{colorOne}{UCred}
+    \colorlet{colorTwo}{UCdark}
+    \colorlet{colorThree}{UCgray}
+}
+{
+    \colorlet{backgroundcolor}{UCred}
+    \colorlet{framecolor}{UCmidgray}
+    \colorlet{titlebgcolor}{UCred}
+    \colorlet{titlefgcolor}{black}
+    \colorlet{blocktitlebgcolor}{UCgray}
+    \colorlet{blocktitlefgcolor}{UCblue}
+    \colorlet{blockbodybgcolor}{UCgray}
+    \colorlet{blockbodyfgcolor}{black}
+    \colorlet{innerblocktitlebgcolor}{UCdark}
+    \colorlet{innerblocktitlefgcolor}{white}
+    \colorlet{innerblockbodybgcolor}{white}
+    \colorlet{innerblockbodyfgcolor}{black}
+    \colorlet{notefgcolor}{black}
+    \colorlet{notebgcolor}{UCmidgray}
+    \colorlet{noteframecolor}{UCdark}
+}
+
+\usetheme{Board}
+\usecolorstyle{UCStyle}
+\emergencystretch=3em
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.3em}
+
+% We are building the title into the top block, so suppress normal title output
+\title{}
+\author{}
+\institute{}
+\titlegraphic{}
+
+\begin{document}
+
+% suppress default title space
+\makeatletter
+\renewcommand\TP@maketitle{}
+\makeatother
+\maketitle
+\vspace{-1.0em}
+
+% ---------------- TOP HEADER BLOCK ----------------
+\block{}{
+\noindent
+\begin{minipage}[c][3.4in][c]{0.24\linewidth}
+    \centering
+    \parbox[c][2.8in][c]{0.94\linewidth}{%
+        \centering
+        {\color{UCblue}\bfseries\fontsize{38}{42}\selectfont Print-Net\par}
+        \vspace{0.35em}
+        {\color{black}\fontsize{18}{22}\selectfont 3D Print Farm Management \& Automation System\par}
+        \vspace{0.20em}
+        {\color{black}\fontsize{16}{20}\selectfont University of Cincinnati -- CEAS\par}
+        \vspace{0.45em}
+        {\color{UCblue}\rule{0.62\linewidth}{2pt}}
+    }
+\end{minipage}
+\hfill
+\begin{minipage}[c][3.4in][c]{0.66\linewidth}
+    \centering
+    \vspace{0.2in}
+    \begin{minipage}[t]{0.2\linewidth}
+        \centering
+        \IfFileExists{mitchell.jpg}
+        {\includegraphics[width=2in,height=2in,keepaspectratio]{mitchell.jpg}}
+        {\fbox{\parbox[c][2in][c]{2in}{\centering Mitchell\\Photo}}}
+        \par\vspace{0.28em}
+        {\normalsize\bfseries Mitchell Koski\par}
+        {\small Computer Science\par}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.2\linewidth}
+        \centering
+        \IfFileExists{muneer.jpg}
+        {\includegraphics[width=2in,height=2in,keepaspectratio]{muneer.jpg}}
+        {\fbox{\parbox[c][2in][c]{2in}{\centering Muneer\\Photo}}}
+        \par\vspace{0.28em}
+        {\normalsize\bfseries Muneer Al-Khasawneh\par}
+        {\small Computer Science\par}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.2\linewidth}
+        \centering
+        \IfFileExists{muhanad.jpg}
+        {\includegraphics[width=2in,height=2in,keepaspectratio]{muhanad.jpg}}
+        {\fbox{\parbox[c][2in][c]{2in}{\centering Muhanad\\Photo}}}
+        \par\vspace{0.28em}
+        {\normalsize\bfseries Muhanad Al-Khasawneh\par}
+        {\small Computer Science\par}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.23\linewidth}
+        \centering
+        \IfFileExists{Hill Jeremy.jpg}
+        {\includegraphics[width=2in,height=2in,keepaspectratio]{Hill Jeremy.jpg}}
+        {\fbox{\parbox[c][2in][c]{2in}{\centering Jeremy\\Photo}}}
+        \par\vspace{0.28em}
+        {\normalsize\bfseries Project Advisor: Jeremy Hill\par}
+        {\small \phantom{Computer Science}\par}
+    \end{minipage}
+\end{minipage}
+\hfill
+\begin{minipage}[c][3.4in][c]{0.07\linewidth}
+    \centering
+    \IfFileExists{uc_logo.png}
+    {\includegraphics[width=0.90\linewidth,keepaspectratio]{uc_logo.png}}
+    {\fbox{\parbox[c][2.0in][c]{1.6in}{\centering UC\\Logo}}}
+\end{minipage}
+}
+
+\vspace{-0.15em}
+
+\begin{columns}
+
+% ================= LEFT COLUMN =================
+\column{0.31}
+
+\block{Background}{
+University 3D printing labs often rely on fragmented tools such as Google Forms, spreadsheets, email, and manual printer checks. These disconnected processes create delays, reduce visibility into job progress, and increase the workload required to manage multiple printers and users.
+
+\vspace{0.5em}
+\textbf{Goal:} Develop a centralized 3D print management platform that automates submission, validation, queueing, dispatch, and monitoring while improving scalability, reliability, and transparency for both students and lab staff.
+}
+
+\block{Problem Statement}{
+\begin{itemize}[leftmargin=1.2em]
+    \item Print jobs are submitted through disconnected tools with limited automation.
+    \item Students have little visibility into whether a print is queued, validated, printing, failed, or completed.
+    \item Technicians must manually monitor printers, move jobs, and manage workflow gaps.
+    \item Existing lab processes do not scale efficiently across multiple printers and many users.
+    \item There is limited standardization for submission, scheduling, and operational tracking.
+\end{itemize}
+}
+
+\block{Solution}{
+\textbf{PrintNet} is a centralized 3D print management system designed to automate the full lifecycle of a print job from submission to completion.
+
+\begin{itemize}[leftmargin=1.2em]
+    \item Accepts structured print job submissions
+    \item Validates files and submission data before processing
+    \item Queues and dispatches jobs to available printers
+    \item Integrates with printer APIs for automated communication
+    \item Monitors printer status and job progress in real time
+    \item Provides a foundation for scalable multi-printer management
+\end{itemize}
+}
+
+\block{Technologies}{
+\begin{itemize}[leftmargin=1.2em]
+    \item Docker for containerized deployment
+    \item RESTful APIs for modular service communication
+    \item OctoPrint API for printer connectivity and control
+    \item Linux-based runtime environment
+    \item Queue-based job orchestration
+    \item Status polling and printer-state monitoring
+    \item Slicing and G-code workflow integration
+    \item Modular backend architecture for maintainability and expansion
+\end{itemize}
+}
+
+% ================= CENTER COLUMN =================
+\column{0.38}
+
+\block{System Architecture and Workflow}{
+PrintNet integrates user interaction, backend job orchestration, slicing preparation, and printer communication into a unified workflow.
+
+\begin{enumerate}[leftmargin=1.4em]
+    \item A user submits a model and print settings
+    \item The system validates the submission and prepares the job
+    \item Slicing and geometry-processing modules generate printable instructions
+    \item G-code and preview data are prepared for review
+    \item The job is queued and dispatched to an available connected printer
+    \item Backend services monitor printer state, progress, and completion status
+\end{enumerate}
+}
+
+\block{Challenges \& Design Constraints}{
+\begin{itemize}[leftmargin=1.2em]
+    \item Reliable communication with network-connected printers
+    \item Synchronizing queue state with live printer state
+    \item Safe handling of failed or interrupted jobs
+    \item Limited budget encouraged open-source modular design
+    \item Security requirements demanded careful access control
+\end{itemize}
+}
+
+\block{Architecture Overview}{
+\centering
+\IfFileExists{image1.png}
+{\includegraphics[width=0.95\linewidth,height=4.0in,keepaspectratio]{image1.png}}
+{\fbox{\parbox[c][3.8in][c]{0.9\linewidth}{\centering Upload \texttt{image1.png}}}}
+
+\vspace{0.35em}
+\small \textbf{Figure 2.} Major architectural layers of PrintNet, including interface components, backend coordination, printer integrations, and core service boundaries.
+}
+
+\block{Module-Level Structure}{
+\centering
+\IfFileExists{image2.png}
+{\includegraphics[width=4\linewidth,height=7in,keepaspectratio]{image2.png}}
+{\fbox{\parbox[c][4.5in][c]{0.95\linewidth}{\centering Upload \texttt{image2.png}}}}
+
+\vspace{0.35em}
+\small \textbf{Figure 3.} Internal module-level structure showing separation of concerns across configuration, shared services, slicing logic, geometry operations, and print-planning components.
+}
+
+% ================= RIGHT COLUMN =================
+\column{0.31}
+
+\block{Achievements / Current Progress}{
+\textbf{Completed}
+\begin{itemize}[leftmargin=1.2em]
+    \item Finalized the architecture for centralized print management
+    \item Implemented backend services for submission and job coordination
+    \item Established printer API communication and queue-based dispatch
+    \item Improved visibility into job state and workflow progress
+    \item Performed integration and stability testing on core functions
+    \item Reached a demo-ready state for presentation
+\end{itemize}
+
+\vspace{0.4em}
+\textbf{Current Progress}
+\begin{itemize}[leftmargin=1.2em]
+    \item Improving queue and printer-state synchronization
+    \item Increasing robustness for multi-printer deployment
+    \item Refining monitoring, usability, and scalability
+\end{itemize}
+}
+
+\block{Main Workflow Diagram}{
+\centering
+\IfFileExists{image3.png}
+{\includegraphics[width=7\linewidth,height=7in,keepaspectratio]{image3.png}}
+{\fbox{\parbox[c][4in][c]{0.9\linewidth}{\centering Upload \texttt{image3.png}}}}
+
+\vspace{0.35em}
+\small \textbf{Figure 1.} High-level workflow of PrintNet showing the end-to-end process from submission and validation to slicing preparation, dispatch, monitoring, and status reporting.
+}
+
+\block{Impact}{
+\begin{itemize}[leftmargin=1.2em]
+    \item Improves student access to fabrication resources
+    \item Reduces confusion during submission and printer use
+    \item Decreases technician workload through automation
+    \item Minimizes downtime through status monitoring
+\end{itemize}
+}
+
+\block{Conclusion}{
+PrintNet demonstrates a practical and technically substantial approach to modernizing university 3D print-farm operations. By centralizing submission, validation, queue coordination, dispatch, and printer-status monitoring, the system addresses real workflow inefficiencies found in fragmented lab environments.
+
+\vspace{0.45em}
+The project combines software architecture, systems integration, and workflow automation into a scalable platform that improves reliability, transparency, and operational efficiency. Its modular structure also positions it well for future expansion into broader multi-printer deployment and more advanced automation features.
+}
+
+\end{columns}
+
+\end{document}

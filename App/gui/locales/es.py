@@ -119,7 +119,7 @@ STRINGS = {
     "topbar.mode.project": "Proyecto",
     "topbar.mode.calibration": "Calibracion",
     "topbar.action.slice_plate": "Laminar placa",
-    "topbar.action.print": "Imprimir",
+    "topbar.action.print": "Seleccionar impresion",
     "device.title": "Dispositivo",
     "device.search.label": "Buscar impresora:",
     "device.search.placeholder": "Buscar impresoras conectadas",
