@@ -177,3 +177,6 @@ docs/_observability_security_release_readiness_summary*.txt
 **/android/.gradle/
 .codex_tmp_playwright
 /.codex_tmp_playwright
+
+# Node workspace artifacts
+node_modules/
