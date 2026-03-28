@@ -176,7 +176,10 @@ docs/_observability_security_release_readiness_summary*.txt
 **/ios/Pods/
 **/android/.gradle/
 .codex_tmp_playwright
+<<<<<<< Updated upstream
 /.codex_tmp_playwright
 
 # Node workspace artifacts
 node_modules/
+=======
+>>>>>>> Stashed changes
