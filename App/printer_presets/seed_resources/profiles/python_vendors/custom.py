@@ -2547,7 +2547,7 @@ ASSETS = [
   "Generic Marlin Printer_cover.png",
   "Generic RRF Printer_cover.png",
   "Generic ToolChanger Printer_cover.png",
-  "orcaslicer_bed_texture.svg"
+  "eonslicer_bed_texture.svg"
 ]
 
 ALL = {

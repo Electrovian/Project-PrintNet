@@ -83,7 +83,7 @@ class PrinterManager:
         self.active_printer = self.printers[0]
 
     def slice_and_print(self, stl_path: str, settings: SliceSettings) -> str:
-        gcode_path = slice_file(stl_path, settings=settings)
+        gcode_path = slice_file(stl_path, settings=settings, printer=self.active_printer)
         return self.print_gcode(gcode_path, printer=self.active_printer)
 
     def print_gcode(self, gcode_path: str, printer: Mapping[str, Any] | None = None) -> str:

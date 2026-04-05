@@ -9,14 +9,18 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 import numpy as np
+import trimesh
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from ...i18n import tr
 from ...theme import export_theme, get_theme_name, register_theme, set_theme
 from ...workers import Worker
+from config.bootstrap import user_cache_dir
 from config.defaults import DEFAULTS
 from config.printer_profile_lookup import resolve_printer_plate_config
 from config.runtime_printer_state import (
@@ -40,6 +44,75 @@ else:
     UiMixinBase = object
 
 
+_FILES_VIEW_CACHE_VERSION = 1
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _files_view_cache_path() -> Path:
+    return user_cache_dir().joinpath("files_view_cache.json")
+
+
+def _normalize_files_view_model(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    identifier = value.get("id")
+    try:
+        identifier = int(identifier)
+    except (TypeError, ValueError):
+        identifier = str(identifier or "").strip()
+    return {
+        "id": identifier,
+        "name": str(value.get("name", "")).strip(),
+        "path": str(value.get("path", "")).strip(),
+        "plate": str(value.get("plate", "")).strip(),
+    }
+
+
+def _load_files_view_cache(path: Path | None = None) -> dict[str, Any]:
+    cache_path = path or _files_view_cache_path()
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"available": False, "models": []}
+    if not isinstance(payload, dict):
+        return {"available": False, "models": []}
+    if payload.get("version") != _FILES_VIEW_CACHE_VERSION:
+        return {"available": False, "models": []}
+    raw_models = payload.get("models")
+    if not isinstance(raw_models, list):
+        return {"available": False, "models": []}
+    models: list[dict[str, Any]] = []
+    for item in raw_models:
+        normalized = _normalize_files_view_model(item)
+        if normalized is not None:
+            models.append(normalized)
+    return {"available": True, "models": models}
+
+
+def _save_files_view_cache(models: list[dict[str, Any]], path: Path | None = None) -> None:
+    cache_path = path or _files_view_cache_path()
+    normalized_models: list[dict[str, Any]] = []
+    for item in list(models or []):
+        normalized = _normalize_files_view_model(item)
+        if normalized is not None:
+            normalized_models.append(normalized)
+    payload = {
+        "version": _FILES_VIEW_CACHE_VERSION,
+        "saved_at_utc": _utc_now_iso(),
+        "models": normalized_models,
+    }
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
+        temp_path.write_text(json.dumps(payload, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+        temp_path.replace(cache_path)
+    except Exception:
+        return
+
+
 class UiMixin(UiMixinBase):
     def __getattr__(self, name: str) -> Any:
         # MainController owns the runtime __getattr__ proxy; this keeps type checkers quiet.
@@ -48,6 +121,29 @@ class UiMixin(UiMixinBase):
     def _dialog_parent(self):
         parent = getattr(self, "main", None)
         return parent if isinstance(parent, QtWidgets.QWidget) else None
+
+    def _panel_item_model_id(self, item) -> int | None:
+        if item is None:
+            return None
+        value = None
+        try:
+            value = item.data(0, QtCore.Qt.UserRole + 1)
+        except TypeError:
+            try:
+                value = item.data(QtCore.Qt.UserRole)
+            except TypeError:
+                value = None
+        if value is None:
+            try:
+                value = item.data(QtCore.Qt.UserRole)
+            except TypeError:
+                value = None
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     def _use_tk_file_dialog(self) -> bool:
         if os.name != "nt":
@@ -354,6 +450,7 @@ class UiMixin(UiMixinBase):
             self.statusBar().showMessage(f"Selected {len(selected)} models")
         self.viewer.set_gizmo_mode("move")
         self._sync_popups()
+        self._update_prepare_action_state()
 
     def _on_model_selection_changed(self, model_ids: list):
         ids = [int(mid) for mid in model_ids] if model_ids else []
@@ -362,6 +459,7 @@ class UiMixin(UiMixinBase):
             self.viewer.set_selected_models([], emit_signal=False)
             self.statusBar().showMessage("Selection cleared")
             self._sync_popups()
+            self._update_prepare_action_state()
             return
         self.current_model_id = ids[0]
         self.viewer.set_selected_models(ids, emit_signal=False)
@@ -372,6 +470,7 @@ class UiMixin(UiMixinBase):
             self.statusBar().showMessage(f"Selected {len(ids)} models")
         self.viewer.set_gizmo_mode("move")
         self._sync_popups()
+        self._update_prepare_action_state()
 
     def _on_model_remove(self, model_id: int):
         self._remove_models([model_id])
@@ -409,11 +508,13 @@ class UiMixin(UiMixinBase):
             row = idx // cols
             col = idx % cols
             offset = base_offset + np.array([(col + 1) * dx, row * dy, 0.0], dtype=float)
-            model_id = self.viewer.add_model_from_data(
+            model_id = self.viewer.add_scene_object(
                 f"{name} Copy {idx + 1}",
-                payload["path"],
-                payload["base_vertices"],
-                payload["faces"],
+                payload.get("path", ""),
+                payload.get("parts", []),
+                plate_id=payload.get("plate_id"),
+                object_metadata=dict(payload.get("object_metadata") or {}),
+                instance_metadata=dict(payload.get("instance_metadata") or {}),
             )
             self.viewer.set_model_transform(
                 model_id,
@@ -421,10 +522,11 @@ class UiMixin(UiMixinBase):
                 rotation_xyz=payload["rotation"],
                 offset_xyz=offset,
             )
-            self.model_panel.add_model(f"{name} Copy {idx + 1}", model_id)
             new_ids.append(model_id)
 
         if new_ids:
+            if hasattr(self.model_panel, "refresh_from_viewer"):
+                self.model_panel.refresh_from_viewer(self.viewer)
             self.current_model_id = new_ids[-1]
             self.viewer.set_selected_model(self.current_model_id)
             self._select_model_in_panel(self.current_model_id)
@@ -434,7 +536,7 @@ class UiMixin(UiMixinBase):
             self._refresh_files_view()
 
     def _clear_all_models(self):
-        model_ids = self.viewer.get_model_ids()
+        model_ids = self.viewer.get_all_model_ids() if hasattr(self.viewer, "get_all_model_ids") else self.viewer.get_model_ids()
         if not model_ids:
             self.current_model_id = None
             self.viewer.set_selected_model(None)
@@ -509,6 +611,62 @@ class UiMixin(UiMixinBase):
     def _on_viewer_selection_changed(self, model_ids: list):
         self._sync_selection_from_viewer(model_ids)
 
+    def _on_viewer_scene_changed(self):
+        if hasattr(self.model_panel, "refresh_from_viewer"):
+            self.model_panel.refresh_from_viewer(self.viewer)
+        self._refresh_files_view(prefer_cache=False)
+        self._update_prepare_action_state()
+        if hasattr(self, "_invalidate_slice_cache"):
+            self._invalidate_slice_cache(clear_preview=False)
+        measure_payload = getattr(getattr(self.viewer, "scene_state", None), "tool_state", None)
+        measure_data = getattr(measure_payload, "measure_payload", {}) if measure_payload is not None else {}
+        points = list(dict(measure_data or {}).get("points", []) or [])
+        if len(points) >= 2:
+            distance = float(dict(measure_data or {}).get("distance_mm", 0.0) or 0.0)
+            delta = list(dict(measure_data or {}).get("delta_xyz_mm", []) or [])
+            if len(delta) == 3:
+                self.statusBar().showMessage(
+                    f"Measure: {distance:.2f} mm  (dX {float(delta[0]):.2f}, dY {float(delta[1]):.2f}, dZ {float(delta[2]):.2f})"
+                )
+
+    def _update_prepare_action_state(self):
+        toolbar = getattr(self, "transform_toolbar", None)
+        if toolbar is None or not hasattr(toolbar, "set_action_enabled"):
+            return
+        all_ids = self.viewer.get_all_model_ids() if hasattr(self.viewer, "get_all_model_ids") else self.viewer.get_model_ids()
+        plate_ids = self.viewer.get_model_ids()
+        selected_ids = self._selected_model_ids()
+        has_any = bool(all_ids)
+        has_plate = bool(plate_ids)
+        has_selection = bool(selected_ids or self.current_model_id is not None)
+        selection_count = len(selected_ids) if selected_ids else (1 if self.current_model_id is not None else 0)
+        enabled_map = {
+            "add_plate": True,
+            "add_model": True,
+            "auto_orient": has_plate,
+            "arrange": has_plate,
+            "add_instance": has_selection,
+            "remove_instance": has_selection,
+            "split_objects": has_selection,
+            "split_parts": has_selection,
+            "variable_layer": has_selection,
+            "move": has_selection,
+            "rotate": has_selection,
+            "scale": has_selection,
+            "lay_on_face": has_selection,
+            "cut": has_selection,
+            "mesh_boolean": selection_count >= 2,
+            "support_paint": has_selection,
+            "seam_paint": has_selection,
+            "fuzzy_paint": has_selection,
+            "emboss": has_selection,
+            "measure": has_any,
+            "brim_ears": has_selection,
+            "assembly_view": has_any,
+        }
+        for action_id, enabled in enabled_map.items():
+            toolbar.set_action_enabled(action_id, enabled)
+
     def _sync_selection_from_viewer(self, model_ids: list):
         ids = [int(mid) for mid in model_ids] if model_ids else []
         self.current_model_id = ids[0] if ids else None
@@ -520,9 +678,10 @@ class UiMixin(UiMixinBase):
                 item = lw.item(row)
                 if item is None:
                     continue
-                if item.data(QtCore.Qt.UserRole) in ids:
+                item_model_id = self._panel_item_model_id(item)
+                if item_model_id in ids:
                     item.setSelected(True)
-                    if item.data(QtCore.Qt.UserRole) == self.current_model_id:
+                    if item_model_id == self.current_model_id:
                         lw.setCurrentItem(item)
         finally:
             lw.blockSignals(block)
@@ -534,6 +693,7 @@ class UiMixin(UiMixinBase):
                 self.statusBar().showMessage(f"Selected {len(ids)} models")
         else:
             self.statusBar().showMessage("Selection cleared")
+        self._update_prepare_action_state()
 
     def _on_viewer_model_moved(self, model_id: int, x: float, y: float):
         if self.current_model_id != model_id:
@@ -662,15 +822,105 @@ class UiMixin(UiMixinBase):
             self.preview_view.select_printer_by_name(name, emit=False)
 
     # ------------------------------------------------------ toolbar popups
+    def _set_prepare_tool(self, tool_id: str, status_message: str | None = None):
+        if hasattr(self.viewer, "set_prepare_tool"):
+            self.viewer.set_prepare_tool(tool_id)
+        if hasattr(self, "transform_toolbar") and hasattr(self.transform_toolbar, "set_active_tool"):
+            self.transform_toolbar.set_active_tool(tool_id)
+        if status_message:
+            self.statusBar().showMessage(status_message)
+
+    def _handle_prepare_action(self, action_id: str):
+        action = str(action_id or "").strip()
+        if not action:
+            return
+        if action == "add_model":
+            self.open_stl_dialog()
+            return
+        if action == "add_plate":
+            plate_id = self.viewer.add_plate() if hasattr(self.viewer, "add_plate") else None
+            if plate_id is not None:
+                if hasattr(self.model_panel, "refresh_from_viewer"):
+                    self.model_panel.refresh_from_viewer(self.viewer)
+                self.statusBar().showMessage(f"Added plate {int(plate_id):02d}")
+                self._push_undo_state()
+            return
+        if action == "auto_orient":
+            self._on_auto_orient_tool()
+            return
+        if action == "arrange":
+            self._on_arrange_tool()
+            return
+        if action == "add_instance":
+            self._add_instance_for_selection()
+            return
+        if action == "remove_instance":
+            model_ids = self._selected_model_ids()
+            if not model_ids and self.current_model_id is not None:
+                model_ids = [self.current_model_id]
+            self._remove_models(model_ids)
+            return
+        if action == "split_objects":
+            self._split_selected_to_objects()
+            return
+        if action == "split_parts":
+            self._split_selected_to_parts()
+            return
+        if action == "variable_layer":
+            self._open_variable_layer_dialog()
+            return
+        if action == "move":
+            self._on_move_tool()
+            return
+        if action == "rotate":
+            self._on_rotate_tool()
+            return
+        if action == "scale":
+            self._on_scale_tool()
+            return
+        if action == "lay_on_face":
+            self._lay_on_face()
+            return
+        if action == "cut":
+            self._open_cut_dialog()
+            return
+        if action == "mesh_boolean":
+            self._open_boolean_dialog()
+            return
+        if action == "support_paint":
+            self._enable_annotation_mode("support_paint", "Support painting: click faces to toggle support regions.")
+            return
+        if action == "seam_paint":
+            self._enable_annotation_mode("seam_paint", "Seam painting: click faces to mark preferred seam regions.")
+            return
+        if action == "fuzzy_paint":
+            self._enable_annotation_mode("fuzzy_paint", "Fuzzy skin painting: click faces to mark fuzzy regions.")
+            return
+        if action == "emboss":
+            self._open_emboss_dialog()
+            return
+        if action == "measure":
+            self._enable_measure_mode()
+            return
+        if action == "brim_ears":
+            self._open_brim_ears_dialog()
+            return
+        if action == "assembly_view":
+            self._toggle_assembly_view()
+            return
+
     def _on_move_tool(self):
+        self._set_prepare_tool("move")
         self._enable_move_gizmo()
         self._toggle_popup(self._popup_move, self.transform_toolbar.move_action)
 
     def _on_rotate_tool(self):
+        self._set_prepare_tool("rotate")
         self._enable_rotate_gizmo()
         self._toggle_popup(self._popup_rotate, self.transform_toolbar.rotate_action)
 
     def _on_scale_tool(self):
+        self._set_prepare_tool("scale")
         self._toggle_popup(self._popup_scale, self.transform_toolbar.scale_action)
 
     def _on_auto_orient_tool(self):
@@ -748,6 +998,309 @@ class UiMixin(UiMixinBase):
             mn, mx = bounds
             size = (float(mx[0] - mn[0]), float(mx[1] - mn[1]), float(mx[2] - mn[2]))
             self._popup_scale.set_size(size[0], size[1], size[2])
+
+    def _add_instance_for_selection(self):
+        if self.current_model_id is None:
+            QtWidgets.QMessageBox.warning(self.main, "Add instance", "Select an object first.")
+            return
+        new_id = self.viewer.add_instance_for_model(self.current_model_id) if hasattr(self.viewer, "add_instance_for_model") else None
+        if new_id is None:
+            QtWidgets.QMessageBox.warning(self.main, "Add instance", "Unable to create another instance.")
+            return
+        if hasattr(self.model_panel, "refresh_from_viewer"):
+            self.model_panel.refresh_from_viewer(self.viewer)
+        self.current_model_id = int(new_id)
+        self.viewer.set_selected_model(int(new_id))
+        self._select_model_in_panel(int(new_id))
+        self._sync_popups()
+        self._push_undo_state()
+
+    def _split_selected_to_objects(self):
+        if self.current_model_id is None:
+            QtWidgets.QMessageBox.warning(self.main, "Split", "Select an object first.")
+            return
+        new_ids = self.viewer.split_model_to_objects(self.current_model_id) if hasattr(self.viewer, "split_model_to_objects") else []
+        if not new_ids:
+            QtWidgets.QMessageBox.warning(self.main, "Split", "The selected object could not be split into separate objects.")
+            return
+        if hasattr(self.model_panel, "refresh_from_viewer"):
+            self.model_panel.refresh_from_viewer(self.viewer)
+        self.current_model_id = int(new_ids[0])
+        self.viewer.set_selected_models(new_ids, emit_signal=False)
+        self._select_model_in_panel(new_ids)
+        self._sync_popups()
+        self._push_undo_state()
+
+    def _split_selected_to_parts(self):
+        if self.current_model_id is None:
+            QtWidgets.QMessageBox.warning(self.main, "Split", "Select an object first.")
+            return
+        ok = self.viewer.split_model_to_parts(self.current_model_id) if hasattr(self.viewer, "split_model_to_parts") else False
+        if not ok:
+            QtWidgets.QMessageBox.warning(self.main, "Split", "The selected object could not be split into parts.")
+            return
+        if hasattr(self.model_panel, "refresh_from_viewer"):
+            self.model_panel.refresh_from_viewer(self.viewer)
+        self._sync_popups()
+        self._push_undo_state()
+
+    def _open_variable_layer_dialog(self):
+        if self.current_model_id is None:
+            QtWidgets.QMessageBox.warning(self.main, "Variable layer height", "Select an object first.")
+            return
+        bounds = self.viewer.get_model_bounds(self.current_model_id)
+        if bounds is None:
+            QtWidgets.QMessageBox.warning(self.main, "Variable layer height", "Selected object bounds are unavailable.")
+            return
+        mn, mx = bounds
+        dlg = QtWidgets.QDialog(self.main)
+        dlg.setWindowTitle("Variable layer height")
+        layout = QtWidgets.QFormLayout(dlg)
+        z_min_spin = QtWidgets.QDoubleSpinBox(dlg)
+        z_min_spin.setRange(float(mn[2]), float(mx[2]))
+        z_min_spin.setDecimals(3)
+        z_min_spin.setValue(float(mn[2]))
+        z_max_spin = QtWidgets.QDoubleSpinBox(dlg)
+        z_max_spin.setRange(float(mn[2]), float(mx[2]))
+        z_max_spin.setDecimals(3)
+        z_max_spin.setValue(float(mx[2]))
+        height_spin = QtWidgets.QDoubleSpinBox(dlg)
+        height_spin.setRange(0.02, 1.0)
+        height_spin.setDecimals(3)
+        height_spin.setValue(0.12)
+        layout.addRow("Z min (mm)", z_min_spin)
+        layout.addRow("Z max (mm)", z_max_spin)
+        layout.addRow("Layer height (mm)", height_spin)
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, parent=dlg)
+        layout.addRow(buttons)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
+            return
+        key = str(int(self.current_model_id))
+        tool_state = self.viewer.scene_state.tool_state
+        ranges = list(tool_state.adaptive_layer_ranges.get(key, []) or [])
+        ranges.append(
+            {
+                "z_min_mm": float(z_min_spin.value()),
+                "z_max_mm": float(z_max_spin.value()),
+                "layer_height_mm": float(height_spin.value()),
+            }
+        )
+        tool_state.adaptive_layer_ranges[key] = ranges
+        if hasattr(self.viewer, "sceneChanged"):
+            self.viewer.sceneChanged.emit()
+        self._push_undo_state()
+
+    def _open_cut_dialog(self):
+        if self.current_model_id is None:
+            QtWidgets.QMessageBox.warning(self.main, "Cut", "Select an object first.")
+            return
+        dlg = QtWidgets.QDialog(self.main)
+        dlg.setWindowTitle("Cut")
+        layout = QtWidgets.QFormLayout(dlg)
+        axis_combo = QtWidgets.QComboBox(dlg)
+        axis_combo.addItems(["X", "Y", "Z"])
+        position_spin = QtWidgets.QDoubleSpinBox(dlg)
+        position_spin.setRange(0.0, 100.0)
+        position_spin.setDecimals(1)
+        position_spin.setValue(50.0)
+        keep_combo = QtWidgets.QComboBox(dlg)
+        keep_combo.addItems(["both", "upper", "lower"])
+        layout.addRow("Axis", axis_combo)
+        layout.addRow("Position (%)", position_spin)
+        layout.addRow("Keep", keep_combo)
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, parent=dlg)
+        layout.addRow(buttons)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
+            return
+        new_ids = self.viewer.cut_model(
+            self.current_model_id,
+            axis=str(axis_combo.currentText()).strip().lower(),
+            position_ratio=float(position_spin.value()) / 100.0,
+            keep_mode=str(keep_combo.currentText()).strip().lower(),
+        ) if hasattr(self.viewer, "cut_model") else []
+        if not new_ids:
+            QtWidgets.QMessageBox.warning(self.main, "Cut", "The cut operation failed.")
+            return
+        if hasattr(self.model_panel, "refresh_from_viewer"):
+            self.model_panel.refresh_from_viewer(self.viewer)
+        self.current_model_id = int(new_ids[0])
+        self.viewer.set_selected_models(new_ids, emit_signal=False)
+        self._select_model_in_panel(new_ids)
+        self._push_undo_state()
+
+    def _open_boolean_dialog(self):
+        model_ids = self._selected_model_ids()
+        if len(model_ids) < 2:
+            QtWidgets.QMessageBox.warning(self.main, "Mesh Boolean", "Select at least two objects on the same plate.")
+            return
+        operation, ok = QtWidgets.QInputDialog.getItem(
+            self.main,
+            "Mesh Boolean",
+            "Operation",
+            ["union", "difference", "intersection"],
+            0,
+            False,
+        )
+        if not ok:
+            return
+        new_id = self.viewer.boolean_models(model_ids, operation=str(operation or "union")) if hasattr(self.viewer, "boolean_models") else None
+        if new_id is None:
+            QtWidgets.QMessageBox.warning(self.main, "Mesh Boolean", "The boolean operation failed.")
+            return
+        if hasattr(self.model_panel, "refresh_from_viewer"):
+            self.model_panel.refresh_from_viewer(self.viewer)
+        self.current_model_id = int(new_id)
+        self.viewer.set_selected_model(int(new_id))
+        self._select_model_in_panel(int(new_id))
+        self._push_undo_state()
+
+    def _enable_annotation_mode(self, tool_id: str, status_message: str):
+        self._hide_all_popups()
+        self._set_prepare_tool(tool_id, status_message)
+
+    def _enable_measure_mode(self):
+        if hasattr(self.viewer, "scene_state"):
+            self.viewer.scene_state.tool_state.measure_payload = {"points": []}
+        self._hide_all_popups()
+        self._set_prepare_tool("measure", "Measure: click two surface points to inspect distance and XYZ delta.")
+        if hasattr(self.viewer, "sceneChanged"):
+            self.viewer.sceneChanged.emit()
+
+    def _open_emboss_dialog(self):
+        if self.current_model_id is None:
+            QtWidgets.QMessageBox.warning(self.main, "Emboss", "Select an object first.")
+            return
+        text, ok = QtWidgets.QInputDialog.getText(self.main, "Emboss", "Text", text="Embossed text")
+        if not ok or not str(text or "").strip():
+            return
+        bounds = self.viewer.get_model_bounds(self.current_model_id)
+        if bounds is None:
+            QtWidgets.QMessageBox.warning(self.main, "Emboss", "Selected object bounds are unavailable.")
+            return
+        mn, mx = bounds
+        depth, ok = QtWidgets.QInputDialog.getDouble(self.main, "Emboss", "Depth (mm)", value=1.0, min=0.2, max=10.0, decimals=2)
+        if not ok:
+            return
+        operation, ok = QtWidgets.QInputDialog.getItem(self.main, "Emboss", "Operation", ["join", "cut"], 0, False)
+        if not ok:
+            return
+        width = max(8.0, min(float(mx[0] - mn[0]) * 0.75, 80.0))
+        height = max(4.0, min(float(mx[1] - mn[1]) * 0.18, 20.0))
+        box = trimesh.creation.box(extents=(width, height, float(depth)))
+        center = np.array(
+            [
+                float((mn[0] + mx[0]) * 0.5),
+                float((mn[1] + mx[1]) * 0.5),
+                float(mx[2] - (depth * 0.5 if str(operation).strip().lower() == "cut" else 0.0)),
+            ],
+            dtype=float,
+        )
+        box.apply_translation(center)
+        plate_id = int(self.viewer.models.get(self.current_model_id, {}).get("plate_id", self.viewer.get_current_plate_id()))
+        plate_origin = np.asarray(self.viewer._plate_origin(plate_id), dtype=float)
+        emboss_id = self.viewer.add_scene_object(
+            str(text).strip(),
+            "",
+            [
+                {
+                    "name": str(text).strip(),
+                    "vertices": np.asarray(box.vertices, dtype=float) - plate_origin,
+                    "faces": np.asarray(box.faces, dtype=int),
+                    "metadata": {"emboss_text": str(text).strip(), "operation": str(operation).strip().lower()},
+                }
+            ],
+            plate_id=plate_id,
+            object_metadata={"emboss_text": str(text).strip(), "operation": str(operation).strip().lower()},
+        )
+        self.viewer.scene_state.tool_state.emboss_payloads[str(int(emboss_id))] = [
+            {"text": str(text).strip(), "depth": float(depth), "operation": str(operation).strip().lower()}
+        ]
+        result_id = emboss_id
+        if str(operation).strip().lower() == "cut":
+            boolean_id = self.viewer.boolean_models([self.current_model_id, emboss_id], operation="difference")
+            if boolean_id is not None:
+                result_id = int(boolean_id)
+        if hasattr(self.model_panel, "refresh_from_viewer"):
+            self.model_panel.refresh_from_viewer(self.viewer)
+        self.current_model_id = int(result_id)
+        self.viewer.set_selected_model(int(result_id))
+        self._select_model_in_panel(int(result_id))
+        self._push_undo_state()
+
+    def _open_brim_ears_dialog(self):
+        if self.current_model_id is None:
+            QtWidgets.QMessageBox.warning(self.main, "Brim Ears", "Select an object first.")
+            return
+        diameter, ok = QtWidgets.QInputDialog.getDouble(self.main, "Brim Ears", "Head diameter (mm)", value=5.0, min=1.0, max=40.0, decimals=2)
+        if not ok:
+            return
+        bounds = self.viewer.get_model_bounds(self.current_model_id)
+        if bounds is None:
+            QtWidgets.QMessageBox.warning(self.main, "Brim Ears", "Selected object bounds are unavailable.")
+            return
+        mn, mx = bounds
+        points = [
+            [float(mn[0]), float(mn[1]), 0.0],
+            [float(mx[0]), float(mn[1]), 0.0],
+            [float(mx[0]), float(mx[1]), 0.0],
+            [float(mn[0]), float(mx[1]), 0.0],
+        ]
+        annotation = dict(self.viewer.scene_state.tool_state.annotations.get(str(int(self.current_model_id)), {}) or {})
+        annotation["brim_ears"] = {"points": points, "head_diameter_mm": float(diameter)}
+        self.viewer.scene_state.tool_state.annotations[str(int(self.current_model_id))] = annotation
+        if hasattr(self.viewer, "sceneChanged"):
+            self.viewer.sceneChanged.emit()
+        self.statusBar().showMessage(f"Brim ears staged for {len(points)} points at {float(diameter):.1f} mm.")
+        self._push_undo_state()
+
+    def _toggle_assembly_view(self):
+        if not hasattr(self.viewer, "scene_state"):
+            return
+        tool_state = self.viewer.scene_state.tool_state
+        enabled = not bool(tool_state.assembly_mode)
+        tool_state.assembly_mode = enabled
+        if enabled:
+            explosion, ok = QtWidgets.QInputDialog.getDouble(
+                self.main,
+                "Assembly View",
+                "Explosion ratio",
+                value=1.6,
+                min=1.0,
+                max=5.0,
+                decimals=2,
+            )
+            if not ok:
+                tool_state.assembly_mode = False
+                if hasattr(self.transform_toolbar, "set_active_tool"):
+                    self.transform_toolbar.set_active_tool("move")
+                return
+            tool_state.assembly_explosion_ratio = float(explosion)
+            selected = self._selected_model_ids() or self.viewer.get_model_ids()
+            centers = []
+            for model_id in selected:
+                bounds = self.viewer.get_model_bounds(model_id)
+                if bounds is None:
+                    continue
+                mn, mx = bounds
+                centers.append(((mn + mx) / 2.0, int(model_id)))
+            if centers:
+                mean = np.mean([center for center, _mid in centers], axis=0)
+                offsets = {}
+                for center, model_id in centers:
+                    delta = (np.asarray(center, dtype=float) - mean) * max(0.0, float(explosion) - 1.0)
+                    offsets[str(int(model_id))] = [float(delta[0]), float(delta[1]), float(delta[2])]
+                tool_state.assembly_offsets = offsets
+            self._set_prepare_tool("assembly_view", "Assembly view enabled. Trigger Assembly View again to return.")
+        else:
+            tool_state.assembly_offsets = {}
+            self._set_prepare_tool("move", "Assembly view disabled.")
+        if hasattr(self.viewer, "sceneChanged"):
+            self.viewer.sceneChanged.emit()
+        self.viewer.update()
 
     def _apply_theme(self):
         if hasattr(self, "prepare_view"):
@@ -1030,14 +1583,24 @@ class UiMixin(UiMixinBase):
         self._sync_popups()
 
     def _on_plate_remove_requested(self):
-        QtWidgets.QMessageBox.information(
-            self.main,
-            tr("viewer.plate.remove.title", "Plate"),
-            tr(
-                "viewer.plate.remove.single_plate_only",
-                "Single-plate mode is active. The current plate cannot be removed.",
-            ),
-        )
+        if not hasattr(self.viewer, "get_plate_ids") or len(self.viewer.get_plate_ids()) <= 1:
+            QtWidgets.QMessageBox.information(
+                self.main,
+                tr("viewer.plate.remove.title", "Plate"),
+                tr(
+                    "viewer.plate.remove.single_plate_only",
+                    "Single-plate mode is active. The current plate cannot be removed.",
+                ),
+            )
+            return
+        removed = self.viewer.delete_current_plate() if hasattr(self.viewer, "delete_current_plate") else False
+        if not removed:
+            QtWidgets.QMessageBox.warning(self.main, tr("viewer.plate.remove.title", "Plate"), "Unable to remove the current plate.")
+            return
+        if hasattr(self.model_panel, "refresh_from_viewer"):
+            self.model_panel.refresh_from_viewer(self.viewer)
+        self._refresh_files_view()
+        self._push_undo_state()
 
     def _on_plate_lock_changed(self, locked: bool):
         if bool(locked):
@@ -1190,7 +1753,7 @@ class UiMixin(UiMixinBase):
                 self.viewer.set_print_stats_visible(False)
             if hasattr(self.viewer, "set_preview_object_visible"):
                 self.viewer.set_preview_object_visible(False)
-            self._refresh_files_view()
+            self._refresh_files_view(prefer_cache=True)
         elif mode == "activity":
             self.prepare_view.hide()
             self.preview_view.hide()
@@ -1215,9 +1778,43 @@ class UiMixin(UiMixinBase):
         if hasattr(self, "_persist_active_mode"):
             self._persist_active_mode(mode)
 
-    def _refresh_files_view(self):
-        if hasattr(self, "files_view") and hasattr(self.files_view, "refresh_from_viewer"):
+    def _resolve_files_view_cache_file(self) -> Path:
+        override = getattr(self, "_files_view_cache_file", None)
+        if isinstance(override, Path):
+            return override
+        return _files_view_cache_path()
+
+    def _remember_files_view_models(self, models: list[dict[str, Any]]) -> None:
+        _save_files_view_cache(models, self._resolve_files_view_cache_file())
+
+    def _restore_files_view_from_cache(self) -> bool:
+        if not hasattr(self, "files_view") or not hasattr(self.files_view, "set_models"):
+            return False
+        payload = _load_files_view_cache(self._resolve_files_view_cache_file())
+        if not bool(payload.get("available", False)):
+            return False
+        models = [dict(item) for item in payload.get("models", []) if isinstance(item, dict)]
+        if not models:
+            return False
+        self.files_view.set_models(models)
+        return True
+
+    def _refresh_files_view(self, prefer_cache: bool = False):
+        if not hasattr(self, "files_view"):
+            return
+        if hasattr(self.files_view, "refresh_from_viewer"):
             self.files_view.refresh_from_viewer(self.viewer)
+        models = []
+        if hasattr(self.files_view, "models_snapshot"):
+            snapshot = self.files_view.models_snapshot()
+            if isinstance(snapshot, list):
+                models = [dict(item) for item in snapshot if isinstance(item, dict)]
+        if models:
+            self._remember_files_view_models(models)
+            return
+        if bool(prefer_cache) and self._restore_files_view_from_cache():
+            return
+        self._remember_files_view_models([])
 
     def _auto_slice_prepare(self):
         if not self.viewer.get_model_ids():
@@ -1591,6 +2188,18 @@ class UiMixin(UiMixinBase):
         else:
             QtWidgets.QMessageBox.warning(self.main, tr("diagnostics.title", "Connection Diagnostics"), detail)
 
+    def _on_device_download_installer_requested(self):
+        url = "https://github.com/Electrovian/Project-PrintNet/releases/latest"
+        reply = QtWidgets.QMessageBox.question(
+            self.main,
+            tr("installer.download.title", "Download Installer"),
+            tr("installer.download.prompt", "Open installer download page in your browser?"),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+        self._open_url(url, tr("installer.download.title", "Download Installer"))
+
     def _switch_mode_tab(self):
         if not hasattr(self, "_mode_tabs"):
             return
@@ -1614,7 +2223,7 @@ class UiMixin(UiMixinBase):
         item = lw.currentItem() or lw.item(0)
         if item is None:
             return
-        model_id = item.data(QtCore.Qt.UserRole)
+        model_id = self._panel_item_model_id(item)
         self.current_model_id = model_id
         self.viewer.set_selected_models(self._selected_model_ids(), emit_signal=False)
         self.statusBar().showMessage("Selected all models")
@@ -1625,7 +2234,9 @@ class UiMixin(UiMixinBase):
         for row in range(lw.count()):
             item = lw.item(row)
             if item is not None and item.isSelected():
-                selected.append(item.data(QtCore.Qt.UserRole))
+                model_id = self._panel_item_model_id(item)
+                if model_id is not None:
+                    selected.append(model_id)
         if not selected and self.current_model_id is not None:
             selected.append(self.current_model_id)
         return selected
@@ -1683,14 +2294,44 @@ class UiMixin(UiMixinBase):
         m = self.viewer.models.get(model_id)
         if not m:
             return None
+        parts = []
+        object_id = int(m.get("object_id", 0))
+        if hasattr(self.viewer, "scene_state") and object_id:
+            obj = self.viewer.scene_state.objects.get(object_id)
+            if obj is not None:
+                for part_id in obj.part_ids:
+                    part = self.viewer.scene_state.parts.get(int(part_id))
+                    if part is None:
+                        continue
+                    parts.append(
+                        {
+                            "name": str(part.name or f"Part {part_id}"),
+                            "vertices": np.asarray(part.vertices, dtype=float).copy(),
+                            "faces": np.asarray(part.faces, dtype=int).copy(),
+                            "source_path": str(part.source_path or ""),
+                            "metadata": dict(part.metadata or {}),
+                        }
+                    )
         return {
             "name": m.get("name", f"Model {model_id}"),
             "path": m.get("path", ""),
             "base_vertices": np.asarray(m.get("base_vertices", []), dtype=float).copy(),
             "faces": np.asarray(m.get("faces", []), dtype=int).copy(),
+            "parts": parts or [
+                {
+                    "name": m.get("name", f"Model {model_id}"),
+                    "vertices": np.asarray(m.get("base_vertices", []), dtype=float).copy(),
+                    "faces": np.asarray(m.get("faces", []), dtype=int).copy(),
+                    "source_path": m.get("path", ""),
+                    "metadata": {},
+                }
+            ],
             "scale": self._scale_to_vec(m.get("scale", 1.0)),
             "rotation": self._vec3(m.get("rotation", [0.0, 0.0, 0.0])),
             "offset": self._vec3(m.get("offset", [0.0, 0.0, 0.0])),
+            "plate_id": int(m.get("plate_id", getattr(self.viewer, "get_current_plate_id", lambda: 1)())),
+            "object_metadata": dict(m.get("object_metadata") or {}),
+            "instance_metadata": dict(m.get("metadata") or {}),
         }
 
     def _apply_model_payloads(self, payloads, offset_step=(0.0, 0.0, 0.0)):
@@ -1698,11 +2339,14 @@ class UiMixin(UiMixinBase):
             return []
         new_ids = []
         for idx, payload in enumerate(payloads):
-            model_id = self.viewer.add_model_from_data(
+            target_plate_id = getattr(self.viewer, "get_current_plate_id", lambda: payload.get("plate_id"))()
+            model_id = self.viewer.add_scene_object(
                 payload["name"],
                 payload["path"],
-                payload["base_vertices"],
-                payload["faces"],
+                payload.get("parts", []),
+                plate_id=target_plate_id,
+                object_metadata=dict(payload.get("object_metadata") or {}),
+                instance_metadata=dict(payload.get("instance_metadata") or {}),
             )
             delta = np.array(offset_step, dtype=float) * float(idx + 1)
             offset = np.array(payload["offset"], dtype=float) + delta
@@ -1712,9 +2356,10 @@ class UiMixin(UiMixinBase):
                 rotation_xyz=payload["rotation"],
                 offset_xyz=offset,
             )
-            self.model_panel.add_model(payload["name"], model_id)
             new_ids.append(model_id)
         if new_ids:
+            if hasattr(self.model_panel, "refresh_from_viewer"):
+                self.model_panel.refresh_from_viewer(self.viewer)
             self._select_model_in_panel(new_ids)
             self.current_model_id = new_ids[0]
             self.viewer.set_selected_models(new_ids, emit_signal=False)
@@ -1733,11 +2378,14 @@ class UiMixin(UiMixinBase):
         try:
             for model_id in model_ids:
                 self.viewer.remove_model(model_id)
-                self.model_panel.remove_model(model_id)
+            if hasattr(self.model_panel, "refresh_from_viewer"):
+                self.model_panel.refresh_from_viewer(self.viewer)
         finally:
             lw.blockSignals(block)
 
         remaining = self.viewer.get_model_ids()
+        if not remaining and hasattr(self.viewer, "get_all_model_ids"):
+            remaining = self.viewer.get_all_model_ids()
         self.current_model_id = remaining[0] if remaining else None
         selected = [self.current_model_id] if self.current_model_id is not None else []
         self.viewer.set_selected_models(selected, emit_signal=False)
@@ -1770,7 +2418,7 @@ class UiMixin(UiMixinBase):
                 item = lw.item(row)
                 if item is None:
                     continue
-                mid = item.data(QtCore.Qt.UserRole)
+                mid = self._panel_item_model_id(item)
                 if mid in current_set:
                     item.setSelected(True)
                     if mid == (ids[0] if ids else None):
@@ -1779,7 +2427,7 @@ class UiMixin(UiMixinBase):
             lw.blockSignals(block)
 
     def _selected_model_index(self):
-        model_ids = list(self.viewer.models.keys())
+        model_ids = list(self.viewer.get_all_model_ids() if hasattr(self.viewer, "get_all_model_ids") else self.viewer.models.keys())
         if self.current_model_id in model_ids:
             return model_ids.index(self.current_model_id)
         return None
@@ -1812,15 +2460,23 @@ class UiMixin(UiMixinBase):
         return np.array([val, val, val], dtype=float)
 
     def _capture_state(self):
+        if hasattr(self.viewer, "serialize_scene"):
+            return {
+                "scene": self.viewer.serialize_scene(),
+            }
         model_ids = list(self.viewer.models.keys())
-        selected_index = self._selected_model_index()
-        payloads = self._capture_models_payload(model_ids)
         return {
-            "models": payloads,
-            "selected_index": selected_index,
+            "models": self._capture_models_payload(model_ids),
+            "selected_index": self._selected_model_index(),
         }
 
     def _state_signature(self, state) -> tuple:
+        scene = state.get("scene")
+        if isinstance(scene, dict):
+            try:
+                return ("scene_v2", json.dumps(scene, sort_keys=True, default=str))
+            except Exception:
+                return ("scene_v2", str(scene))
         model_sigs = []
         for payload in state.get("models", []):
             scale = tuple(float(v) for v in np.asarray(payload["scale"], dtype=float).reshape(-1))
@@ -1875,43 +2531,56 @@ class UiMixin(UiMixinBase):
     def _restore_state(self, state):
         self._undo_in_progress = True
         try:
-            lw = self.model_panel.list_widget
-            block = lw.blockSignals(True)
-            try:
-                self.viewer.clear_all_models()
-                self.model_panel.list_widget.clear()
-                new_ids = []
-                for payload in state.get("models", []):
-                    model_id = self.viewer.add_model_from_data(
-                        payload["name"],
-                        payload["path"],
-                        payload["base_vertices"],
-                        payload["faces"],
-                    )
-                    self.model_panel.add_model(payload["name"], model_id)
-                    self.viewer.set_model_transform(
-                        model_id,
-                        scale=payload["scale"],
-                        rotation_xyz=payload["rotation"],
-                        offset_xyz=payload["offset"],
-                    )
-                    new_ids.append(model_id)
-            finally:
-                lw.blockSignals(block)
-
-            selected_index = state.get("selected_index")
-            selected_id = None
-            if new_ids:
-                if selected_index is not None and 0 <= selected_index < len(new_ids):
-                    selected_id = new_ids[selected_index]
+            scene = state.get("scene")
+            if isinstance(scene, dict) and hasattr(self.viewer, "restore_scene"):
+                self.viewer.restore_scene(scene)
+                if hasattr(self.model_panel, "refresh_from_viewer"):
+                    self.model_panel.refresh_from_viewer(self.viewer)
+                selected_ids = list(scene.get("selected_entity_ids", []) or [])
+                self.current_model_id = selected_ids[0] if selected_ids else None
+                self.viewer.set_selected_models(selected_ids, emit_signal=False)
+                if selected_ids:
+                    self._select_model_in_panel(selected_ids)
                 else:
-                    selected_id = new_ids[-1]
-            self.current_model_id = selected_id
-            self.viewer.set_selected_model(selected_id)
-            if selected_id is not None:
-                self._select_model_in_panel(selected_id)
+                    self.model_panel.list_widget.clearSelection()
             else:
-                self.model_panel.list_widget.clearSelection()
+                lw = self.model_panel.list_widget
+                block = lw.blockSignals(True)
+                try:
+                    self.viewer.clear_all_models()
+                    self.model_panel.list_widget.clear()
+                    new_ids = []
+                    for payload in state.get("models", []):
+                        model_id = self.viewer.add_model_from_data(
+                            payload["name"],
+                            payload["path"],
+                            payload["base_vertices"],
+                            payload["faces"],
+                        )
+                        self.model_panel.add_model(payload["name"], model_id)
+                        self.viewer.set_model_transform(
+                            model_id,
+                            scale=payload["scale"],
+                            rotation_xyz=payload["rotation"],
+                            offset_xyz=payload["offset"],
+                        )
+                        new_ids.append(model_id)
+                finally:
+                    lw.blockSignals(block)
+
+                selected_index = state.get("selected_index")
+                selected_id = None
+                if new_ids:
+                    if selected_index is not None and 0 <= selected_index < len(new_ids):
+                        selected_id = new_ids[selected_index]
+                    else:
+                        selected_id = new_ids[-1]
+                self.current_model_id = selected_id
+                self.viewer.set_selected_model(selected_id)
+                if selected_id is not None:
+                    self._select_model_in_panel(selected_id)
+                else:
+                    self.model_panel.list_widget.clearSelection()
             self._sync_popups()
         finally:
             self._undo_in_progress = False
@@ -2013,7 +2682,7 @@ class UiMixin(UiMixinBase):
         self._open_path(path, "Configuration Folder")
 
     def _check_for_updates(self):
-        url = "https://github.com/Electrovian/Project-EON-OpenSlicer/releases"
+        url = "https://github.com/Electrovian/Project-PrintNet/releases"
         self._open_url(url, "Updates")
 
     def _open_log_view(self):

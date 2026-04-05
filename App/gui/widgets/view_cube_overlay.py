@@ -14,6 +14,8 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         self._azimuth = -45.0
         self._elevation = 30.0
         self._cube_size = 84
+        self._min_cube_size = 72
+        self._max_cube_size = 220
         self._padding = 6
         self._face_regions = []
         self._edge_regions = []
@@ -44,6 +46,17 @@ class ViewCubeOverlay(QtWidgets.QWidget):
 
     def sizeHint(self):
         return QtCore.QSize(self._cube_size, self._cube_size)
+
+    def set_cube_size(self, size: int):
+        target = int(size)
+        target = max(int(self._min_cube_size), min(int(self._max_cube_size), target))
+        if target == self._cube_size:
+            return
+        self._cube_size = target
+        self._padding = max(4, int(round(target * 0.07)))
+        self._corner_radius = max(4, int(round(target * 0.07)))
+        self.updateGeometry()
+        self.update()
 
     def set_camera(self, azimuth: float, elevation: float):
         if abs(self._azimuth - azimuth) < 1e-3 and abs(self._elevation - elevation) < 1e-3:
@@ -95,7 +108,7 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         p.setPen(QtGui.QPen(text))
         font = p.font()
         font.setBold(True)
-        font.setPointSize(7)
+        font.setPointSize(max(7, int(round(self._cube_size * 0.09))))
         p.setFont(font)
         metrics = QtGui.QFontMetrics(font)
         rect = QtCore.QRectF(metrics.boundingRect(label))

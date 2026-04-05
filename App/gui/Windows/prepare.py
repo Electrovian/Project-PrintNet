@@ -48,16 +48,13 @@ class PrepareView(QtCore.QObject):
         toolbar = TransformToolbar(self.main)
         self.main.addToolBar(QtCore.Qt.TopToolBarArea, toolbar)
         toolbar.setMovable(False)
-        toolbar.addRequested.connect(self.main.open_stl_dialog)
-        toolbar.moveRequested.connect(self.main._on_move_tool)
-        toolbar.rotateRequested.connect(self.main._on_rotate_tool)
-        toolbar.scaleRequested.connect(self.main._on_scale_tool)
-        toolbar.autoOrientRequested.connect(self.main._on_auto_orient_tool)
-        toolbar.autoArrangeRequested.connect(self.main._on_arrange_tool)
-        toolbar.layOnFaceRequested.connect(self.main._lay_on_face)
+        toolbar.actionTriggered.connect(self.main._handle_prepare_action)
+        for action in toolbar.action_registry.values():
+            self.main.addAction(action)
 
         self.transform_toolbar = toolbar
         self.main.transform_toolbar = toolbar
+        self.main.prepare_action_registry = toolbar.action_registry
 
     def _build_popups(self):
         self.main._popup_move = MovePopup(self.main)

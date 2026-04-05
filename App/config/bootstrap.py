@@ -29,6 +29,16 @@ def user_config_dir() -> Path:
     return Path.home().joinpath(".config", "eon-openslicer")
 
 
+def user_cache_dir() -> Path:
+    if os.name == "nt":
+        root = os.environ.get("LOCALAPPDATA") or str(Path.home())
+        return Path(root).joinpath("EON-OpenSlicer", "cache")
+    xdg = str(os.environ.get("XDG_CACHE_HOME", "")).strip()
+    if xdg:
+        return Path(xdg).joinpath("eon-openslicer")
+    return Path.home().joinpath(".cache", "eon-openslicer")
+
+
 def bootstrap_config_path() -> Path:
     return user_config_dir().joinpath("bootstrap.json")
 
@@ -116,4 +126,3 @@ def setup_completed(payload: Mapping[str, Any] | None) -> bool:
     if not stamp:
         return False
     return True
-

@@ -2,6 +2,14 @@ from dataclasses import dataclass, field
 import math
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+from .gcode_contract import (
+    GCodeOutputContract,
+    build_output_contract,
+    build_setup_lines,
+    build_teardown_lines,
+    translate_xy_to_bed,
+)
+
 _XYZ_DIGITS = 3
 _E_DIGITS = 5
 _XYZ_EPSILON = 10 ** (-_XYZ_DIGITS)
@@ -94,6 +102,11 @@ class SliceSettings:
     min_move_distance: float = 0.0
     start_gcode: Optional[List[str] | str] = None
     end_gcode: Optional[List[str] | str] = None
+    bed_x: float = 220.0
+    bed_y: float = 220.0
+    gcode_absolute_extrusion: bool | None = None
+    nozzle_temperature_c: float | None = None
+    bed_temperature_c: float | None = None
     filament_name: str = "Hyper PLA"
     filament_color: str = "#42d94a"
     filament_density: float = 1.24
@@ -253,6 +266,17 @@ class SliceSettings:
                 return fallback_value
             return fallback_value if numeric <= 0.0 else numeric
 
+        def _optional_positive(value: object) -> float | None:
+            if value is None:
+                return None
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                return None
+            if numeric < 0.0:
+                return None
+            return numeric
+
         self.seam_position = str(self.seam_position).strip().lower() or "aligned"
         self.staggered_inner_seams = bool(self.staggered_inner_seams)
         self.seam_gap = max(0.0, min(100.0, float(self.seam_gap)))
@@ -283,6 +307,12 @@ class SliceSettings:
         if self.end_gcode is None:
             self.end_gcode = list(profile.end_gcode)
         self.end_gcode = _normalize_gcode_lines(self.end_gcode)
+        self.bed_x = max(1.0, float(self.bed_x))
+        self.bed_y = max(1.0, float(self.bed_y))
+        if self.gcode_absolute_extrusion is not None:
+            self.gcode_absolute_extrusion = bool(self.gcode_absolute_extrusion)
+        self.nozzle_temperature_c = _optional_positive(self.nozzle_temperature_c)
+        self.bed_temperature_c = _optional_positive(self.bed_temperature_c)
         self.filament_density = max(0.1, float(self.filament_density))
         self.infill_wall_overlap_percent = max(0.0, min(100.0, float(self.infill_wall_overlap_percent)))
         self.top_bottom_infill_wall_overlap_percent = max(
@@ -486,6 +516,19 @@ class GCodeWriter:
     _segment_layer_z: Optional[float] = field(default=None, init=False, repr=False)
     _seen_extrusion_segments: set = field(default_factory=set, init=False, repr=False)
     _seen_arc_segments: set = field(default_factory=set, init=False, repr=False)
+    output_contract: GCodeOutputContract = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self.output_contract = build_output_contract(
+            bed_x_mm=self.settings.bed_x,
+            bed_y_mm=self.settings.bed_y,
+            firmware_flavor=self.settings.firmware_flavor,
+            absolute_extrusion=self.settings.gcode_absolute_extrusion,
+            startup_macro=self.settings.start_gcode,
+            end_macro=self.settings.end_gcode,
+            nozzle_temperature_c=self.settings.nozzle_temperature_c,
+            bed_temperature_c=self.settings.bed_temperature_c,
+        )
 
     def add(self, line: str):
         self.lines.append(line)
@@ -509,8 +552,10 @@ class GCodeWriter:
                             feed_rate: Optional[float]) -> Optional[str]:
         parts = [cmd]
         if x is not None:
+            x, _ = translate_xy_to_bed(x, 0.0, self.output_contract.bed_x_mm, self.output_contract.bed_y_mm)
             parts.append(f"X{_format_gcode_number(x, _XYZ_DIGITS)}")
         if y is not None:
+            _, y = translate_xy_to_bed(0.0, y, self.output_contract.bed_x_mm, self.output_contract.bed_y_mm)
             parts.append(f"Y{_format_gcode_number(y, _XYZ_DIGITS)}")
         if z is not None:
             parts.append(f"Z{_format_gcode_number(z, _XYZ_DIGITS)}")
@@ -533,10 +578,16 @@ class GCodeWriter:
                          j: float,
                          e: Optional[float],
                          feed_rate: Optional[float]) -> str:
+        machine_x, machine_y = translate_xy_to_bed(
+            x,
+            y,
+            self.output_contract.bed_x_mm,
+            self.output_contract.bed_y_mm,
+        )
         parts = [
             cmd,
-            f"X{_format_gcode_number(x, _XYZ_DIGITS)}",
-            f"Y{_format_gcode_number(y, _XYZ_DIGITS)}",
+            f"X{_format_gcode_number(machine_x, _XYZ_DIGITS)}",
+            f"Y{_format_gcode_number(machine_y, _XYZ_DIGITS)}",
             f"Z{_format_gcode_number(z, _XYZ_DIGITS)}",
             f"I{_format_gcode_number(i, _XYZ_DIGITS)}",
             f"J{_format_gcode_number(j, _XYZ_DIGITS)}",
@@ -606,22 +657,16 @@ class GCodeWriter:
                 self.add(line)
 
     def write_header(self):
-        self.add("; EON-OpenSlicer demo G-code")
-        self.add("G90 ; absolute positioning")
-        self.add("M82 ; absolute extrusion")
-        self.add("G28 ; home all axes")
-        if self.settings.start_gcode:
-            self._emit_macro(self.settings.start_gcode)
+        self._emit_macro(
+            build_setup_lines(
+                self.output_contract,
+                header_comment="EON-OpenSlicer legacy emitter",
+            )
+        )
         self.add("")
 
     def write_footer(self):
-        if self.settings.end_gcode:
-            self._emit_macro(self.settings.end_gcode)
-        self.add("M104 S0 ; hotend off")
-        self.add("M140 S0 ; bed off")
-        self.add("G28 X0 Y0 ; home XY")
-        self.add("M84 ; disable motors")
-        self.add("; End of EON-OpenSlicer demo")
+        self._emit_macro(build_teardown_lines(self.output_contract))
 
     def move_travel(self, x: float, y: float, z: float, f: float, retract: bool = True):
         eps = self._axis_eps()
@@ -671,10 +716,11 @@ class GCodeWriter:
                 return
         self.unretract()
         self.e_position += extrusion
+        e_value = self.e_position if self.output_contract.absolute_extrusion else extrusion
         x_out = x if abs(dx) >= eps else None
         y_out = y if abs(dy) >= eps else None
         z_out = z if abs(dz) >= eps else None
-        line = self._format_linear_move("G1", x_out, y_out, z_out, self.e_position, speed * 60.0)
+        line = self._format_linear_move("G1", x_out, y_out, z_out, e_value, speed * 60.0)
         if line:
             self.add(line)
         self.position = (x, y, z)
@@ -706,7 +752,8 @@ class GCodeWriter:
         i = center_xy[0] - self.position[0]
         j = center_xy[1] - self.position[1]
         cmd = "G2" if clockwise else "G3"
-        self.add(self._format_arc_move(cmd, x, y, z, i, j, self.e_position, speed * 60.0))
+        e_value = self.e_position if self.output_contract.absolute_extrusion else extrusion
+        self.add(self._format_arc_move(cmd, x, y, z, i, j, e_value, speed * 60.0))
         self.position = (x, y, z)
         if extrusion > 0.0:
             self.has_extruded = True
@@ -717,11 +764,15 @@ class GCodeWriter:
         if self.settings.retract_style == "firmware":
             self.add("G10")
         else:
-            self.e_position -= self.settings.retract_distance
-            line = self._format_linear_move("G1", None, None, None, self.e_position,
+            if self.output_contract.absolute_extrusion:
+                self.e_position -= self.settings.retract_distance
+                e_value = self.e_position
+            else:
+                e_value = -self.settings.retract_distance
+            line = self._format_linear_move("G1", None, None, None, e_value,
                                             self.settings.retract_speed * 60.0)
             if line:
-                self.add(line)
+                self.add(f"{line} ; retract")
         self.is_retracted = True
 
     def unretract(self):
@@ -730,11 +781,15 @@ class GCodeWriter:
         if self.settings.retract_style == "firmware":
             self.add("G11")
         else:
-            self.e_position += self.settings.retract_distance
-            line = self._format_linear_move("G1", None, None, None, self.e_position,
+            if self.output_contract.absolute_extrusion:
+                self.e_position += self.settings.retract_distance
+                e_value = self.e_position
+            else:
+                e_value = self.settings.retract_distance
+            line = self._format_linear_move("G1", None, None, None, e_value,
                                             self.settings.retract_speed * 60.0)
             if line:
-                self.add(line)
+                self.add(f"{line} ; unretract")
         self.is_retracted = False
 
     def extrusion_for_length(self,

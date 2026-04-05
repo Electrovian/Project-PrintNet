@@ -4,7 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest import mock
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -17,6 +17,7 @@ from config.bootstrap import (  # noqa: E402
     normalize_bootstrap_config,
     save_bootstrap_config,
     setup_completed,
+    user_cache_dir,
 )
 
 
@@ -57,6 +58,40 @@ class BootstrapConfigTests(unittest.TestCase):
                 self.assertEqual(loaded["ui_language"], "es")
                 self.assertEqual(loaded["region_code"], "US-TX")
                 self.assertTrue(setup_completed(loaded))
+
+    def test_user_cache_dir_windows_uses_localappdata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).joinpath("LocalAppData")
+            with mock.patch("config.bootstrap.os.name", "nt"):
+                with mock.patch.dict(os.environ, {"LOCALAPPDATA": str(root)}, clear=False):
+                    self.assertEqual(user_cache_dir(), root.joinpath("EON-OpenSlicer", "cache"))
+
+    def test_user_cache_dir_uses_xdg_cache_home_when_set(self):
+        class _FakePosixPath(PurePosixPath):
+            @classmethod
+            def home(cls):
+                return cls("/home/test")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _FakePosixPath("/tmp/xdg-cache")
+            with mock.patch("config.bootstrap.os.name", "posix"):
+                with mock.patch("config.bootstrap.Path", _FakePosixPath):
+                    with mock.patch.dict(os.environ, {"XDG_CACHE_HOME": str(root)}, clear=False):
+                        self.assertEqual(user_cache_dir(), root.joinpath("eon-openslicer"))
+
+    def test_user_cache_dir_defaults_to_home_cache_directory(self):
+        class _FakePosixPath(PurePosixPath):
+            @classmethod
+            def home(cls):
+                return cls("/home/tester")
+
+        with mock.patch("config.bootstrap.os.name", "posix"):
+            with mock.patch("config.bootstrap.Path", _FakePosixPath):
+                with mock.patch.dict(os.environ, {"XDG_CACHE_HOME": ""}, clear=False):
+                    self.assertEqual(
+                        user_cache_dir(),
+                        _FakePosixPath.home().joinpath(".cache", "eon-openslicer"),
+                    )
 
 
 if __name__ == "__main__":

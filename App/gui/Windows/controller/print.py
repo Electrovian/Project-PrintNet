@@ -5,7 +5,7 @@ import os
 import re
 import tempfile
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -19,6 +19,7 @@ from slicer_v2.legacy_ai_checks import run_ai_checks
 from slicer_v2.legacy_gcode_preview import parse_gcode_preview, parse_gcode_preview_file
 from slicer_v2.legacy_gcode_stats import estimate_gcode_file
 from slicer_v2.legacy_gcode_writer import SliceSettings
+from slicer_v2.gcode_contract import resolve_output_settings_payload
 try:
     from slicer_v2.legacy_slicer.emit import slice_trimesh_auto as slice_v2_trimesh_auto
 except Exception:
@@ -44,6 +45,107 @@ def _sanitize_gcode_basename(value: str, default: str = "plate") -> str:
     cleaned = cleaned.replace(" ", "_").strip("._")
     cleaned = re.sub(r"_+", "_", cleaned)
     return cleaned or default
+
+
+def _settings_to_dict(settings: Any) -> dict[str, Any]:
+    if settings is None:
+        return {}
+
+
+def _resolve_slice_output_contract(
+    settings: SliceSettings,
+    *,
+    runtime_printer_state: object | None = None,
+    printer: dict[str, object] | None = None,
+) -> tuple[SliceSettings, dict[str, Any]]:
+    payload = resolve_output_settings_payload(
+        settings,
+        runtime_printer_state=runtime_printer_state,
+        printer=printer,
+    )
+    resolved_settings = replace(
+        settings,
+        firmware_flavor=str(payload.get("firmware_flavor", settings.firmware_flavor)),
+        start_gcode=list(payload.get("start_gcode", settings.start_gcode or [])),
+        end_gcode=list(payload.get("end_gcode", settings.end_gcode or [])),
+        bed_x=float(payload.get("bed_x", settings.bed_x)),
+        bed_y=float(payload.get("bed_y", settings.bed_y)),
+        gcode_absolute_extrusion=bool(payload.get("gcode_absolute_extrusion", True)),
+        nozzle_temperature_c=payload.get("nozzle_temperature_c"),
+        bed_temperature_c=payload.get("bed_temperature_c"),
+    )
+    return resolved_settings, payload
+    if is_dataclass(settings):
+        return asdict(settings)
+    if isinstance(settings, dict):
+        return dict(settings)
+    try:
+        return dict(settings)
+    except Exception:
+        pass
+    try:
+        return {
+            str(key): value
+            for key, value in vars(settings).items()
+            if not str(key).startswith("_")
+        }
+    except Exception:
+        return {}
+
+
+def _merged_adaptive_layer_ranges(raw_ranges: list[dict[str, object]] | tuple[dict[str, object], ...] | None) -> list[dict[str, float]]:
+    normalized: list[dict[str, float]] = []
+    for item in list(raw_ranges or []):
+        if not isinstance(item, dict):
+            continue
+        try:
+            z_min = float(item.get("z_min_mm", item.get("z_min", item.get("start", 0.0))))
+            z_max = float(item.get("z_max_mm", item.get("z_max", item.get("end", 0.0))))
+            layer_height = float(item.get("layer_height_mm", item.get("layer_height", item.get("height", 0.0))))
+        except (TypeError, ValueError):
+            continue
+        if z_max <= z_min or layer_height <= 0.0:
+            continue
+        normalized.append(
+            {
+                "z_min_mm": z_min,
+                "z_max_mm": z_max,
+                "layer_height_mm": layer_height,
+            }
+        )
+    if not normalized:
+        return []
+
+    epsilon = 1e-9
+    breakpoints = sorted({float(item["z_min_mm"]) for item in normalized} | {float(item["z_max_mm"]) for item in normalized})
+    merged: list[dict[str, float]] = []
+    for start, end in zip(breakpoints, breakpoints[1:]):
+        if end <= start + epsilon:
+            continue
+        midpoint = (start + end) * 0.5
+        overlapping = [
+            float(item["layer_height_mm"])
+            for item in normalized
+            if float(item["z_min_mm"]) - epsilon <= midpoint <= float(item["z_max_mm"]) + epsilon
+        ]
+        if not overlapping:
+            continue
+        target_height = min(overlapping)
+        if (
+            merged
+            and abs(float(merged[-1]["layer_height_mm"]) - target_height) <= epsilon
+            and abs(float(merged[-1]["z_max_mm"]) - start) <= epsilon
+        ):
+            merged[-1]["z_max_mm"] = float(end)
+        else:
+            merged.append(
+                {
+                    "z_min_mm": float(start),
+                    "z_max_mm": float(end),
+                    "layer_height_mm": float(target_height),
+                }
+            )
+    return merged
 
 
 class PrintMixin:
@@ -239,11 +341,39 @@ class PrintMixin:
                     "scale": [float(v) for v in np.asarray(scale).reshape(-1)],
                     "offset": [float(v) for v in np.asarray(offset).reshape(-1)],
                     "rotation": [float(v) for v in np.asarray(rotation).reshape(-1)],
+                    "object_id": int(self.viewer.models.get(mid, {}).get("object_id", 0)),
+                    "plate_id": int(self.viewer.models.get(mid, {}).get("plate_id", 0)),
                 }
             )
         if not models_payload:
             return None
-        payload = {"models": models_payload, "settings": asdict(settings)}
+        tool_state = {}
+        if hasattr(self.viewer, "scene_state"):
+            active_ids = {str(int(mid)) for mid in model_ids}
+            raw_tool_state = self.viewer.scene_state.tool_state
+            tool_state = {
+                "adaptive_layer_ranges": {
+                    key: value
+                    for key, value in dict(raw_tool_state.adaptive_layer_ranges or {}).items()
+                    if key in active_ids
+                },
+                "annotations": {
+                    key: value
+                    for key, value in dict(raw_tool_state.annotations or {}).items()
+                    if key in active_ids
+                },
+                "emboss_payloads": {
+                    key: value
+                    for key, value in dict(raw_tool_state.emboss_payloads or {}).items()
+                    if key in active_ids
+                },
+            }
+        payload = {
+            "plate_id": int(self.viewer.get_current_plate_id()) if hasattr(self.viewer, "get_current_plate_id") else 1,
+            "models": models_payload,
+            "settings": _settings_to_dict(settings),
+            "tool_state": tool_state,
+        }
         return json.dumps(payload, sort_keys=True, default=str)
 
     def _resolve_reusable_gcode_path(self, settings: SliceSettings) -> str | None:
@@ -329,6 +459,13 @@ class PrintMixin:
     ) -> str:
         output_path = self._resolve_output_gcode_path(source_path, output_gcode_path)
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        active_printer = getattr(getattr(self, "printer_manager", None), "active_printer", None)
+        printer_payload = dict(active_printer) if isinstance(active_printer, dict) else active_printer
+        settings, resolved_output_settings = _resolve_slice_output_contract(
+            settings,
+            runtime_printer_state=getattr(self, "runtime_printer_state", None),
+            printer=printer_payload,
+        )
 
         mesh_for_v2 = combined_mesh.copy()
         mesh_shift = np.array([0.0, 0.0, 0.0], dtype=float)
@@ -397,12 +534,10 @@ class PrintMixin:
                 "gpu_mode": str(perf.get("gpu_mode", "auto")),
                 "mesh_count": int(len(meshes)),
             }
-            resolved_settings = asdict(settings)
-            resolved_settings["gcode_validation_allow_negative_xy"] = True
             context = create_v2_context(
                 job_id=f"eon-v2-{uuid.uuid4().hex[:12]}",
                 mesh_path=temp_path,
-                resolved_settings=resolved_settings,
+                resolved_settings=dict(resolved_output_settings),
                 runtime_settings=runtime_settings,
             )
             result = run_v2_pipeline(context)
@@ -572,6 +707,33 @@ class PrintMixin:
 
     def _settings_with_slice_defaults(self) -> SliceSettings:
         settings = self.settings_panel.to_settings()
+        viewer = getattr(self, "viewer", None)
+        support_paint_present = False
+        seam_paint_present = False
+        fuzzy_paint_present = False
+        brim_ears_present = False
+        if viewer is not None and hasattr(viewer, "scene_state"):
+            adaptive_ranges: list[dict[str, object]] = list(getattr(settings, "adaptive_layer_ranges", ()) or [])
+            tool_state = viewer.scene_state.tool_state
+            for model_id in viewer.get_model_ids():
+                adaptive_ranges.extend(list(tool_state.adaptive_layer_ranges.get(str(int(model_id)), []) or []))
+                annotation = dict(tool_state.annotations.get(str(int(model_id)), {}) or {})
+                support_paint_present = support_paint_present or bool(annotation.get("support"))
+                seam_paint_present = seam_paint_present or bool(annotation.get("seam"))
+                fuzzy_paint_present = fuzzy_paint_present or bool(annotation.get("fuzzy"))
+                brim_ears_present = brim_ears_present or bool(annotation.get("brim_ears"))
+            merged_ranges = _merged_adaptive_layer_ranges(adaptive_ranges)
+            if merged_ranges:
+                settings.adaptive_layering_enabled = True
+                settings.adaptive_layer_ranges = list(merged_ranges)
+        if support_paint_present:
+            settings.support_enabled = True
+        if seam_paint_present and not str(settings.seam_position or "").strip():
+            settings.seam_position = "aligned"
+        if fuzzy_paint_present and str(settings.fuzzy_skin or "none").strip().lower() == "none":
+            settings.fuzzy_skin = "all"
+        if brim_ears_present and float(getattr(settings, "brim_width", 0.0) or 0.0) <= 0.0:
+            settings.brim_width = 3.0
         return settings
 
     def slice_current_plate(self):
@@ -591,7 +753,7 @@ class PrintMixin:
             self._warn_plate_data_unavailable()
             return
 
-        settings = self.settings_panel.to_settings()
+        settings = self._settings_with_slice_defaults()
         reusable_path = self._resolve_reusable_gcode_path(settings)
         if reusable_path:
             self._send_existing_gcode(printer, reusable_path)
@@ -670,7 +832,7 @@ class PrintMixin:
         if not out_path.lower().endswith(".gcode"):
             out_path = f"{out_path}.gcode"
 
-        settings = self.settings_panel.to_settings()
+        settings = self._settings_with_slice_defaults()
         signature = self._build_slice_signature(settings)
         self._last_slice_meshes = [m for m in meshes]
         preferred_engine = self._slicer_engine_preference()
@@ -710,7 +872,7 @@ class PrintMixin:
         self._start_worker(worker)
 
     def _on_device_send_requested(self, printer):
-        settings = self.settings_panel.to_settings()
+        settings = self._settings_with_slice_defaults()
         gcode_path = self._resolve_reusable_gcode_path(settings)
         if gcode_path:
             self._send_existing_gcode(printer, gcode_path)
@@ -769,6 +931,18 @@ class PrintMixin:
         if not hasattr(self, "preview_view"):
             return
         settings = self.settings_panel.to_settings() if hasattr(self, "settings_panel") else None
+        preview_settings = settings
+        if preview_settings is not None:
+            try:
+                active_printer = getattr(getattr(self, "printer_manager", None), "active_printer", None)
+                printer_payload = dict(active_printer) if isinstance(active_printer, dict) else active_printer
+                preview_settings, _resolved_payload = _resolve_slice_output_contract(
+                    preview_settings,
+                    runtime_printer_state=getattr(self, "runtime_printer_state", None),
+                    printer=printer_payload,
+                )
+            except Exception:
+                preview_settings = settings
         stats = dict(stats or {})
         if settings is not None and self._last_slice_meshes:
             try:
@@ -797,13 +971,13 @@ class PrintMixin:
             preview_text, _total_lines = self._read_gcode_preview(gcode_path)
         if preview is None:
             try:
-                preview = parse_gcode_preview_file(gcode_path, settings=settings)
+                preview = parse_gcode_preview_file(gcode_path, settings=preview_settings)
             except Exception as exc:
                 stats["preview_parse_error"] = str(exc)
                 try:
-                    preview = parse_gcode_preview(preview_text.splitlines(), settings=settings)
+                    preview = parse_gcode_preview(preview_text.splitlines(), settings=preview_settings)
                 except Exception:
-                    preview = parse_gcode_preview([], settings=settings)
+                    preview = parse_gcode_preview([], settings=preview_settings)
 
         self.preview_view.set_gcode_text(preview_text)
         self.preview_view.update_stats(stats)
@@ -811,9 +985,9 @@ class PrintMixin:
             self.viewer.set_print_stats(stats)
 
         if hasattr(self.preview_view, "set_preview_settings"):
-            self.preview_view.set_preview_settings(settings)
+            self.preview_view.set_preview_settings(preview_settings)
         if hasattr(self.viewer, "set_preview_settings"):
-            self.viewer.set_preview_settings(settings)
+            self.viewer.set_preview_settings(preview_settings)
         if hasattr(self.viewer, "set_gcode_preview"):
             self.viewer.set_gcode_preview(preview)
         self.preview_view.set_preview_data(preview)

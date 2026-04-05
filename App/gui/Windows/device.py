@@ -12,6 +12,7 @@ class DeviceView(QtWidgets.QWidget):
     printer_changed = QtCore.pyqtSignal(object)
     add_printer_requested = QtCore.pyqtSignal()
     diagnostics_requested = QtCore.pyqtSignal(object)
+    download_installer_requested = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -117,11 +118,15 @@ class DeviceView(QtWidgets.QWidget):
         self._email_btn = QtWidgets.QPushButton(tr("device.button.send_email", "Send email"))
         self._add_printer_btn = QtWidgets.QPushButton(tr("device.button.add_printer", "Add printer"))
         self._diagnostics_btn = QtWidgets.QPushButton(tr("device.button.diagnostics", "Diagnostics"))
+        self._download_installer_btn = QtWidgets.QPushButton(
+            tr("device.button.download_installer", "Download installer")
+        )
         btn_row.addWidget(self._send_btn)
         btn_row.addWidget(self._save_btn)
         btn_row.addWidget(self._email_btn)
         btn_row.addWidget(self._add_printer_btn)
         btn_row.addWidget(self._diagnostics_btn)
+        btn_row.addWidget(self._download_installer_btn)
         left_col.addLayout(btn_row)
         left_col.addStretch(1)
 
@@ -173,6 +178,7 @@ class DeviceView(QtWidgets.QWidget):
         self._email_btn.clicked.connect(self.email_requested.emit)
         self._add_printer_btn.clicked.connect(self.add_printer_requested.emit)
         self._diagnostics_btn.clicked.connect(self._emit_diagnostics)
+        self._download_installer_btn.clicked.connect(self.download_installer_requested.emit)
 
         self.apply_theme()
 

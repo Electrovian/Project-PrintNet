@@ -13,6 +13,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from ..i18n import tr
 from ..theme import theme_qcolor, theme_value
 from ..widgets.view_cube_overlay import ViewCubeOverlay
+from config.defaults import DEFAULTS
 
 
 class PanelMixin:
@@ -486,13 +487,15 @@ class PanelMixin:
         self._sync_bed_texture_item()
 
     def _clear_bed_texture_item(self):
-        item = getattr(self, "_bed_texture_item", None)
-        if item is None:
-            return
-        try:
-            self.removeItem(item)
-        except Exception:
-            pass
+        items = dict(getattr(self, "_plate_texture_items", {}) or {})
+        for item in items.values():
+            if item is None:
+                continue
+            try:
+                self.removeItem(item)
+            except Exception:
+                pass
+        self._plate_texture_items = {}
         self._bed_texture_item = None
 
     def _sync_bed_texture_item(self):
@@ -519,38 +522,92 @@ class PanelMixin:
         rgba[:, :, 3] = alpha
         rgba = np.ascontiguousarray(rgba)
 
-        try:
-            image_item = gl.GLImageItem(rgba, smooth=True, glOptions="translucent")
-        except Exception:
-            return
-
         scale_x = float(self._bed_size[0]) / max(1.0, float(rgba.shape[0]))
         scale_y = float(self._bed_size[1]) / max(1.0, float(rgba.shape[1]))
-        image_item.scale(scale_x, scale_y, 1.0)
-        image_item.translate(-float(self._bed_size[0]) * 0.5, -float(self._bed_size[1]) * 0.5, -0.05)
-        self._bed_texture_item = image_item
-        self.addItem(image_item)
+        self._plate_texture_items = {}
+        for plate_id in getattr(self, "get_plate_ids", lambda: [1])():
+            try:
+                image_item = gl.GLImageItem(rgba.copy(), smooth=True, glOptions="translucent")
+            except Exception:
+                continue
+            image_item.scale(scale_x, scale_y, 1.0)
+            origin = getattr(self, "_plate_origin")(int(plate_id))
+            image_item.translate(
+                float(origin[0]) - (float(self._bed_size[0]) * 0.5),
+                float(origin[1]) - (float(self._bed_size[1]) * 0.5),
+                -0.05,
+            )
+            self._plate_texture_items[int(plate_id)] = image_item
+            self.addItem(image_item)
+        first_id = next(iter(self._plate_texture_items.keys()), None)
+        self._bed_texture_item = self._plate_texture_items.get(first_id) if first_id is not None else None
 
     def _sync_bed_grid(self):
-        if getattr(self, "_grid_item", None) is None:
-            return
         size_x = float(self._bed_size[0]) if self._bed_size else 0.0
         size_y = float(self._bed_size[1]) if self._bed_size else 0.0
-        self._safe_gl_update(self._grid_item.setSize, size_x, size_y, 0)
+        spacing = DEFAULTS["viewer"]["grid_spacing"]
+        active_color = theme_value("grid_color", (80, 80, 80, 255))
+        inactive = QtGui.QColor(theme_qcolor("popup_muted_text"))
+        inactive.setAlpha(110)
+        inactive_color = (
+            inactive.redF(),
+            inactive.greenF(),
+            inactive.blueF(),
+            inactive.alphaF(),
+        )
+        desired = set(getattr(self, "get_plate_ids", lambda: [1])())
+        existing = dict(getattr(self, "_plate_grid_items", {}) or {})
+        for plate_id, item in existing.items():
+            if plate_id in desired:
+                continue
+            try:
+                self.removeItem(item)
+            except Exception:
+                pass
+        self._plate_grid_items = {}
+        current_plate_id = getattr(self, "get_current_plate_id", lambda: 1)()
+        for plate_id in desired:
+            item = existing.get(int(plate_id))
+            if item is None:
+                item = gl.GLGridItem()
+                self.addItem(item)
+            self._safe_gl_update(item.setSize, size_x, size_y, 0)
+            self._safe_gl_update(item.setSpacing, spacing[0], spacing[1], spacing[2])
+            origin = getattr(self, "_plate_origin")(int(plate_id))
+            try:
+                item.resetTransform()
+            except Exception:
+                pass
+            item.translate(float(origin[0]), float(origin[1]), 0.0)
+            item.setColor(active_color if int(plate_id) == int(current_plate_id) else inactive_color)
+            self._plate_grid_items[int(plate_id)] = item
+        first_id = next(iter(self._plate_grid_items.keys()), None)
+        self._grid_item = self._plate_grid_items.get(first_id) if first_id is not None else None
+        self._sync_bed_texture_item()
+        self._update_plate_label_texts()
 
     def get_out_of_bounds_models(self) -> List[int]:
         return [mid for mid, model in self.models.items() if model.get("out_of_bounds")]
 
-    def _bed_bounds(self) -> Tuple[float, float, float, float]:
+    def _bed_bounds(self, plate_id: int | None = None) -> Tuple[float, float, float, float]:
         half_w = float(self._bed_size[0]) / 2.0
         half_d = float(self._bed_size[1]) / 2.0
-        return (-half_w, half_w, -half_d, half_d)
+        origin = (0.0, 0.0, 0.0)
+        if hasattr(self, "_plate_origin"):
+            resolved_plate = int(plate_id if plate_id is not None else getattr(self, "get_current_plate_id", lambda: 1)())
+            origin = getattr(self, "_plate_origin")(resolved_plate)
+        return (
+            float(origin[0]) - half_w,
+            float(origin[0]) + half_w,
+            float(origin[1]) - half_d,
+            float(origin[1]) + half_d,
+        )
 
-    def _is_outside_bed(self, bounds) -> bool:
+    def _is_outside_bed(self, bounds, plate_id: int | None = None) -> bool:
         if bounds is None:
             return False
         mn, mx = bounds
-        min_x, max_x, min_y, max_y = self._bed_bounds()
+        min_x, max_x, min_y, max_y = self._bed_bounds(plate_id)
         if mn[0] < min_x or mx[0] > max_x:
             return True
         if mn[1] < min_y or mx[1] > max_y:
@@ -563,7 +620,8 @@ class PanelMixin:
         m = self.models.get(model_id)
         if m is None:
             return False
-        out_of_bounds = self._is_outside_bed(m.get("bounds"))
+        plate_id = int(m.get("plate_id", getattr(self, "get_current_plate_id", lambda: 1)()))
+        out_of_bounds = self._is_outside_bed(m.get("bounds"), plate_id=plate_id)
         m["out_of_bounds"] = out_of_bounds
         self._apply_model_color(m)
         return out_of_bounds
@@ -577,10 +635,18 @@ class PanelMixin:
         warn_color = theme_value("mesh_warning", (1.0, 0.25, 0.2, 0.95))
         color = warn_color if model.get("out_of_bounds") else base_color
         alpha_scale = getattr(self, "_model_preview_alpha", 1.0)
+        active_plate = int(getattr(self, "get_current_plate_id", lambda: 1)())
+        if int(model.get("plate_id", active_plate)) != active_plate:
+            alpha_scale *= 0.35
         if isinstance(color, (tuple, list)):
             values = list(color)
             if len(values) == 3:
                 values.append(1.0 if max(values) <= 1.0 else 255.0)
+            if int(model.get("plate_id", active_plate)) != active_plate:
+                muted = float(sum(float(v) for v in values[:3]) / 3.0)
+                values[0] = muted
+                values[1] = muted
+                values[2] = muted
             max_rgb = max(values[:3]) if values[:3] else 1.0
             if max_rgb > 1.0:
                 values[3] = max(0.0, min(255.0, float(values[3]) * alpha_scale))
@@ -598,6 +664,108 @@ class PanelMixin:
             item.update()
         except Exception:
             return
+
+    def _apply_plate_visual_theme(self):
+        active_color = theme_value("grid_color", (80, 80, 80, 255))
+        inactive = QtGui.QColor(theme_qcolor("popup_muted_text"))
+        inactive.setAlpha(110)
+        inactive_color = (
+            inactive.redF(),
+            inactive.greenF(),
+            inactive.blueF(),
+            inactive.alphaF(),
+        )
+        current_plate_id = int(getattr(self, "get_current_plate_id", lambda: 1)())
+        for plate_id, item in dict(getattr(self, "_plate_grid_items", {}) or {}).items():
+            item.setColor(active_color if int(plate_id) == current_plate_id else inactive_color)
+        self._update_plate_label_texts()
+
+    def _ensure_plate_label(self, plate_id: int, *, number: bool) -> QtWidgets.QLabel:
+        attr = "_plate_number_labels" if number else "_plate_name_labels"
+        labels = getattr(self, attr, None)
+        if labels is None:
+            labels = {}
+            setattr(self, attr, labels)
+        label = labels.get(int(plate_id))
+        if label is None:
+            label = QtWidgets.QLabel(cast(QtWidgets.QWidget, self))
+            label.setObjectName("PlateNumberLabel" if number else "PlateNameLabel")
+            label.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+            label.show()
+            labels[int(plate_id)] = label
+        return label
+
+    def _update_plate_label_texts(self):
+        if not hasattr(self, "scene_state"):
+            return
+        plates = getattr(self.scene_state, "plates", {})
+        ordered = []
+        if hasattr(self, "get_plate_ids"):
+            ordered = list(getattr(self, "get_plate_ids")())
+        active_plate = int(getattr(self, "get_current_plate_id", lambda: 1)())
+        remove_btn = getattr(self, "_plate_remove_btn", None)
+        if remove_btn is not None:
+            remove_btn.setEnabled(len(ordered) > 1)
+        lock_btn = getattr(self, "_plate_lock_btn", None)
+        if lock_btn is not None and hasattr(self, "is_plate_locked"):
+            prev = lock_btn.blockSignals(True)
+            lock_btn.setChecked(bool(self.is_plate_locked()))
+            lock_btn.blockSignals(prev)
+        for index, plate_id in enumerate(ordered):
+            plate = plates.get(int(plate_id))
+            if plate is None:
+                continue
+            name_label = self._ensure_plate_label(int(plate_id), number=False)
+            number_label = self._ensure_plate_label(int(plate_id), number=True)
+            name_text = str(getattr(plate, "name", "") or f"{index + 1:02d}").strip() or f"{index + 1:02d}"
+            number_text = f"{index + 1:02d}"
+            text_color = theme_qcolor("topbar_accent") if int(plate_id) == active_plate else theme_qcolor("popup_muted_text")
+            style = (
+                f"color: rgba({text_color.red()}, {text_color.green()}, {text_color.blue()}, {255 if int(plate_id) == active_plate else 180});"
+                "font-weight: 700;"
+                "background: transparent;"
+            )
+            name_label.setStyleSheet(style)
+            number_label.setStyleSheet(style)
+            name_label.setText(name_text)
+            number_label.setText(number_text)
+            name_label.adjustSize()
+            number_label.adjustSize()
+            name_label.setVisible(True)
+            number_label.setVisible(True)
+        for attr in ("_plate_name_labels", "_plate_number_labels"):
+            labels = getattr(self, attr, {})
+            for plate_id in list(labels.keys()):
+                if plate_id in ordered:
+                    continue
+                label = labels.pop(plate_id)
+                label.hide()
+                label.deleteLater()
+        if hasattr(self, "_position_plate_labels"):
+            self._position_plate_labels()
+
+    def _position_plate_labels(self):
+        ordered = list(getattr(self, "get_plate_ids", lambda: [])())
+        for plate_id in ordered:
+            name_label = getattr(self, "_plate_name_labels", {}).get(int(plate_id))
+            number_label = getattr(self, "_plate_number_labels", {}).get(int(plate_id))
+            bounds = self._bed_bounds(int(plate_id))
+            top_left = self._project_world_to_screen(np.array([bounds[0], bounds[3], 0.0], dtype=float)) if hasattr(self, "_project_world_to_screen") else None
+            bottom_right = self._project_world_to_screen(np.array([bounds[1], bounds[2], 0.0], dtype=float)) if hasattr(self, "_project_world_to_screen") else None
+            if top_left is None or bottom_right is None:
+                if name_label is not None:
+                    name_label.hide()
+                if number_label is not None:
+                    number_label.hide()
+                continue
+            if name_label is not None:
+                name_label.move(int(round(top_left[0])), int(round(top_left[1] - name_label.height())))
+                name_label.raise_()
+                name_label.show()
+            if number_label is not None:
+                number_label.move(int(round(bottom_right[0] - number_label.width())), int(round(bottom_right[1])))
+                number_label.raise_()
+                number_label.show()
 
     def _model_volume(self, model: dict):
         base = model.get("base_volume")
@@ -669,6 +837,7 @@ class PanelMixin:
         self._view_cube.homeRequested.connect(self.reset_view)
         self._build_fit_camera_button()
         self._build_plate_action_strip()
+        self._sync_overlay_button_metrics()
         self._position_view_cube()
         self._sync_view_cube()
 
@@ -705,8 +874,6 @@ class PanelMixin:
             )
         )
         self._fit_camera_btn.setIcon(self._build_overlay_icon("fit"))
-        self._fit_camera_btn.setIconSize(QtCore.QSize(18, 18))
-        self._fit_camera_btn.setFixedSize(30, 30)
         self._fit_camera_btn.clicked.connect(self.fit_camera_to_scene_or_selection)
 
     def _build_plate_action_strip(self):
@@ -784,12 +951,11 @@ class PanelMixin:
         btn.setCursor(QtCore.Qt.PointingHandCursor)
         btn.setToolTip(str(tooltip or ""))
         btn.setIcon(self._build_overlay_icon(icon_kind))
-        btn.setIconSize(QtCore.QSize(16, 16))
-        btn.setFixedSize(28, 28)
         return btn
 
-    def _build_overlay_icon(self, kind: str) -> QtGui.QIcon:
-        size = 18
+    def _build_overlay_icon(self, kind: str, size: int | None = None) -> QtGui.QIcon:
+        size = int(size if size is not None else 18)
+        size = max(14, min(40, size))
         pm = QtGui.QPixmap(size, size)
         pm.fill(QtCore.Qt.transparent)
         painter = QtGui.QPainter(pm)
@@ -872,6 +1038,58 @@ class PanelMixin:
         painter.end()
         return QtGui.QIcon(pm)
 
+    def _overlay_metrics(self) -> Dict[str, int]:
+        cube_size = 84
+        if hasattr(self, "_view_cube") and self._view_cube is not None:
+            try:
+                cube_size = int(self._view_cube.sizeHint().width())
+            except Exception:
+                cube_size = 84
+        cube_size = max(72, cube_size)
+
+        action_btn = max(24, int(round(cube_size * 0.34)))
+        action_icon = max(14, int(round(action_btn * 0.58)))
+        fit_btn = max(action_btn + 2, int(round(action_btn * 1.08)))
+        fit_icon = max(14, int(round(fit_btn * 0.58)))
+        spacing = max(3, int(round(action_btn * 0.14)))
+        margin = max(2, int(round(action_btn * 0.08)))
+        return {
+            "action_btn": action_btn,
+            "action_icon": action_icon,
+            "fit_btn": fit_btn,
+            "fit_icon": fit_icon,
+            "spacing": spacing,
+            "margin": margin,
+        }
+
+    def _sync_overlay_button_metrics(self):
+        metrics = self._overlay_metrics()
+        icon_map = {
+            "_plate_remove_btn": "remove",
+            "_plate_auto_orient_btn": "auto_orient",
+            "_plate_arrange_btn": "arrange",
+            "_plate_lock_btn": "lock",
+            "_plate_edit_btn": "edit",
+        }
+        if hasattr(self, "_plate_actions") and self._plate_actions is not None:
+            layout = self._plate_actions.layout()
+            if isinstance(layout, QtWidgets.QBoxLayout):
+                margin = int(metrics["margin"])
+                layout.setContentsMargins(margin, margin, margin, margin)
+                layout.setSpacing(int(metrics["spacing"]))
+            for attr_name, kind in icon_map.items():
+                btn = getattr(self, attr_name, None)
+                if btn is None:
+                    continue
+                btn.setFixedSize(int(metrics["action_btn"]), int(metrics["action_btn"]))
+                btn.setIconSize(QtCore.QSize(int(metrics["action_icon"]), int(metrics["action_icon"])))
+                btn.setIcon(self._build_overlay_icon(kind, size=int(metrics["action_icon"])))
+        if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
+            self._fit_camera_btn.setFixedSize(int(metrics["fit_btn"]), int(metrics["fit_btn"]))
+            self._fit_camera_btn.setIconSize(QtCore.QSize(int(metrics["fit_icon"]), int(metrics["fit_icon"])))
+            self._fit_camera_btn.setIcon(self._build_overlay_icon("fit", size=int(metrics["fit_icon"])))
+        self._apply_plate_overlay_theme()
+
     def _apply_plate_overlay_theme(self):
         if not hasattr(self, "_plate_actions") or self._plate_actions is None:
             return
@@ -879,16 +1097,20 @@ class PanelMixin:
         bg = theme_qcolor("popup_bg")
         hover = theme_qcolor("menu_hover_bg")
         active = theme_qcolor("topbar_accent")
+        panel_radius = max(6, int(round(self._plate_actions.sizeHint().width() * 0.06)))
+        btn_radius = 4
+        if hasattr(self, "_plate_remove_btn") and self._plate_remove_btn is not None:
+            btn_radius = max(4, int(round(self._plate_remove_btn.height() * 0.18)))
 
         self._plate_actions.setStyleSheet(
             "QFrame#PlateActions {"
             f"background-color: {self._rgba_css(bg, 84)};"
             f"border: 1px solid {self._rgba_css(border, 150)};"
-            "border-radius: 6px;"
+            f"border-radius: {panel_radius}px;"
             "}"
             "QToolButton#PlateActionButton {"
             "border: 1px solid transparent;"
-            "border-radius: 4px;"
+            f"border-radius: {btn_radius}px;"
             "padding: 2px;"
             "}"
             "QToolButton#PlateActionButton:hover {"
@@ -901,10 +1123,11 @@ class PanelMixin:
             "}"
         )
         if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
+            fit_radius = max(6, int(round(self._fit_camera_btn.height() * 0.26)))
             self._fit_camera_btn.setStyleSheet(
                 "QToolButton#FitCameraButton {"
                 "border: 1px solid transparent;"
-                "border-radius: 7px;"
+                f"border-radius: {fit_radius}px;"
                 "padding: 2px;"
                 "}"
                 "QToolButton#FitCameraButton:hover {"
@@ -924,19 +1147,23 @@ class PanelMixin:
             btn = getattr(self, attr_name, None)
             if btn is None:
                 continue
-            btn.setIcon(self._build_overlay_icon(kind))
+            icon_px = max(14, int(btn.iconSize().width()))
+            btn.setIcon(self._build_overlay_icon(kind, size=icon_px))
         if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
-            self._fit_camera_btn.setIcon(self._build_overlay_icon("fit"))
+            fit_icon_px = max(14, int(self._fit_camera_btn.iconSize().width()))
+            self._fit_camera_btn.setIcon(self._build_overlay_icon("fit", size=fit_icon_px))
 
     def _position_fit_camera_button(self):
         if not hasattr(self, "_fit_camera_btn") or self._fit_camera_btn is None:
             return
         if not hasattr(self, "_view_cube") or self._view_cube is None:
             return
-        margin = 10
+        margin = max(8, int(round(self._view_cube.sizeHint().width() * 0.12)))
         x = self._view_cube.geometry().right() + margin
         y = self._view_cube.geometry().bottom() - self._fit_camera_btn.height()
-        self._fit_camera_btn.move(max(0, x), max(0, y))
+        max_x = max(0, self.width() - self._fit_camera_btn.width())
+        max_y = max(0, self.height() - self._fit_camera_btn.height())
+        self._fit_camera_btn.move(max(0, min(max_x, x)), max(0, min(max_y, y)))
         self._fit_camera_btn.raise_()
 
     def _plate_overlay_anchor(self) -> Tuple[float, float, float, float] | None:
@@ -1013,7 +1240,7 @@ class PanelMixin:
             y = max(0, (self.height() - self._plate_actions.height()) // 2)
         else:
             anchor_x, anchor_y, normal_x, normal_y = anchor
-            gap = 8.0
+            gap = float(max(8, int(round(self._plate_actions.width() * 0.18))))
             x = int(round(anchor_x + normal_x * gap))
             y = int(round(anchor_y - (self._plate_actions.height() * 0.5) + normal_y * gap))
             max_x = max(0, self.width() - self._plate_actions.width())

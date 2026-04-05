@@ -87,6 +87,8 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiM
         self.runtime_printer_state = runtime_printer_state_from_defaults(DEFAULTS.get("printer", {}))
         self._push_undo_state()
         self.viewer.set_labels_visible(self._labels_visible)
+        if hasattr(self, "_update_prepare_action_state"):
+            self._update_prepare_action_state()
         if hasattr(self, "_labels_action"):
             self._labels_action.setChecked(self._labels_visible)
 
@@ -123,6 +125,8 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiM
             self.viewer.selectionChanged.connect(self._on_viewer_selection_changed)
         if hasattr(self.viewer, "simplifyRequested"):
             self.viewer.simplifyRequested.connect(self._open_simplify_dialog)
+        if hasattr(self.viewer, "sceneChanged"):
+            self.viewer.sceneChanged.connect(self._on_viewer_scene_changed)
         if hasattr(self.viewer, "plateAutoOrientRequested"):
             self.viewer.plateAutoOrientRequested.connect(lambda: self._on_auto_orient_requested("default"))
         if hasattr(self.viewer, "plateArrangeRequested"):
@@ -141,6 +145,8 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiM
             self.device_view.add_printer_requested.connect(self._on_device_add_printer_requested)
         if hasattr(self, "device_view") and hasattr(self.device_view, "diagnostics_requested"):
             self.device_view.diagnostics_requested.connect(self._on_device_diagnostics_requested)
+        if hasattr(self, "device_view") and hasattr(self.device_view, "download_installer_requested"):
+            self.device_view.download_installer_requested.connect(self._on_device_download_installer_requested)
         if hasattr(self, "control_view") and hasattr(self.control_view, "printer_changed"):
             self.control_view.printer_changed.connect(
                 lambda printer: self._apply_printer_profile(printer, source="control")
@@ -151,6 +157,8 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiM
             )
         if hasattr(self, "activity_view") and hasattr(self.activity_view, "state_changed"):
             self.activity_view.state_changed.connect(self._on_activity_view_state_changed)
+        if hasattr(self, "activity_view") and hasattr(self.activity_view, "refresh_requested"):
+            self.activity_view.refresh_requested.connect(self._on_activity_view_refresh_requested)
 
     def _start_worker(self, worker: Worker):
         self._workers.add(worker)

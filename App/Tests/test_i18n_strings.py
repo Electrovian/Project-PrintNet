@@ -8,6 +8,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from gui.i18n import available_languages, set_language, tr  # noqa: E402
+from gui.locales import LANGUAGES  # noqa: E402
 
 
 def test_available_languages_include_expected_codes() -> None:
@@ -42,3 +43,14 @@ def test_unknown_language_falls_back_to_english() -> None:
     set_language("zz")
     assert tr("topbar.file") == "File"
     set_language("en")
+
+
+def test_activity_cache_notice_strings_exist_in_all_shipped_locales() -> None:
+    required = {
+        "activity.cache.notice.restored",
+        "activity.cache.notice.unavailable",
+        "activity.cache.notice.not_configured",
+    }
+    for code, strings in LANGUAGES.items():
+        for key in required:
+            assert key in strings, f"missing {key} in {code}"

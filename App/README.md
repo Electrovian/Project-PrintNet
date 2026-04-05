@@ -46,7 +46,7 @@ production slicer.
 3. **Open the folder in VS Code**
 
    - Start **Visual Studio Code**.
-   - `File -> Open Folder...` and select the `Project-EON-OpenSlicer` folder.
+   - `File -> Open Folder...` and select the `Project-PrintNet` folder.
 
 4. **Open a terminal and move into the app folder**
 

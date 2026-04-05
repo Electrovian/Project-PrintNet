@@ -37,8 +37,8 @@ class FilesView(QtWidgets.QWidget):
         layout.addLayout(toolbar)
 
         self._stack = QtWidgets.QStackedWidget(self)
-        self._table = QtWidgets.QTableWidget(0, 4, self._stack)
-        self._table.setHorizontalHeaderLabels(["Name", "Type", "Size", "Modified"])
+        self._table = QtWidgets.QTableWidget(0, 5, self._stack)
+        self._table.setHorizontalHeaderLabels(["Name", "Plate", "Type", "Size", "Modified"])
         self._table.verticalHeader().setVisible(False)
         self._table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self._table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
@@ -63,17 +63,38 @@ class FilesView(QtWidgets.QWidget):
         self._models = list(models or [])
         self._apply_filter()
 
+    def models_snapshot(self):
+        return [dict(model) for model in list(self._models or []) if isinstance(model, dict)]
+
     def refresh_from_viewer(self, viewer):
         models = []
         if viewer is not None:
-            for mid, payload in viewer.models.items():
-                models.append(
-                    {
-                        "id": mid,
-                        "name": payload.get("name") or f"Model {mid}",
-                        "path": payload.get("path") or "",
-                    }
-                )
+            if hasattr(viewer, "get_plate_ids") and hasattr(viewer, "get_plate_model_ids"):
+                for plate_id in viewer.get_plate_ids():
+                    plate_name = ""
+                    if hasattr(viewer, "scene_state"):
+                        plate = viewer.scene_state.plates.get(int(plate_id))
+                        if plate is not None:
+                            plate_name = str(plate.name or "").strip()
+                    for mid in viewer.get_plate_model_ids(int(plate_id)):
+                        payload = viewer.models.get(int(mid), {})
+                        models.append(
+                            {
+                                "id": int(mid),
+                                "name": payload.get("name") or f"Model {mid}",
+                                "path": payload.get("path") or "",
+                                "plate": plate_name or f"{int(plate_id):02d}",
+                            }
+                        )
+            else:
+                for mid, payload in viewer.models.items():
+                    models.append(
+                        {
+                            "id": mid,
+                            "name": payload.get("name") or f"Model {mid}",
+                            "path": payload.get("path") or "",
+                        }
+                    )
         self.set_models(models)
 
     def _apply_filter(self):
@@ -83,14 +104,16 @@ class FilesView(QtWidgets.QWidget):
         for row, model in enumerate(rows):
             name = model.get("name") or "Model"
             path = model.get("path") or ""
+            plate = model.get("plate") or "-"
             ext = os.path.splitext(path)[1].lstrip(".").lower() if path else ""
             file_type = ext if ext else "model"
             size = self._format_size(path)
             modified = self._format_age(path)
             self._table.setItem(row, 0, QtWidgets.QTableWidgetItem(name))
-            self._table.setItem(row, 1, QtWidgets.QTableWidgetItem(file_type))
-            self._table.setItem(row, 2, QtWidgets.QTableWidgetItem(size))
-            self._table.setItem(row, 3, QtWidgets.QTableWidgetItem(modified))
+            self._table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(plate)))
+            self._table.setItem(row, 2, QtWidgets.QTableWidgetItem(file_type))
+            self._table.setItem(row, 3, QtWidgets.QTableWidgetItem(size))
+            self._table.setItem(row, 4, QtWidgets.QTableWidgetItem(modified))
         self._stack.setCurrentWidget(self._table if rows else self._empty_label)
 
     def _format_size(self, path: str) -> str:
