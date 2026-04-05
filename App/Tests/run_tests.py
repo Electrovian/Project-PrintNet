@@ -7,6 +7,28 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+
+SMOKE_TESTS = [
+    "test_desktop_startup_smoke.py",
+    "test_slicer_v2_scaffolding.py",
+    "test_slicer_v2_cli_contract.py",
+    "test_slicer_v2_fff_corpus.py",
+    "test_gcode_output_contract_plumbing.py",
+    "test_slice_plate_behavior.py",
+    "test_slice_plate_scene_defaults.py",
+    "test_desktop_plate_flow.py",
+    "test_runtime_printer_state.py",
+    "test_startup_validation.py",
+    "test_device_view.py",
+    "test_files_view_persistence.py",
+    "test_activity_view.py",
+    "test_printer_manager_demo.py",
+    "test_gui_main_window.py",
+    "test_gui_prepare_view.py",
+    "test_gui_control_view.py",
+]
+
+
 def _build_suite(scope: str) -> unittest.TestSuite:
     loader = unittest.TestLoader()
     start_dir = os.path.dirname(__file__)
@@ -14,16 +36,8 @@ def _build_suite(scope: str) -> unittest.TestSuite:
     if scope == "gui":
         return loader.discover(start_dir, pattern="test_gui_*.py")
     if scope == "smoke":
-        patterns = [
-            "test_preview_utils.py",
-            "test_arrange_utils.py",
-            "test_selection_utils.py",
-            "test_geometry_helpers.py",
-            "test_gcode_extra.py",
-            "test_slicer_helpers.py",
-        ]
         suite = unittest.TestSuite()
-        for pattern in patterns:
+        for pattern in SMOKE_TESTS:
             suite.addTests(loader.discover(start_dir, pattern=pattern))
         return suite
     return loader.discover(start_dir, pattern="test_*.py")

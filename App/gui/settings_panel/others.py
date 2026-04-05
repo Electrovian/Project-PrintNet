@@ -209,32 +209,37 @@ class OtherSectionMixin:
         self._printers = list(printers or [])
         if not hasattr(self, "_printer_combo"):
             return
-        self._printer_combo.clear()
-        if not self._printers:
-            self._printer_combo.addItem("No printers configured")
-            self._printer_combo.setEnabled(False)
-            if hasattr(self, "_fit_combo_popup_width"):
-                self._fit_combo_popup_width(self._printer_combo, min_width=260)
-            return
-        self._printer_combo.setEnabled(True)
-        default_name = ""
-        main = cast(MainWindow, self.parent())
-        runtime_state = getattr(main, "runtime_printer_state", None) if main is not None else None
-        if runtime_state is not None:
-            default_name = str(getattr(runtime_state, "name", "")).strip().lower()
-        if not default_name:
-            default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
-        default_index = None
-        for idx, printer in enumerate(self._printers):
-            name = printer.get("name") if isinstance(printer, dict) else None
-            self._printer_combo.addItem(name or "Printer")
-            if default_name and str(name or "").strip().lower() == default_name:
-                default_index = idx
-        if default_index is not None:
-            self._printer_combo.setCurrentIndex(default_index)
+        block = self._printer_combo.blockSignals(True)
+        try:
+            self._printer_combo.clear()
+            if not self._printers:
+                self._printer_combo.addItem("No printers configured")
+                self._printer_combo.setEnabled(False)
+                if hasattr(self, "_fit_combo_popup_width"):
+                    self._fit_combo_popup_width(self._printer_combo, min_width=260)
+                self._refresh_profile_presets(None, apply_default=False)
+                return
+            self._printer_combo.setEnabled(True)
+            default_name = ""
+            main = cast(MainWindow, self.parent())
+            runtime_state = getattr(main, "runtime_printer_state", None) if main is not None else None
+            if runtime_state is not None:
+                default_name = str(getattr(runtime_state, "name", "")).strip().lower()
+            if not default_name:
+                default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+            default_index = None
+            for idx, printer in enumerate(self._printers):
+                name = printer.get("name") if isinstance(printer, dict) else None
+                self._printer_combo.addItem(name or "Printer")
+                if default_name and str(name or "").strip().lower() == default_name:
+                    default_index = idx
+            if default_index is not None:
+                self._printer_combo.setCurrentIndex(default_index)
+        finally:
+            self._printer_combo.blockSignals(block)
         if hasattr(self, "_fit_combo_popup_width"):
             self._fit_combo_popup_width(self._printer_combo, min_width=260)
-        self._on_printer_changed(self._printer_combo.currentIndex())
+        self._refresh_profile_presets(self.current_printer(), apply_default=False)
 
     def current_printer(self):
         if not getattr(self, "_printers", None):

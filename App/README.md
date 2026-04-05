@@ -1,124 +1,39 @@
-﻿# EON-OpenSlicer (Prototype)
+# App
 
-EON-OpenSlicer is a **prototype** openâ€‘source 3D printing slicer and print manager.
+This directory contains the current desktop slicer and print workflow used by the demo build.
 
-This version is intentionally lightweight: it has a functional PyQt GUI,
-STL preview, a very simple demo slicer that generates a singleâ€‘layer
-outline, and stubs for Airtable and OctoPrint integration.  
-It is meant as a starting point and architecture reference, **not** a
-production slicer.
+## Quick Start
 
-## Features
+Run the app from this folder with:
 
-- Dark UI inspired by modern professional slicer workflows.
-- Dragâ€‘andâ€‘drop STL loading.
-- 3D preview of the model.
-- Basic slicing demo that writes a simple square outline Gâ€‘code.
-- Core local workflows are designed to run offline after dependencies are installed.
-- Settings panel for layer height, infill %, etc. (currently used only
-  by the demo slicer).
-- Job queue panel (local only by default).
-- Architecture hooks for:
-  - Airtable job fetching / status update.
-  - OctoPrint upload & print start.
-  - Printer configuration from `Printer Information.xlsx`.
+```powershell
+python main.py
+```
 
-## Limitations
+Run the demo smoke suite with:
 
-- The slicing engine is **minimal** and only generates a single outline
-  at the modelâ€™s bounding box as a proofâ€‘ofâ€‘concept.
-- Real infill, supports, multiâ€‘layer path planning, etc. are **not**
-  implemented yet.
-- Airtable and OctoPrint calls are safe stubs until you add real
-  credentials in config.
+```powershell
+python .\Tests\run_tests.py --scope smoke
+```
 
----
+Run the headless desktop startup smoke with:
 
-## Installation (Windows + Visual Studio Code)
+```powershell
+python -m App.testing.desktop_startup_smoke
+```
 
-1. **Install Python 3.10+**  
-   Download from python.org and check **â€œAdd Python to PATHâ€** during
-   installation.
+Run the FFF parity corpus with a manifest that points at real mesh files:
 
-2. **Install Git (optional but recommended)**  
-   So you can manage this project as a repo later.
+```powershell
+python -m App.testing.fff_parity --manifest <manifest.json> --profile <profile.json> --output <report.json>
+```
 
-3. **Open the folder in VS Code**
+The parity runner now fails fast if the manifest references missing meshes or if no comparable models are available.
 
-   - Start **Visual Studio Code**.
-   - `File -> Open Folder...` and select the `Project-PrintNet` folder.
+## Notes
 
-4. **Open a terminal and move into the app folder**
-
-   ```bash
-   cd App
-   ```
-
-5. **Optional: create a local virtual environment**
-
-   This repo does not include a venv. You can skip this step and use your
-   system Python, or create a local venv for isolation.
-
-   In VS Code, open a terminal (``Ctrl+` ``) and run:
-
-   ```bash
-   python -m venv .venv
-   ```
-
-   Then activate it:
-
-   - PowerShell:
-
-     ```bash
-     .venv\Scripts\Activate
-     ```
-
-   VS Code should then detect the `.venv` interpreter if you created it.
-
-6. **Install dependencies**
-
-   In the same terminal:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-7. **(Optional) Add `Printer Information.xlsx`**
-
-   Place your `Printer Information.xlsx` file in the `App` folder
-   (next to `main.py`).  
-   The loader is tolerant; if the file is missing it will create a
-   default MakerGear M3-SE configuration.
-
-8. **Run the app**
-
-   In VS Code:
-
-   - Open `main.py`.
-   - Press `F5` (Run with Debugging) or run:
-
-     ```bash
-     python main.py
-     ```
-
-   A window titled **EON-OpenSlicer** should appear.  
-   Drag an STL file onto the build plate area or use **File â†’ Open STL**.
-
----
-
-## Very quick user guide
-
-- **Load model**: drag & drop an STL file into the window or use the menu.
-- **Inspect**: rotate (left mouse), pan (right mouse), zoom (wheel).
-- **Settings**: adjust layer height / infill on the right panel.
-- **Slice**: click the **Slice** button in the toolbar.
-- **Preview**: the Gâ€‘code outline appears as a wireframe square.
-- **Print**:
-  - Configure OctoPrint URL and API key in `config/printer_config.py`
-    or your Excel.
-  - Click **Send to Printer** (demo prints the Gâ€‘code path to console
-    unless fully wired).
-
-This codebase is intentionally small and heavily commented so you can
-grow it into a full slicer (multiâ€‘layer geometry, real infill, supports,
-Airtable workflow, etc.).
+- `App/Tests/run_tests.py` is the entrypoint for the curated smoke suite.
+- `App/testing/desktop_startup_smoke.py` verifies real offscreen startup without hanging in the full event loop.
+- `App/testing/fff_parity.py` works both as a module and as a direct script.
+- `docs/LAUNCH_READINESS.md` is the authoritative repo-wide launch runbook.
+- If you are looking for repo-wide task tracking, start with `docs/TASKS.md`.

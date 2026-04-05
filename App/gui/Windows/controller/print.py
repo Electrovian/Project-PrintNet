@@ -6,7 +6,7 @@ import re
 import tempfile
 import uuid
 from dataclasses import asdict, is_dataclass, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
 
 import numpy as np
 import trimesh
@@ -20,6 +20,7 @@ from slicer_v2.legacy_gcode_preview import parse_gcode_preview, parse_gcode_prev
 from slicer_v2.legacy_gcode_stats import estimate_gcode_file
 from slicer_v2.legacy_gcode_writer import SliceSettings
 from slicer_v2.gcode_contract import resolve_output_settings_payload
+from slicer_v2.supports import build_preview_support_diagnostics
 try:
     from slicer_v2.legacy_slicer.emit import slice_trimesh_auto as slice_v2_trimesh_auto
 except Exception:
@@ -50,6 +51,22 @@ def _sanitize_gcode_basename(value: str, default: str = "plate") -> str:
 def _settings_to_dict(settings: Any) -> dict[str, Any]:
     if settings is None:
         return {}
+    if is_dataclass(settings):
+        return asdict(settings)
+    if isinstance(settings, Mapping):
+        return dict(settings)
+    try:
+        return dict(settings)
+    except Exception:
+        pass
+    try:
+        return {
+            str(key): value
+            for key, value in vars(settings).items()
+            if not str(key).startswith("_")
+        }
+    except Exception:
+        return {}
 
 
 def _resolve_slice_output_contract(
@@ -75,22 +92,6 @@ def _resolve_slice_output_contract(
         bed_temperature_c=payload.get("bed_temperature_c"),
     )
     return resolved_settings, payload
-    if is_dataclass(settings):
-        return asdict(settings)
-    if isinstance(settings, dict):
-        return dict(settings)
-    try:
-        return dict(settings)
-    except Exception:
-        pass
-    try:
-        return {
-            str(key): value
-            for key, value in vars(settings).items()
-            if not str(key).startswith("_")
-        }
-    except Exception:
-        return {}
 
 
 def _merged_adaptive_layer_ranges(raw_ranges: list[dict[str, object]] | tuple[dict[str, object], ...] | None) -> list[dict[str, float]]:
@@ -146,6 +147,61 @@ def _merged_adaptive_layer_ranges(raw_ranges: list[dict[str, object]] | tuple[di
                 }
             )
     return merged
+
+
+def _to_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    output: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if text:
+            output.append(text)
+    return output
+
+
+def _support_settings_payload(settings: SliceSettings | None) -> dict[str, object]:
+    if settings is None:
+        return {}
+    return {
+        "support_enabled": bool(getattr(settings, "support_enabled", False)),
+        "support_type": str(getattr(settings, "support_type", "normal") or "normal"),
+        "support_style": str(getattr(settings, "support_style", "pillars") or "pillars"),
+        "support_build_plate_only": bool(getattr(settings, "support_build_plate_only", False)),
+        "support_critical_regions_only": bool(getattr(settings, "support_critical_regions_only", False)),
+        "support_remove_small_overhang": bool(getattr(settings, "support_remove_small_overhang", False)),
+        "tree_support_strict_parity_mode": bool(getattr(settings, "tree_support_strict_parity_mode", False)),
+    }
+
+
+def _build_support_diagnostics_payload(
+    settings: SliceSettings | None,
+    payload: Mapping[str, object] | None,
+    *,
+    status: str | None = None,
+    source: str | None = None,
+    warnings: list[str] | None = None,
+    error: object | None = None,
+) -> dict[str, object]:
+    merged: dict[str, object] = _support_settings_payload(settings)
+    if isinstance(payload, Mapping):
+        merged.update(dict(payload))
+
+    combined_warnings = _to_string_list(merged.get("warnings"))
+    for warning in _to_string_list(warnings):
+        if warning not in combined_warnings:
+            combined_warnings.append(warning)
+    if combined_warnings:
+        merged["warnings"] = combined_warnings
+        merged["warning_count"] = max(int(merged.get("warning_count", 0) or 0), len(combined_warnings))
+
+    if status:
+        merged["diagnostics_status"] = str(status).strip().lower()
+    if source:
+        merged["diagnostics_source"] = str(source).strip()
+    if error is not None:
+        merged["diagnostics_error"] = str(error).strip()
+    return build_preview_support_diagnostics(merged)
 
 
 class PrintMixin:
@@ -221,23 +277,6 @@ class PrintMixin:
 
     def _warn_plate_data_unavailable(self, message: str = PLATE_DATA_UNAVAILABLE_MESSAGE) -> None:
         QtWidgets.QMessageBox.warning(self.main, "No model", message)
-
-    def _default_plate_gcode_basename(self) -> str:
-        if not hasattr(self, "viewer"):
-            return "plate"
-        model_ids = list(self.viewer.get_model_ids())
-        if not model_ids:
-            return "plate"
-        first_id = model_ids[0]
-        first_path = str(self.viewer.get_model_path(first_id) or "").strip()
-        if first_path:
-            base_name = os.path.splitext(os.path.basename(first_path))[0]
-        else:
-            base_name = str(self.viewer.get_model_name(first_id) or "plate").strip()
-        sanitized = _sanitize_gcode_basename(base_name)
-        if len(model_ids) > 1:
-            return _sanitize_gcode_basename(f"{sanitized}_plate")
-        return sanitized
 
     def _get_plate_mesh(self):
         model_ids = self.viewer.get_model_ids()
@@ -370,6 +409,9 @@ class PrintMixin:
             }
         payload = {
             "plate_id": int(self.viewer.get_current_plate_id()) if hasattr(self.viewer, "get_current_plate_id") else 1,
+            "plate_name": str(self.viewer.get_current_plate_name() or "").strip()
+            if hasattr(self.viewer, "get_current_plate_name")
+            else "",
             "models": models_payload,
             "settings": _settings_to_dict(settings),
             "tool_state": tool_state,
@@ -387,6 +429,7 @@ class PrintMixin:
             return None
         if signature != self._last_slice_signature:
             return None
+        self._log_slicer_activity("slice_cache_hit", gcode_path=gcode_path)
         return gcode_path
 
     def _slicer_engine_preference(self) -> str:
@@ -448,6 +491,116 @@ class PrintMixin:
             return str(os.path.splitext(source_path)[0] + ".gcode")
         return self._default_plate_gcode_path()
 
+    def _support_diagnostics_from_stage_artifacts(
+        self,
+        stage_artifacts: object,
+        settings: SliceSettings | None,
+        *,
+        source: str,
+        error: object | None = None,
+    ) -> dict[str, object]:
+        supports_artifact = None
+        if isinstance(stage_artifacts, Mapping):
+            supports_artifact = stage_artifacts.get("supports")
+        if isinstance(supports_artifact, Mapping):
+            preview_payload = supports_artifact.get("preview_diagnostics")
+            diagnostics_payload = preview_payload if isinstance(preview_payload, Mapping) else supports_artifact
+            return _build_support_diagnostics_payload(settings, diagnostics_payload, source=source)
+
+        missing_warnings = None
+        missing_status = None
+        if bool(getattr(settings, "support_enabled", False)):
+            missing_warnings = ["support_planning:diagnostics_unavailable"]
+            missing_status = "unavailable"
+        return _build_support_diagnostics_payload(
+            settings,
+            None,
+            status=missing_status,
+            source=source,
+            warnings=missing_warnings,
+            error=error,
+        )
+
+    def _normalize_slice_result_payload(
+        self,
+        payload: object,
+        settings: SliceSettings | None,
+    ) -> dict[str, object]:
+        gcode_path = ""
+        support_payload = None
+        source = "slice_payload"
+        status = None
+        warnings = None
+
+        if isinstance(payload, Mapping):
+            raw_path = payload.get("gcode_path", payload.get("output_path", payload.get("path")))
+            if raw_path is not None:
+                gcode_path = str(raw_path)
+            maybe_support_payload = payload.get("support_diagnostics")
+            if isinstance(maybe_support_payload, Mapping):
+                support_payload = maybe_support_payload
+        elif isinstance(payload, str):
+            gcode_path = payload
+            source = "legacy_string_result"
+        elif payload is not None:
+            gcode_path = str(payload)
+            source = "legacy_string_result"
+
+        if not gcode_path:
+            raise RuntimeError("slicer_v2 produced no G-code path.")
+
+        if support_payload is None and bool(getattr(settings, "support_enabled", False)):
+            status = "unavailable"
+            warnings = ["support_planning:diagnostics_unavailable"]
+
+        return {
+            "gcode_path": gcode_path,
+            "support_diagnostics": _build_support_diagnostics_payload(
+                settings,
+                support_payload,
+                status=status,
+                source=source,
+                warnings=warnings,
+            ),
+        }
+
+    def _build_slice_preview_stats(
+        self,
+        gcode_path: str,
+        settings: SliceSettings,
+        preferred_engine: str,
+        perf: dict[str, object],
+        support_diagnostics: Mapping[str, object] | None,
+    ) -> dict[str, object]:
+        stats = self._analyze_gcode(gcode_path, settings)
+        stats["slicer_engine"] = str(getattr(self, "_last_slicer_backend", preferred_engine))
+        stats["cpu_threads"] = int(perf.get("max_threads", 1))
+        stats["gpu_mode"] = str(perf.get("gpu_mode", "auto"))
+        stats["support_diagnostics"] = dict(support_diagnostics or {})
+        return stats
+
+    def _apply_slice_payload_to_preview(
+        self,
+        payload: object,
+        settings: SliceSettings,
+        signature: str | None,
+        preferred_engine: str,
+        perf: dict[str, object],
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        slice_payload = self._normalize_slice_result_payload(payload, settings)
+        gcode_path = str(slice_payload["gcode_path"])
+        self._last_gcode_path = gcode_path
+        self._last_slice_signature = signature
+        stats = self._build_slice_preview_stats(
+            gcode_path,
+            settings,
+            preferred_engine,
+            perf,
+            slice_payload.get("support_diagnostics") if isinstance(slice_payload, Mapping) else None,
+        )
+        self._update_preview_from_gcode(gcode_path, stats)
+        return slice_payload, stats
+
     def _slice_with_v2_pipeline(
         self,
         meshes: list[trimesh.Trimesh],
@@ -456,7 +609,7 @@ class PrintMixin:
         source_path: str | None,
         output_gcode_path: str | None,
         perf: dict[str, object],
-    ) -> str:
+    ) -> dict[str, object]:
         output_path = self._resolve_output_gcode_path(source_path, output_gcode_path)
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
         active_printer = getattr(getattr(self, "printer_manager", None), "active_printer", None)
@@ -486,6 +639,74 @@ class PrintMixin:
             "yes",
             "on",
         )
+        support_diagnostics = _build_support_diagnostics_payload(settings, None, source="runtime_defaults")
+        semantic_error: Exception | None = None
+        semantic_lines: list[str] | None = None
+        if create_v2_context is not None and run_v2_pipeline is not None:
+            temp_path = ""
+            fd = -1
+            try:
+                fd, temp_path = tempfile.mkstemp(prefix="eon_slicer_v2_", suffix=".stl")
+                os.close(fd)
+                fd = -1
+                mesh_for_v2.export(temp_path, file_type="stl")
+
+                runtime_settings = {
+                    "cpu_threads": int(perf.get("max_threads", 1)),
+                    "gpu_mode": str(perf.get("gpu_mode", "auto")),
+                    "mesh_count": int(len(meshes)),
+                }
+                context = create_v2_context(
+                    job_id=f"eon-v2-{uuid.uuid4().hex[:12]}",
+                    mesh_path=temp_path,
+                    resolved_settings=dict(resolved_output_settings),
+                    runtime_settings=runtime_settings,
+                )
+                result = run_v2_pipeline(context)
+                support_diagnostics = self._support_diagnostics_from_stage_artifacts(
+                    result.context.stage_artifacts,
+                    settings,
+                    source="supports_stage",
+                )
+                gcode_artifact = result.context.stage_artifacts.get("gcode", {})
+                lines_value = gcode_artifact.get("lines", [])
+                if isinstance(lines_value, list) and lines_value:
+                    semantic_lines = [str(line) for line in lines_value]
+                else:
+                    semantic_error = RuntimeError("slicer_v2 produced no G-code lines.")
+            except Exception as exc:
+                semantic_error = exc
+                support_diagnostics = _build_support_diagnostics_payload(
+                    settings,
+                    None,
+                    status="unavailable" if bool(getattr(settings, "support_enabled", False)) else None,
+                    source="semantic_pipeline",
+                    warnings=["support_planning:diagnostics_unavailable"]
+                    if bool(getattr(settings, "support_enabled", False))
+                    else None,
+                    error=exc,
+                )
+            finally:
+                if fd >= 0:
+                    try:
+                        os.close(fd)
+                    except Exception:
+                        pass
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
+        elif bool(getattr(settings, "support_enabled", False)):
+            support_diagnostics = _build_support_diagnostics_payload(
+                settings,
+                None,
+                status="unavailable",
+                source="semantic_pipeline",
+                warnings=["support_planning:diagnostics_unavailable"],
+                error="semantic pipeline is unavailable",
+            )
+
         detailed_error: Exception | None = None
         if slice_v2_trimesh_auto is not None and not force_semantic_only:
             mesh_items: list[trimesh.Trimesh] = []
@@ -502,7 +723,7 @@ class PrintMixin:
             if not mesh_items:
                 mesh_items = [mesh_for_v2]
             try:
-                return str(
+                detailed_path = str(
                     slice_v2_trimesh_auto(
                         meshes=mesh_items,
                         output_gcode_path=output_path,
@@ -511,8 +732,20 @@ class PrintMixin:
                         combined_mesh=mesh_for_v2,
                     )
                 )
+                return {
+                    "gcode_path": detailed_path,
+                    "support_diagnostics": support_diagnostics,
+                }
             except Exception as exc:
                 detailed_error = exc
+
+        if semantic_lines:
+            with open(output_path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write("\n".join(semantic_lines).rstrip() + "\n")
+            return {
+                "gcode_path": output_path,
+                "support_diagnostics": support_diagnostics,
+            }
 
         if create_v2_context is None or run_v2_pipeline is None:
             if detailed_error is not None:
@@ -521,51 +754,17 @@ class PrintMixin:
                 ) from detailed_error
             raise RuntimeError("slicer_v2 pipeline is unavailable.")
 
-        temp_path = ""
-        fd = -1
-        try:
-            fd, temp_path = tempfile.mkstemp(prefix="eon_slicer_v2_", suffix=".stl")
-            os.close(fd)
-            fd = -1
-            mesh_for_v2.export(temp_path, file_type="stl")
-
-            runtime_settings = {
-                "cpu_threads": int(perf.get("max_threads", 1)),
-                "gpu_mode": str(perf.get("gpu_mode", "auto")),
-                "mesh_count": int(len(meshes)),
-            }
-            context = create_v2_context(
-                job_id=f"eon-v2-{uuid.uuid4().hex[:12]}",
-                mesh_path=temp_path,
-                resolved_settings=dict(resolved_output_settings),
-                runtime_settings=runtime_settings,
-            )
-            result = run_v2_pipeline(context)
-            gcode_artifact = result.context.stage_artifacts.get("gcode", {})
-            lines_value = gcode_artifact.get("lines", [])
-            if not isinstance(lines_value, list) or not lines_value:
-                raise RuntimeError("slicer_v2 produced no G-code lines.")
-            lines = [str(line) for line in lines_value]
-            with open(output_path, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write("\n".join(lines).rstrip() + "\n")
-            return output_path
-        except Exception as exc:
-            if detailed_error is not None:
-                raise RuntimeError(
-                    f"slicer_v2 detailed path failed: {detailed_error}; semantic pipeline failed: {exc}"
-                ) from exc
-            raise
-        finally:
-            if fd >= 0:
-                try:
-                    os.close(fd)
-                except Exception:
-                    pass
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
+        if detailed_error is not None and semantic_error is not None:
+            raise RuntimeError(
+                f"slicer_v2 detailed path failed: {detailed_error}; semantic pipeline failed: {semantic_error}"
+            ) from semantic_error
+        if detailed_error is not None:
+            raise RuntimeError(
+                f"slicer_v2 detailed path failed: {detailed_error}; semantic pipeline produced no G-code lines."
+            ) from detailed_error
+        if semantic_error is not None:
+            raise semantic_error
+        raise RuntimeError("slicer_v2 produced no G-code lines.")
 
     def _slice_with_selected_engine(
         self,
@@ -574,7 +773,7 @@ class PrintMixin:
         settings: SliceSettings,
         source_path: str | None,
         output_gcode_path: str | None,
-    ) -> str:
+    ) -> dict[str, object]:
         perf = self._runtime_performance()
         preferred = self._slicer_engine_preference()
         self._last_slicer_backend = preferred
@@ -587,7 +786,7 @@ class PrintMixin:
             mesh_count=int(len(meshes)),
         )
         try:
-            out_path = self._slice_with_v2_pipeline(
+            raw_payload = self._slice_with_v2_pipeline(
                 meshes=meshes,
                 combined_mesh=combined_mesh,
                 settings=settings,
@@ -595,9 +794,19 @@ class PrintMixin:
                 output_gcode_path=output_gcode_path,
                 perf=perf,
             )
+            slice_payload = self._normalize_slice_result_payload(raw_payload, settings)
             self._last_slicer_backend = "v2"
-            self._log_slicer_activity("slice_success", engine="v2", output_path=out_path)
-            return out_path
+            support_diagnostics = slice_payload.get("support_diagnostics")
+            support_status = ""
+            if isinstance(support_diagnostics, Mapping):
+                support_status = str(support_diagnostics.get("status", "") or "").strip()
+            self._log_slicer_activity(
+                "slice_success",
+                engine="v2",
+                output_path=slice_payload["gcode_path"],
+                support_status=support_status,
+            )
+            return slice_payload
         except Exception as exc:
             self._log_slicer_activity("slice_engine_error", engine="v2", error=str(exc))
             raise RuntimeError(f"slicer_v2 failed: {exc}") from exc
@@ -633,17 +842,24 @@ class PrintMixin:
             self.statusBar().showMessage(f"Slicing model ({status_hint})...")
         self._slice_in_progress = True
 
-        def on_done(gcode_path):
+        def on_done(payload):
             if dlg is not None:
                 dlg.close()
             self._slice_in_progress = False
-            self._last_gcode_path = gcode_path
-            self._last_slice_signature = signature
-            stats = self._analyze_gcode(gcode_path, settings)
-            stats["slicer_engine"] = str(getattr(self, "_last_slicer_backend", preferred_engine))
-            stats["cpu_threads"] = int(perf.get("max_threads", 1))
-            stats["gpu_mode"] = str(perf.get("gpu_mode", "auto"))
-            self._update_preview_from_gcode(gcode_path, stats)
+            try:
+                slice_payload, stats = self._apply_slice_payload_to_preview(
+                    payload,
+                    settings,
+                    signature,
+                    preferred_engine,
+                    perf,
+                )
+            except Exception as exc:
+                self.statusBar().showMessage("Slicing failed")
+                if show_errors:
+                    QtWidgets.QMessageBox.critical(self.main, "Slicing error", str(exc))
+                return
+            gcode_path = str(slice_payload["gcode_path"])
             self.statusBar().showMessage(
                 f"Sliced ({stats['slicer_engine'].upper()}) to {gcode_path}"
             )
@@ -770,15 +986,20 @@ class PrintMixin:
         def do_print(mesh_items, combined_mesh, s, source, active_printer):
             if active_printer is not None and hasattr(self.printer_manager, "set_active_printer"):
                 self.printer_manager.set_active_printer(active_printer)
-            gcode_path = self._slice_with_selected_engine(
+            slice_payload = self._slice_with_selected_engine(
                 mesh_items,
                 combined_mesh,
                 s,
                 source,
                 None,
             )
+            gcode_path = str(slice_payload["gcode_path"])
             message = self.printer_manager.print_gcode(gcode_path, printer=active_printer)
-            return {"gcode_path": gcode_path, "message": message}
+            return {
+                "gcode_path": gcode_path,
+                "support_diagnostics": slice_payload.get("support_diagnostics"),
+                "message": message,
+            }
 
         worker = Worker(do_print, meshes, combined, settings, source_path, printer)
 
@@ -786,16 +1007,21 @@ class PrintMixin:
             dlg.close()
             if not isinstance(payload, dict):
                 payload = {"message": str(payload), "gcode_path": None}
-            gcode_path = payload.get("gcode_path")
             message = str(payload.get("message", "Print request sent."))
+            gcode_path = payload.get("gcode_path")
             if gcode_path and isinstance(gcode_path, str) and os.path.exists(gcode_path):
-                self._last_gcode_path = gcode_path
-                self._last_slice_signature = signature
-                stats = self._analyze_gcode(gcode_path, settings)
-                stats["slicer_engine"] = str(getattr(self, "_last_slicer_backend", preferred_engine))
-                stats["cpu_threads"] = int(perf.get("max_threads", 1))
-                stats["gpu_mode"] = str(perf.get("gpu_mode", "auto"))
-                self._update_preview_from_gcode(gcode_path, stats)
+                try:
+                    self._apply_slice_payload_to_preview(
+                        payload,
+                        settings,
+                        signature,
+                        preferred_engine,
+                        perf,
+                    )
+                except Exception as exc:
+                    self.statusBar().showMessage("Print failed")
+                    QtWidgets.QMessageBox.critical(self.main, "Print error", str(exc))
+                    return
             self.statusBar().showMessage(message)
             QtWidgets.QMessageBox.information(self.main, "Print", message)
 
@@ -850,15 +1076,21 @@ class PrintMixin:
             out_path,
         )
 
-        def on_done(gcode_path):
+        def on_done(payload):
             dlg.close()
-            self._last_gcode_path = gcode_path
-            self._last_slice_signature = signature
-            stats = self._analyze_gcode(gcode_path, settings)
-            stats["slicer_engine"] = str(getattr(self, "_last_slicer_backend", preferred_engine))
-            stats["cpu_threads"] = int(perf.get("max_threads", 1))
-            stats["gpu_mode"] = str(perf.get("gpu_mode", "auto"))
-            self._update_preview_from_gcode(gcode_path, stats)
+            try:
+                slice_payload, _stats = self._apply_slice_payload_to_preview(
+                    payload,
+                    settings,
+                    signature,
+                    preferred_engine,
+                    perf,
+                )
+            except Exception as exc:
+                self.statusBar().showMessage("Export failed")
+                QtWidgets.QMessageBox.critical(self.main, "Export error", str(exc))
+                return
+            gcode_path = str(slice_payload["gcode_path"])
             self.statusBar().showMessage(f"Exported G-code to {gcode_path}")
             QtWidgets.QMessageBox.information(self.main, "Export complete", f"G-code written to:\n{gcode_path}")
 
@@ -974,6 +1206,7 @@ class PrintMixin:
                 preview = parse_gcode_preview_file(gcode_path, settings=preview_settings)
             except Exception as exc:
                 stats["preview_parse_error"] = str(exc)
+                self._log_slicer_activity("preview_parse_error", gcode_path=gcode_path, error=str(exc))
                 try:
                     preview = parse_gcode_preview(preview_text.splitlines(), settings=preview_settings)
                 except Exception:

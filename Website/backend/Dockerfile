@@ -14,7 +14,7 @@ RUN python -m pip install --upgrade pip && \
 
 COPY . .
 
-RUN mkdir -p /app/uploads && chown -R appuser:appuser /app
+RUN mkdir -p /app/runtime/uploads && chown -R appuser:appuser /app
 
 USER appuser
 

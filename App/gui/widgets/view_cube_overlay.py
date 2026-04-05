@@ -11,16 +11,17 @@ class ViewCubeOverlay(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._azimuth = -45.0
+        self._azimuth = 45.0
         self._elevation = 30.0
-        self._cube_size = 84
-        self._min_cube_size = 72
-        self._max_cube_size = 220
-        self._padding = 6
+        self._cube_size = 112
+        self._min_cube_size = 96
+        self._max_cube_size = 260
+        self._padding = 8
         self._face_regions = []
         self._edge_regions = []
         self._corner_regions = []
-        self._corner_radius = 6
+        self._corner_radius = 8
+        self._edge_radius = 5
         self.invert_x = True
         self.invert_y = True
         self.invert_z = True
@@ -53,8 +54,9 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         if target == self._cube_size:
             return
         self._cube_size = target
-        self._padding = max(4, int(round(target * 0.07)))
-        self._corner_radius = max(4, int(round(target * 0.07)))
+        self._padding = max(6, int(round(target * 0.085)))
+        self._corner_radius = max(6, int(round(target * 0.072)))
+        self._edge_radius = max(4, int(round(self._corner_radius * 0.72)))
         self.updateGeometry()
         self.update()
 
@@ -69,18 +71,23 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.Antialiasing, True)
         p.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
+        p.setRenderHint(QtGui.QPainter.SmoothPixmapTransform, True)
 
         faces, corners, edges = self._project_faces()
         self._face_regions = []
         self._edge_regions = []
         self._corner_regions = []
+        border = QtGui.QColor(self._border_color)
+        border.setAlpha(225)
+        border_pen = QtGui.QPen(border, max(1.0, self._cube_size * 0.012))
+        border_pen.setJoinStyle(QtCore.Qt.RoundJoin)
 
         faces.sort(key=lambda f: f["depth"])
         for face in faces:
             poly = QtGui.QPolygonF([QtCore.QPointF(pt[0], pt[1]) for pt in face["points"]])
             face_color = self._face_fill(face["normal_z"], face["name"])
             p.setBrush(QtGui.QBrush(face_color))
-            p.setPen(QtGui.QPen(self._border_color, 1))
+            p.setPen(border_pen)
             p.drawPolygon(poly)
 
             label_pos = face["label_pos"]
@@ -92,27 +99,33 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         self._draw_corner_zones(p, corners, self._border_color)
 
     def _face_fill(self, normal_z: float, name: str) -> QtGui.QColor:
-        shade = max(0.0, min(1.0, float(normal_z)))
-        color = QtGui.QColor(self._face_color)
-        color = color.lighter(110 + int(shade * 60))
         if name == self._active_name:
             return QtGui.QColor(self._active_color)
         if name == self._hover_name:
             return QtGui.QColor(self._hover_color)
+        shade = max(0.0, min(1.0, float(normal_z)))
+        color = QtGui.QColor(self._face_color)
+        color = color.lighter(108 + int(shade * 38))
         return color
 
     def _draw_face_label(self, p: QtGui.QPainter, label: str, pos, angle_deg: float, text: QtGui.QColor):
         p.save()
         p.translate(float(pos[0]), float(pos[1]))
         p.rotate(float(angle_deg))
-        p.setPen(QtGui.QPen(text))
         font = p.font()
         font.setBold(True)
-        font.setPointSize(max(7, int(round(self._cube_size * 0.09))))
+        font.setPointSize(max(9, int(round(self._cube_size * 0.115))))
+        font.setLetterSpacing(QtGui.QFont.AbsoluteSpacing, max(0.0, self._cube_size * 0.007))
         p.setFont(font)
         metrics = QtGui.QFontMetrics(font)
         rect = QtCore.QRectF(metrics.boundingRect(label))
         rect.moveCenter(QtCore.QPointF(0.0, 0.0))
+        shadow = QtGui.QColor(0, 0, 0, 110)
+        p.setPen(QtGui.QPen(shadow))
+        shadow_rect = QtCore.QRectF(rect)
+        shadow_rect.translate(max(0.8, self._cube_size * 0.006), max(0.8, self._cube_size * 0.006))
+        p.drawText(shadow_rect, QtCore.Qt.AlignCenter, label)
+        p.setPen(QtGui.QPen(text))
         p.drawText(rect, QtCore.Qt.AlignCenter, label)
         p.restore()
 
@@ -127,21 +140,16 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         if not corners:
             return
         fill = QtGui.QColor(self._accent_color)
-        fill.setAlpha(190)
-        p.setPen(QtGui.QPen(border, 1))
+        fill.setAlpha(210)
+        marker_border = QtGui.QColor(border)
+        marker_border.setAlpha(190)
+        p.setPen(QtGui.QPen(marker_border, max(1.0, self._cube_size * 0.01)))
         r = float(self._corner_radius)
         for corner in corners:
             cx, cy = corner["pos"]
             name = corner["name"]
             p.setBrush(QtGui.QBrush(self._marker_color(name, fill)))
-            poly = QtGui.QPolygonF(
-                [
-                    QtCore.QPointF(cx, cy - r),
-                    QtCore.QPointF(cx + r, cy),
-                    QtCore.QPointF(cx, cy + r),
-                    QtCore.QPointF(cx - r, cy),
-                ]
-            )
+            poly = self._marker_polygon(cx, cy, r)
             p.drawPolygon(poly)
             self._corner_regions.append((poly, name, corner["depth"]))
 
@@ -149,23 +157,28 @@ class ViewCubeOverlay(QtWidgets.QWidget):
         if not edges:
             return
         fill = QtGui.QColor(self._accent_color)
-        fill.setAlpha(190)
-        p.setPen(QtGui.QPen(border, 1))
-        r = float(self._corner_radius)
+        fill.setAlpha(132)
+        marker_border = QtGui.QColor(border)
+        marker_border.setAlpha(140)
+        p.setPen(QtGui.QPen(marker_border, max(1.0, self._cube_size * 0.008)))
+        r = float(self._edge_radius)
         for edge in edges:
             cx, cy = edge["pos"]
             name = edge["name"]
             p.setBrush(QtGui.QBrush(self._marker_color(name, fill)))
-            poly = QtGui.QPolygonF(
-                [
-                    QtCore.QPointF(cx, cy - r),
-                    QtCore.QPointF(cx + r, cy),
-                    QtCore.QPointF(cx, cy + r),
-                    QtCore.QPointF(cx - r, cy),
-                ]
-            )
+            poly = self._marker_polygon(cx, cy, r)
             p.drawPolygon(poly)
             self._edge_regions.append((poly, name, edge["depth"]))
+
+    def _marker_polygon(self, cx: float, cy: float, radius: float) -> QtGui.QPolygonF:
+        return QtGui.QPolygonF(
+            [
+                QtCore.QPointF(cx, cy - radius),
+                QtCore.QPointF(cx + radius, cy),
+                QtCore.QPointF(cx, cy + radius),
+                QtCore.QPointF(cx - radius, cy),
+            ]
+        )
 
     def mousePressEvent(self, a0: QtGui.QMouseEvent):
         pos = QtCore.QPointF(a0.pos())
@@ -244,7 +257,7 @@ class ViewCubeOverlay(QtWidgets.QWidget):
             self._cube_size - self._padding * 2,
             self._cube_size - self._padding * 2,
         )
-        scale = min(cube_area.width() / w, cube_area.height() / h) * 0.9
+        scale = min(cube_area.width() / w, cube_area.height() / h) * 0.86
         cx = cube_area.center().x()
         cy = cube_area.center().y()
 

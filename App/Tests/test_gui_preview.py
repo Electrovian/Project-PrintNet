@@ -124,6 +124,53 @@ class PreviewViewTests(QtTestCase):
 
         self.assertEqual(display_item.checkState(), QtCore.Qt.Unchecked)
 
+    def test_update_stats_renders_ai_and_support_diagnostics(self):
+        view, _main, _viewer = self._build()
+        view.update_stats(
+            {
+                "ai_warnings": ["Thin walls detected"],
+                "ai_suggestions": ["Enable supports for overhangs"],
+                "support_diagnostics": {
+                    "status": "warnings",
+                    "support_type": "tree",
+                    "support_style": "organic",
+                    "diagnostics_source": "supports_stage",
+                    "support_build_plate_only": True,
+                    "support_region_count": 2,
+                    "support_path_count": 5,
+                    "unsupported_island_count_total": 1,
+                    "tree_branch_count_total": 4,
+                    "tree_trunk_count_total": 1,
+                    "tree_merge_count_total": 1,
+                    "tree_collision_avoid_count_total": 2,
+                    "tree_pruned_branch_count_total": 1,
+                    "tree_parent_assignment_count_total": 3,
+                    "tree_branch_trunk_assignment_counts": {"child": 3, "trunk": 1},
+                    "warnings": [
+                        "support_planning:tree_style=organic",
+                        "layer_1:tree_collision_avoided=2",
+                    ],
+                },
+            }
+        )
+        text = view._diagnostics_value.toPlainText()
+        self.assertIn("AI Checks", text)
+        self.assertIn("Thin walls detected", text)
+        self.assertIn("Support Diagnostics", text)
+        self.assertIn("Status: warnings", text)
+        self.assertIn("Style: organic", text)
+        self.assertIn("Tree branches: 4", text)
+        self.assertIn("layer_1:tree_collision_avoided=2", text)
+
+    def test_update_stats_defaults_diagnostics_pane_when_empty(self):
+        view, _main, _viewer = self._build()
+        view.update_stats({})
+        text = view._diagnostics_value.toPlainText()
+        self.assertIn("AI Checks", text)
+        self.assertIn("All checks passed.", text)
+        self.assertIn("Support Diagnostics", text)
+        self.assertIn("No support diagnostics available.", text)
+
 
 if TYPE_CHECKING:
     from PyQt5 import QtWidgets as _QtWidgets

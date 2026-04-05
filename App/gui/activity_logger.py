@@ -2,13 +2,13 @@ import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from PyQt5 import QtCore, QtWidgets
 
 
 def _utc_timestamp():
-    return datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _short_text(value, max_len=160):

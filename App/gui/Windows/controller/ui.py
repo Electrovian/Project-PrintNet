@@ -1850,11 +1850,23 @@ class UiMixin(UiMixinBase):
         printers = [dict(item) for item in getattr(manager, "printers", []) if isinstance(item, dict)]
         connected = [row for row in printers if not bool(row.get("catalog_only", False))]
         if hasattr(self, "main"):
+            self.main.printers = [dict(item) for item in printers]
             self.main.connected_printers = connected
+        if hasattr(self, "settings_panel") and hasattr(self.settings_panel, "set_printers"):
+            self.settings_panel.set_printers(printers)
+        if hasattr(self, "preview_view") and hasattr(self.preview_view, "set_printers"):
+            self.preview_view.set_printers(printers)
         if hasattr(self, "device_view"):
             self.device_view.set_printers(connected)
         if hasattr(self, "control_view"):
             self.control_view.set_printers(connected)
+        active_printer = getattr(manager, "active_printer", None)
+        if isinstance(active_printer, dict):
+            self._apply_printer_profile(active_printer, source="refresh")
+            return
+        state = getattr(self, "runtime_printer_state", None)
+        if isinstance(state, RuntimePrinterState):
+            self._sync_printer_selection({"name": str(state.name)}, source=None)
 
     def _run_background_task(
         self,

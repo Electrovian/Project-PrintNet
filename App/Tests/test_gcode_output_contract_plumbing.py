@@ -72,7 +72,8 @@ class OutputContractPlumbingTests(unittest.TestCase):
                     perf={"max_threads": 1, "gpu_mode": "off"},
                 )
 
-        self.assertEqual(result, out_path)
+        self.assertEqual(result["gcode_path"], out_path)
+        self.assertIn("support_diagnostics", result)
         resolved_settings = captured["settings"]
         self.assertIsInstance(resolved_settings, SliceSettings)
         self.assertEqual(resolved_settings.bed_x, 300.0)
@@ -108,7 +109,8 @@ class OutputContractPlumbingTests(unittest.TestCase):
                             perf={"max_threads": 1, "gpu_mode": "off"},
                         )
 
-        self.assertEqual(result, out_path)
+        self.assertEqual(result["gcode_path"], out_path)
+        self.assertIn("support_diagnostics", result)
         resolved_settings = captured["resolved_settings"]
         self.assertEqual(resolved_settings["bed_x"], 300.0)
         self.assertEqual(resolved_settings["bed_y"], 280.0)

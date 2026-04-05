@@ -1019,17 +1019,21 @@ class PanelMixin:
                 )
             )
         elif kind == "fit":
-            painter.drawRoundedRect(QtCore.QRectF(2.5, 2.5, size - 5, size - 5), 4.0, 4.0)
+            inset = max(2.5, size * 0.16)
+            rect = QtCore.QRectF(inset, inset, size - inset * 2, size - inset * 2)
+            radius = max(3.0, size * 0.16)
+            painter.drawRoundedRect(rect, radius, radius)
+            cross_inset = max(2.0, size * 0.14)
             painter.drawLine(
                 QtCore.QLineF(
-                    QtCore.QPointF(5.0, size * 0.5),
-                    QtCore.QPointF(size - 5.0, size * 0.5),
+                    QtCore.QPointF(rect.left() + cross_inset, rect.center().y()),
+                    QtCore.QPointF(rect.right() - cross_inset, rect.center().y()),
                 )
             )
             painter.drawLine(
                 QtCore.QLineF(
-                    QtCore.QPointF(size * 0.5, 5.0),
-                    QtCore.QPointF(size * 0.5, size - 5.0),
+                    QtCore.QPointF(rect.center().x(), rect.top() + cross_inset),
+                    QtCore.QPointF(rect.center().x(), rect.bottom() - cross_inset),
                 )
             )
         else:
@@ -1045,14 +1049,14 @@ class PanelMixin:
                 cube_size = int(self._view_cube.sizeHint().width())
             except Exception:
                 cube_size = 84
-        cube_size = max(72, cube_size)
+        cube_size = max(96, cube_size)
 
-        action_btn = max(24, int(round(cube_size * 0.34)))
-        action_icon = max(14, int(round(action_btn * 0.58)))
-        fit_btn = max(action_btn + 2, int(round(action_btn * 1.08)))
-        fit_icon = max(14, int(round(fit_btn * 0.58)))
-        spacing = max(3, int(round(action_btn * 0.14)))
-        margin = max(2, int(round(action_btn * 0.08)))
+        action_btn = max(28, min(56, int(round(cube_size * 0.3))))
+        action_icon = max(16, min(28, int(round(action_btn * 0.56))))
+        fit_btn = max(34, min(64, int(round(cube_size * 0.34))))
+        fit_icon = max(16, min(30, int(round(fit_btn * 0.56))))
+        spacing = max(4, int(round(action_btn * 0.16)))
+        margin = max(3, int(round(action_btn * 0.12)))
         return {
             "action_btn": action_btn,
             "action_icon": action_icon,
@@ -1126,13 +1130,18 @@ class PanelMixin:
             fit_radius = max(6, int(round(self._fit_camera_btn.height() * 0.26)))
             self._fit_camera_btn.setStyleSheet(
                 "QToolButton#FitCameraButton {"
-                "border: 1px solid transparent;"
+                f"background-color: {self._rgba_css(bg, 104)};"
+                f"border: 1px solid {self._rgba_css(border, 180)};"
                 f"border-radius: {fit_radius}px;"
-                "padding: 2px;"
+                "padding: 0;"
                 "}"
                 "QToolButton#FitCameraButton:hover {"
                 f"background-color: {self._rgba_css(hover, 190)};"
                 f"border-color: {self._rgba_css(active, 220)};"
+                "}"
+                "QToolButton#FitCameraButton:pressed {"
+                f"background-color: {self._rgba_css(active, 170)};"
+                f"border-color: {self._rgba_css(active, 255)};"
                 "}"
             )
 
@@ -1158,9 +1167,10 @@ class PanelMixin:
             return
         if not hasattr(self, "_view_cube") or self._view_cube is None:
             return
-        margin = max(8, int(round(self._view_cube.sizeHint().width() * 0.12)))
-        x = self._view_cube.geometry().right() + margin
-        y = self._view_cube.geometry().bottom() - self._fit_camera_btn.height()
+        margin = max(10, int(round(self._view_cube.sizeHint().width() * 0.1)))
+        cube_rect = self._view_cube.geometry()
+        x = cube_rect.right() + margin
+        y = int(round(cube_rect.center().y() + cube_rect.height() * 0.16 - self._fit_camera_btn.height() * 0.5))
         max_x = max(0, self.width() - self._fit_camera_btn.width())
         max_y = max(0, self.height() - self._fit_camera_btn.height())
         self._fit_camera_btn.move(max(0, min(max_x, x)), max(0, min(max_y, y)))

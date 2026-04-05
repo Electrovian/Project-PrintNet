@@ -17,6 +17,7 @@ from config.bootstrap import (  # noqa: E402
     normalize_bootstrap_config,
     save_bootstrap_config,
     setup_completed,
+    user_config_dir,
     user_cache_dir,
 )
 
@@ -65,6 +66,13 @@ class BootstrapConfigTests(unittest.TestCase):
             with mock.patch("config.bootstrap.os.name", "nt"):
                 with mock.patch.dict(os.environ, {"LOCALAPPDATA": str(root)}, clear=False):
                     self.assertEqual(user_cache_dir(), root.joinpath("EON-OpenSlicer", "cache"))
+
+    def test_user_config_dir_windows_uses_appdata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).joinpath("AppData")
+            with mock.patch("config.bootstrap.os.name", "nt"):
+                with mock.patch.dict(os.environ, {"APPDATA": str(root)}, clear=False):
+                    self.assertEqual(user_config_dir(), root.joinpath("EON-OpenSlicer"))
 
     def test_user_cache_dir_uses_xdg_cache_home_when_set(self):
         class _FakePosixPath(PurePosixPath):

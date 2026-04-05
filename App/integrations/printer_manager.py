@@ -86,48 +86,79 @@ class PrinterManager:
         gcode_path = slice_file(stl_path, settings=settings, printer=self.active_printer)
         return self.print_gcode(gcode_path, printer=self.active_printer)
 
+    def _format_stage_failure(
+        self,
+        connector_type: str,
+        stage: str,
+        payload: object | None = None,
+    ) -> str:
+        connector_name = str(connector_type or "connector").strip() or "connector"
+        stage_name = str(stage or "operation").strip() or "operation"
+        state = ""
+        message = ""
+        if isinstance(payload, Mapping):
+            state = str(payload.get("state", "")).strip()
+            message = str(payload.get("message", "")).strip()
+        elif payload is not None:
+            message = str(payload).strip()
+
+        prefix = f"{connector_name} {stage_name} failed"
+        if state:
+            prefix = f"{prefix} ({state})"
+        if message:
+            return f"{prefix}: {message}"
+        return f"{prefix}."
+
     def print_gcode(self, gcode_path: str, printer: Mapping[str, Any] | None = None) -> str:
         active = dict(printer) if isinstance(printer, Mapping) else self.active_printer
         if not active:
-            return f"No printer configured. G-code generated at {gcode_path}"
+            return f"Print not submitted: no printer configured. G-code generated at {gcode_path}"
 
         try:
             connector = self.connector_registry.resolve(active)
-            hydrated = self.hydrate_printer_credentials(active)
-            connect_result = connector.connect(hydrated)
-            if isinstance(connect_result, dict) and not bool(connect_result.get("ok", True)):
-                message = str(connect_result.get("message", "")).strip()
-                if message:
-                    return message
-                return f"Connector {connector.connector_type} is not ready."
-
-            upload_result = connector.upload(hydrated, gcode_path)
-            if isinstance(upload_result, dict) and not bool(upload_result.get("ok", True)):
-                message = str(upload_result.get("message", "")).strip()
-                if message:
-                    return message
-                return f"Connector {connector.connector_type} upload failed."
-
-            remote_path = ""
-            if isinstance(upload_result, dict):
-                remote_path = str(upload_result.get("remote_path", "")).strip()
-            start_result = connector.start_print(hydrated, remote_path=remote_path, gcode_path=gcode_path)
-            if isinstance(start_result, dict):
-                if not bool(start_result.get("ok", True)):
-                    message = str(start_result.get("message", "")).strip()
-                    if message:
-                        return message
-                    return f"Connector {connector.connector_type} start failed."
-                message = str(start_result.get("message", "")).strip()
-                if message:
-                    return message
-
-            filename = Path(gcode_path).name
-            return f"Submitted {filename} to printer using {connector.connector_type}."
         except ConnectorError as exc:
             return f"Printer connector error: {exc}"
         except Exception as exc:
             return f"Unexpected printer connector error: {exc}"
+
+        hydrated = self.hydrate_printer_credentials(active)
+
+        try:
+            connect_result = connector.connect(hydrated)
+        except ConnectorError as exc:
+            return self._format_stage_failure(connector.connector_type, "connect", exc)
+        except Exception as exc:
+            return self._format_stage_failure(connector.connector_type, "connect", exc)
+        if isinstance(connect_result, Mapping) and not bool(connect_result.get("ok", True)):
+            return self._format_stage_failure(connector.connector_type, "connect", connect_result)
+
+        try:
+            upload_result = connector.upload(hydrated, gcode_path)
+        except ConnectorError as exc:
+            return self._format_stage_failure(connector.connector_type, "upload", exc)
+        except Exception as exc:
+            return self._format_stage_failure(connector.connector_type, "upload", exc)
+        if isinstance(upload_result, Mapping) and not bool(upload_result.get("ok", True)):
+            return self._format_stage_failure(connector.connector_type, "upload", upload_result)
+
+        remote_path = ""
+        if isinstance(upload_result, Mapping):
+            remote_path = str(upload_result.get("remote_path", "")).strip()
+        try:
+            start_result = connector.start_print(hydrated, remote_path=remote_path, gcode_path=gcode_path)
+        except ConnectorError as exc:
+            return self._format_stage_failure(connector.connector_type, "start", exc)
+        except Exception as exc:
+            return self._format_stage_failure(connector.connector_type, "start", exc)
+        if isinstance(start_result, Mapping):
+            if not bool(start_result.get("ok", True)):
+                return self._format_stage_failure(connector.connector_type, "start", start_result)
+            message = str(start_result.get("message", "")).strip()
+            if message:
+                return message
+
+        filename = Path(gcode_path).name
+        return f"Submitted {filename} to printer using {connector.connector_type}."
 
     def discover_local_wifi_printers(
         self,
@@ -207,14 +238,25 @@ class PrinterManager:
             return {
                 "ok": ok,
                 "state": state,
+                "stage": "connect",
                 "connector_type": connector.connector_type,
                 "message": message,
                 "details": dict(connect_payload) if isinstance(connect_payload, Mapping) else {},
+            }
+        except ConnectorError as exc:
+            return {
+                "ok": False,
+                "state": "failed",
+                "stage": "connect",
+                "connector_type": str(printer.get("connector_type", "")).strip(),
+                "message": str(exc),
+                "details": {},
             }
         except Exception as exc:
             return {
                 "ok": False,
                 "state": "failed",
+                "stage": "connect",
                 "connector_type": str(printer.get("connector_type", "")).strip(),
                 "message": str(exc),
                 "details": {},

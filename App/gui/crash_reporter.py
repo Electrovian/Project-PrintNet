@@ -6,14 +6,14 @@ import sys
 import threading
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import quote
 
 from PyQt5 import QtCore, QtGui
 
 
 def _utc_timestamp():
-    return datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _safe_text(value, max_len=200):

@@ -24,10 +24,7 @@ from .profile_compat import (
 )
 
 
-DEFAULT_CLI_CONFIG_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "printer_presets/seed_resources/profiles/BBL/cli_config.json"
-)
+DEFAULT_CLI_CONFIG_IDENTIFIER = "profiles/BBL/cli_config.json"
 
 
 class CliParameterError(ValueError):
@@ -152,8 +149,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--downward-check", action="store_true", help="Enable downward compatibility lookup.")
     parser.add_argument(
         "--cli-config-path",
-        default=str(DEFAULT_CLI_CONFIG_PATH),
-        help="Path to EON-compatible cli_config.json.",
+        default=DEFAULT_CLI_CONFIG_IDENTIFIER,
+        help="Path or embedded identifier for EON-compatible cli_config.json.",
     )
     parser.add_argument("--printer-name", default="", help="Printer preset name for downward compatibility lookup.")
     parser.add_argument("--printer-model", default="", help="Printer model key for downward compatibility lookup.")
@@ -213,9 +210,14 @@ def main(argv: list[str] | None = None) -> int:
                 printer_name=str(args.printer_name),
             )
             run_result.downward_compatible_machine = compat.downward_compatible_machine
+            run_result.cli_config_source = compat.config_source
+            run_result.cli_config_warnings = list(compat.warnings)
             compat_warnings = list(compat.warnings)
 
         run_result.prepare_time = perf_counter() - run_started
+        run_result.profile_setting_paths = list(merge_report.loaded_setting_paths)
+        run_result.profile_filament_paths = list(merge_report.loaded_filament_paths)
+        run_result.profile_warnings = list(merge_report.warnings)
 
         context = create_context(
             job_id=f"slicer-v2-{uuid.uuid4().hex[:12]}",
@@ -263,8 +265,12 @@ def main(argv: list[str] | None = None) -> int:
             "gcode_path": str(output_path.resolve()),
             "profile_warning_count": int(len(merge_report.warnings)),
             "profile_warnings": merge_report.warnings,
+            "profile_setting_paths": merge_report.loaded_setting_paths,
+            "profile_filament_paths": merge_report.loaded_filament_paths,
             "compat_warning_count": int(len(compat_warnings)),
             "compat_warnings": compat_warnings,
+            "cli_config_source": run_result.cli_config_source,
+            "cli_config_warnings": run_result.cli_config_warnings,
         }
     except CliParameterError as exc:
         _set_failure(run_result, CliExitCode.CLI_INVALID_PARAMS, str(exc))

@@ -1980,8 +1980,8 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
 
     def _view_cube_target_size(self) -> int:
         min_dim = max(1, int(min(self.width(), self.height())))
-        target = int(round(min_dim * 0.12))
-        return max(84, min(170, target))
+        target = int(round(min_dim * 0.15))
+        return max(110, min(196, target))
 
     def _position_view_cube(self):
         if not hasattr(self, "_view_cube") or self._view_cube is None:

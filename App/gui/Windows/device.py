@@ -1,6 +1,7 @@
 from PyQt5 import QtWidgets, QtCore
 
 from ..i18n import tr
+from ..printer_selection import connector_endpoint, connector_name
 from ..theme import theme_css
 from config.defaults import DEFAULTS
 
@@ -189,30 +190,34 @@ class DeviceView(QtWidgets.QWidget):
             for printer in raw_printers
             if not (isinstance(printer, dict) and printer.get("catalog_only"))
         ]
-        self._printer_combo.clear()
-        if not self._printers:
-            self._printer_combo.addItem(tr("device.connected.none", "No connected printers"))
-            self._printer_combo.setEnabled(False)
-        else:
-            self._printer_combo.setEnabled(True)
-            default_name = ""
-            main = self.parent()
-            runtime_state = getattr(main, "runtime_printer_state", None) if main is not None else None
-            if runtime_state is not None:
-                default_name = str(getattr(runtime_state, "name", "")).strip().lower()
-            if not default_name:
-                default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
-            default_index = None
-            for idx, printer in enumerate(self._printers):
-                name = printer.get("name", "Printer")
-                name = name or tr("device.printer.default_name", "Printer")
-                self._printer_combo.addItem(name)
-                if default_name and str(name or "").strip().lower() == default_name:
-                    default_index = idx
-            if default_index is not None:
-                self._printer_combo.setCurrentIndex(default_index)
+        block = self._printer_combo.blockSignals(True)
+        try:
+            self._printer_combo.clear()
+            if not self._printers:
+                self._printer_combo.addItem(tr("device.connected.none", "No connected printers"))
+                self._printer_combo.setEnabled(False)
+            else:
+                self._printer_combo.setEnabled(True)
+                default_name = ""
+                main = self.parent()
+                runtime_state = getattr(main, "runtime_printer_state", None) if main is not None else None
+                if runtime_state is not None:
+                    default_name = str(getattr(runtime_state, "name", "")).strip().lower()
+                if not default_name:
+                    default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+                default_index = None
+                for idx, printer in enumerate(self._printers):
+                    name = printer.get("name", "Printer")
+                    name = name or tr("device.printer.default_name", "Printer")
+                    self._printer_combo.addItem(name)
+                    if default_name and str(name or "").strip().lower() == default_name:
+                        default_index = idx
+                if default_index is not None:
+                    self._printer_combo.setCurrentIndex(default_index)
+        finally:
+            self._printer_combo.blockSignals(block)
         self._populate_connected_list()
-        self._update_details()
+        self._update_details(emit_signal=False)
 
     def current_printer(self):
         if not self._printers:
@@ -253,9 +258,16 @@ class DeviceView(QtWidgets.QWidget):
                 z=printer.get("bed_z", tr("device.value.na", "n/a")),
             ),
         ]
-        url = printer.get("octoprint_url")
-        if url:
-            desc.append(tr("device.printer.octoprint", url=url))
+        connector = connector_name(printer)
+        if connector:
+            desc.append(
+                tr("device.printer.connector", "Connector: {connector}", connector=connector)
+            )
+        endpoint = connector_endpoint(printer)
+        if endpoint:
+            desc.append(
+                tr("device.printer.endpoint", "Endpoint: {endpoint}", endpoint=endpoint)
+            )
         self._printer_details.setText("\n".join(desc))
         self._send_btn.setEnabled(True)
         if emit_signal:

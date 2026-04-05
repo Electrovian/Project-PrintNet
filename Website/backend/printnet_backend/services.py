@@ -58,7 +58,7 @@ class BackendState:
         "queue_worker_operational",
         "kubernetes_packaging_validated",
     )
-    model_store_dir: str = "Website/backend/uploads"
+    model_store_dir: str = "Website/backend/runtime/uploads"
 
     def __post_init__(self):
         self.default_role = normalize_role(self.default_role)
@@ -915,13 +915,28 @@ def _project_root_dir() -> str:
     return os.path.abspath(os.path.join(_backend_root_dir(), "..", ".."))
 
 
+def _backend_runtime_dir() -> str:
+    return os.path.abspath(os.path.join(_backend_root_dir(), "runtime"))
+
+
+def _default_model_store_dir() -> str:
+    return os.path.abspath(os.path.join(_backend_runtime_dir(), "uploads"))
+
+
 def _normalize_model_store_dir(value: object) -> str:
     text = str(value or "").strip()
     if not text:
-        return os.path.abspath(os.path.join(_backend_root_dir(), "uploads"))
+        return _default_model_store_dir()
     if os.path.isabs(text):
         return os.path.abspath(text)
     normalized = text.replace("\\", "/")
+    legacy_normalized = normalized.lower().strip("/")
+    if (
+        legacy_normalized in {"uploads", "backend/uploads", "website/backend/uploads"}
+        or legacy_normalized.endswith("/backend/uploads")
+        or legacy_normalized.endswith("/website/backend/uploads")
+    ):
+        return _default_model_store_dir()
     if normalized.startswith("Website/"):
         project_root = _project_root_dir()
         if os.path.isdir(os.path.join(project_root, "Website")):
@@ -929,6 +944,8 @@ def _normalize_model_store_dir(value: object) -> str:
         normalized = normalized[len("Website/") :]
         if normalized.startswith("backend/"):
             normalized = normalized[len("backend/") :]
+    if normalized.startswith("runtime/"):
+        return os.path.abspath(os.path.join(_backend_root_dir(), normalized))
     return os.path.abspath(os.path.join(_backend_root_dir(), normalized))
 
 
