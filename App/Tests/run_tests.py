@@ -28,13 +28,26 @@ SMOKE_TESTS = [
     "test_gui_control_view.py",
 ]
 
+SHELL_TESTS = [
+    "test_app_shell_audit_entrypoint.py",
+]
+
 
 def _build_suite(scope: str) -> unittest.TestSuite:
     loader = unittest.TestLoader()
     start_dir = os.path.dirname(__file__)
     scope = (scope or "full").strip().lower()
     if scope == "gui":
-        return loader.discover(start_dir, pattern="test_gui_*.py")
+        suite = unittest.TestSuite()
+        suite.addTests(loader.discover(start_dir, pattern="test_gui_*.py"))
+        for pattern in SHELL_TESTS:
+            suite.addTests(loader.discover(start_dir, pattern=pattern))
+        return suite
+    if scope == "shell":
+        suite = unittest.TestSuite()
+        for pattern in SHELL_TESTS:
+            suite.addTests(loader.discover(start_dir, pattern=pattern))
+        return suite
     if scope == "smoke":
         suite = unittest.TestSuite()
         for pattern in SMOKE_TESTS:
@@ -47,9 +60,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--scope",
-        choices=("smoke", "full", "gui"),
+        choices=("smoke", "full", "gui", "shell"),
         default=os.environ.get("TEST_SCOPE", "full"),
-        help="Test scope: smoke, full, or gui",
+        help="Test scope: smoke, shell, full, or gui",
     )
     args = parser.parse_args()
 

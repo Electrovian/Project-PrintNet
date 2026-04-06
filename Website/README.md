@@ -9,13 +9,16 @@ Repo-wide launch and smoke instructions live in `docs/LAUNCH_READINESS.md`.
 Run from the repository root:
 
 ```powershell
-docker compose up --build -d frontend backend worker redis mongo
+powershell -ExecutionPolicy Bypass -File scripts/launch-website-docker.ps1
 ```
 
-Open:
+The launcher:
 
-- Frontend: `http://localhost:8080`
-- Backend health: `http://localhost:8000/api/v1/health/live`
+- starts `frontend`, `backend`, `worker`, `redis`, `mongo`, and `mailpit`
+- detects the current LAN URL for other devices on the same private network
+- creates or refreshes the Windows firewall rule for port `8080`
+- generates QR assets and a launch manifest under `%TEMP%\printnet_website_launch_<timestamp>\`
+- prints the effective email mode (`real_smtp` or `mail_capture`)
 
 Stop services:
 
@@ -23,11 +26,19 @@ Stop services:
 docker compose down
 ```
 
-Optional helper script:
+If you still want to launch the stack directly without the helper:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/launch-website-docker.ps1
+docker compose up --build -d frontend backend worker redis mongo mailpit
 ```
+
+Local URLs:
+
+- Frontend: `http://localhost:8080`
+- Backend health: `http://localhost:8000/api/v1/health/live`
+- Mail capture UI when using the default local email sink: `http://localhost:8025`
+
+The supported LAN-sharing path is the Docker frontend on port `8080`. Direct backend startup stays local-only and is not the QR target.
 
 The supported mobile launch path for this demo is the Toga/Briefcase app in `Mobile/app_mobile.py`.
 The Flutter runner under `Mobile/flutter_runner/` is experimental/future work and should not be treated as the launch target.

@@ -52,6 +52,7 @@ def create_app(
         auth_verification_code_ttl_seconds=resolved_settings.auth_verification_code_ttl_seconds,
         auth_verification_max_attempts=resolved_settings.auth_verification_max_attempts,
         auth_expose_debug_code=resolved_settings.auth_expose_debug_code,
+        auth_email_require_smtp=resolved_settings.auth_email_require_smtp,
         auth_email_from=resolved_settings.auth_email_from,
         smtp_host=resolved_settings.smtp_host,
         smtp_port=resolved_settings.smtp_port,

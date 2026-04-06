@@ -171,6 +171,27 @@ class PreviewViewTests(QtTestCase):
         self.assertIn("Support Diagnostics", text)
         self.assertIn("No support diagnostics available.", text)
 
+    def test_hide_stops_preview_playback(self):
+        from slicer_v2.legacy_gcode_preview import parse_gcode_preview
+
+        view, _main, _viewer = self._build()
+        preview = parse_gcode_preview(
+            [
+                ";LAYER:0",
+                ";TYPE:Outer wall",
+                "G1 X0 Y0 Z0.2 F1200",
+                "G1 X10 Y0 E0.6 F1200",
+            ]
+        )
+        view.set_preview_data(preview)
+        view._play_btn.setChecked(True)
+        self.assertTrue(view._play_timer.isActive())
+
+        view.hide()
+
+        self.assertFalse(view._play_timer.isActive())
+        self.assertFalse(view._play_btn.isChecked())
+
 
 if TYPE_CHECKING:
     from PyQt5 import QtWidgets as _QtWidgets

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import tempfile
 import uuid
 from dataclasses import asdict, is_dataclass, replace
@@ -13,8 +14,15 @@ import trimesh
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from ...workers import Worker
+from ...widgets.email_compose_dialog import EmailComposeDialog
 from config.defaults import DEFAULTS
 from config.performance import resolve_performance_limits
+from integrations.email_delivery import (
+    EmailConfigurationError,
+    EmailDeliveryError,
+    build_mailto_url,
+    send_email_via_smtp,
+)
 from slicer_v2.legacy_ai_checks import run_ai_checks
 from slicer_v2.legacy_gcode_preview import parse_gcode_preview, parse_gcode_preview_file
 from slicer_v2.legacy_gcode_stats import estimate_gcode_file
@@ -1113,6 +1121,138 @@ class PrintMixin:
 
     def _on_device_save_requested(self):
         self.export_gcode()
+
+    def _default_email_subject(self, printer: Mapping[str, object] | None) -> str:
+        printer_name = ""
+        if isinstance(printer, Mapping):
+            printer_name = str(printer.get("name", "") or "").strip()
+        if not printer_name:
+            printer_name = str(getattr(getattr(self, "runtime_printer_state", None), "name", "") or "").strip()
+        if self.current_model_id is not None and hasattr(self.viewer, "get_model_name"):
+            model_name = str(self.viewer.get_model_name(self.current_model_id) or "").strip()
+        else:
+            model_name = ""
+        if not model_name:
+            model_name = self._default_plate_gcode_basename()
+        if printer_name:
+            return f"Print job handoff: {model_name} -> {printer_name}"
+        return f"Print job handoff: {model_name}"
+
+    def _device_email_context_lines(self, printer: Mapping[str, object] | None) -> list[str]:
+        lines = [
+            f"Generated from: {socket.gethostname()}",
+        ]
+        if isinstance(printer, Mapping):
+            printer_name = str(printer.get("name", "") or "").strip()
+            if printer_name:
+                lines.append(f"Printer: {printer_name}")
+            connector = str(printer.get("connector_type", "") or "").strip()
+            if connector:
+                lines.append(f"Connector: {connector}")
+            for key in (
+                "endpoint",
+                "octoprint_url",
+                "moonraker_url",
+                "prusalink_url",
+                "bambu_url",
+                "creality_url",
+            ):
+                endpoint = str(printer.get(key, "") or "").strip()
+                if endpoint:
+                    lines.append(f"Endpoint: {endpoint}")
+                    break
+        if self.current_model_id is not None and hasattr(self.viewer, "get_model_name"):
+            model_name = str(self.viewer.get_model_name(self.current_model_id) or "").strip()
+            if model_name:
+                lines.append(f"Model: {model_name}")
+        plate_name = ""
+        if hasattr(self.viewer, "get_current_plate_name"):
+            plate_name = str(self.viewer.get_current_plate_name() or "").strip()
+        if plate_name:
+            lines.append(f"Plate: {plate_name}")
+        if self._current_project_path:
+            lines.append(f"Project path: {self._current_project_path}")
+        if self._last_gcode_path:
+            lines.append(f"G-code path: {self._last_gcode_path}")
+        return lines
+
+    def _device_email_body(self, printer: Mapping[str, object] | None, note: str) -> str:
+        lines = ["EON-OpenSlicer print job handoff", ""]
+        lines.extend(self._device_email_context_lines(printer))
+        cleaned_note = str(note or "").strip()
+        if cleaned_note:
+            lines.extend(["", "Operator note:", cleaned_note])
+        return "\n".join(lines).strip() + "\n"
+
+    def _on_device_email_requested(self):
+        printer = self.device_view.current_printer() if hasattr(self, "device_view") else None
+        last_recipient = ""
+        if hasattr(self, "_ui_settings") and self._ui_settings is not None:
+            last_recipient = str(self._ui_settings.value("email/last_recipient", "") or "").strip()
+        dialog = EmailComposeDialog(
+            recipient=last_recipient,
+            subject=self._default_email_subject(printer),
+            context_lines=self._device_email_context_lines(printer),
+            parent=self.main,
+        )
+        if dialog.exec_() != QtWidgets.QDialog.Accepted:
+            self.statusBar().showMessage("Email cancelled")
+            return
+
+        payload = dialog.payload()
+        recipient = str(payload.get("recipient", "") or "").strip()
+        subject = str(payload.get("subject", "") or "").strip()
+        note = str(payload.get("note", "") or "").strip()
+        body = self._device_email_body(printer, note)
+
+        if hasattr(self, "_ui_settings") and self._ui_settings is not None:
+            self._ui_settings.setValue("email/last_recipient", recipient)
+            self._ui_settings.sync()
+
+        try:
+            smtp_result = send_email_via_smtp(recipient=recipient, subject=subject, body=body)
+            sender = str(smtp_result.get("sender", "no-reply@printnet.local"))
+            message = f"Email sent to {recipient} via SMTP."
+            self.statusBar().showMessage(message)
+            QtWidgets.QMessageBox.information(
+                self.main,
+                "Send email",
+                f"{message}\n\nFrom: {sender}",
+            )
+            return
+        except (EmailConfigurationError, EmailDeliveryError) as exc:
+            fallback_error = str(exc).strip()
+
+        reply = QtWidgets.QMessageBox.question(
+            self.main,
+            "Send email",
+            "SMTP delivery is unavailable.\n\n"
+            f"{fallback_error}\n\n"
+            "Open your default mail app with this draft instead?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.Yes,
+        )
+        if reply != QtWidgets.QMessageBox.Yes:
+            self.statusBar().showMessage("Email fallback declined")
+            return
+
+        try:
+            mailto_url = build_mailto_url(recipient=recipient, subject=subject, body=body)
+        except EmailConfigurationError as exc:
+            QtWidgets.QMessageBox.warning(self.main, "Send email", str(exc))
+            self.statusBar().showMessage("Email fallback unavailable")
+            return
+
+        opened = QtGui.QDesktopServices.openUrl(QtCore.QUrl(mailto_url))
+        if not opened:
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                "Send email",
+                "Unable to open the default mail application for the fallback draft.",
+            )
+            self.statusBar().showMessage("Email fallback failed")
+            return
+        self.statusBar().showMessage("Opened fallback email draft")
 
     def _send_existing_gcode(self, printer, gcode_path: str):
         if not gcode_path or not os.path.exists(gcode_path):

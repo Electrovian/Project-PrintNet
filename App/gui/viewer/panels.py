@@ -165,6 +165,31 @@ class PanelMixin:
         self._update_simplify_warning_style()
         panel.hide()
 
+    def _build_viewer_runtime_warning(self):
+        parent = cast(QtWidgets.QWidget, self)
+        panel = QtWidgets.QFrame(parent)
+        panel.setObjectName("ViewerRuntimeWarning")
+        layout = QtWidgets.QVBoxLayout(panel)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(4)
+
+        title = QtWidgets.QLabel(self._t("viewer.runtime_warning.title", "3D Viewer Safe Mode"), panel)
+        title.setObjectName("ViewerRuntimeWarningTitle")
+        title.setWordWrap(True)
+
+        details = QtWidgets.QLabel(panel)
+        details.setObjectName("ViewerRuntimeWarningDetails")
+        details.setWordWrap(True)
+
+        layout.addWidget(title)
+        layout.addWidget(details)
+
+        self._viewer_runtime_warning = panel
+        self._viewer_runtime_warning_title = title
+        self._viewer_runtime_warning_details = details
+        self._update_viewer_runtime_warning_style()
+        panel.hide()
+
     def _update_selection_info_style(self):
         if not hasattr(self, "_selection_info") or self._selection_info is None:
             return
@@ -257,6 +282,29 @@ class PanelMixin:
             "}"
         )
 
+    def _update_viewer_runtime_warning_style(self):
+        if getattr(self, "_viewer_runtime_warning", None) is None:
+            return
+        bg = theme_qcolor("popup_bg")
+        border = theme_qcolor("popup_border")
+        text = theme_qcolor("popup_text")
+        accent = theme_qcolor("mesh_warning")
+        self._viewer_runtime_warning.setStyleSheet(
+            "QFrame#ViewerRuntimeWarning {"
+            f"background-color: {self._rgba_css(bg, 242)};"
+            f"border: 1px solid {self._rgba_css(border, 242)};"
+            f"border-left: 4px solid {self._rgba_css(accent, 255)};"
+            "border-radius: 8px;"
+            "}"
+            "QLabel#ViewerRuntimeWarningTitle {"
+            f"color: {self._rgba_css(text, 255)};"
+            "font-weight: 700;"
+            "}"
+            "QLabel#ViewerRuntimeWarningDetails {"
+            f"color: {self._rgba_css(text, 232)};"
+            "}"
+        )
+
     def _position_selection_info(self):
         self._position_bottom_left_panels()
 
@@ -284,6 +332,17 @@ class PanelMixin:
             self._simplify_warning.adjustSize()
             y = max(margin, y - self._simplify_warning.height())
             self._simplify_warning.move(margin, y)
+
+    def _position_viewer_runtime_warning(self):
+        panel = getattr(self, "_viewer_runtime_warning", None)
+        if panel is None or not panel.isVisible():
+            return
+        panel.adjustSize()
+        top_margin = 18
+        x = max(12, int(round((self.width() - panel.width()) * 0.5)))
+        max_x = max(12, self.width() - panel.width() - 12)
+        panel.move(min(x, max_x), top_margin)
+        panel.raise_()
 
     def set_labels_visible(self, visible: bool):
         self._labels_enabled = bool(visible)
@@ -408,6 +467,21 @@ class PanelMixin:
             return
         self._simplify_warning_model_id = None
         self._simplify_warning.setVisible(False)
+
+    def _show_viewer_runtime_warning(self, message: str):
+        panel = getattr(self, "_viewer_runtime_warning", None)
+        details = getattr(self, "_viewer_runtime_warning_details", None)
+        if panel is None or details is None:
+            return
+        details.setText(str(message or "").strip())
+        panel.setVisible(True)
+        self._position_viewer_runtime_warning()
+
+    def _hide_viewer_runtime_warning(self):
+        panel = getattr(self, "_viewer_runtime_warning", None)
+        if panel is None:
+            return
+        panel.setVisible(False)
 
     def set_print_stats(self, stats: dict | None):
         if self._print_stats_panel is None:
@@ -786,6 +860,8 @@ class PanelMixin:
         return volume
 
     def reset_view(self):
+        if hasattr(self, "stop_view_animation"):
+            self.stop_view_animation()
         self.opts["distance"] = self._default_view["distance"] # pyright: ignore[reportArgumentType]
         self.opts["elevation"] = self._default_view["elevation"] # pyright: ignore[reportArgumentType]
         self.opts["azimuth"] = self._default_view["azimuth"] # pyright: ignore[reportArgumentType]
@@ -793,7 +869,9 @@ class PanelMixin:
         self._sync_view_cube()
         self.update()
 
-    def set_view(self, azimuth: float, elevation: float, distance: float | None = None):
+    def set_view(self, azimuth: float, elevation: float, distance: float | None = None, _from_animation: bool = False):
+        if not _from_animation and hasattr(self, "stop_view_animation"):
+            self.stop_view_animation()
         self.opts["azimuth"] = float(azimuth) # pyright: ignore[reportArgumentType]
         self.opts["elevation"] = float(elevation) # pyright: ignore[reportArgumentType]
         if distance is not None:
@@ -834,8 +912,9 @@ class PanelMixin:
     def _build_view_cube(self):
         self._view_cube = ViewCubeOverlay(cast(QtWidgets.QWidget, self))
         self._view_cube.viewRequested.connect(self._set_view_from_cube)
-        self._view_cube.homeRequested.connect(self.reset_view)
-        self._build_fit_camera_button()
+        self._view_cube.orbitRequested.connect(self._orbit_from_cube)
+        self._view_cube.fitRequested.connect(self.fit_camera_to_scene_or_selection)
+        self._view_cube.menuRequested.connect(self._show_view_cube_menu)
         self._build_plate_action_strip()
         self._sync_overlay_button_metrics()
         self._position_view_cube()
@@ -846,35 +925,63 @@ class PanelMixin:
             self._view_cube.setVisible(bool(visible))
             if visible:
                 self._position_view_cube()
-        if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
-            overlay_visible = bool(getattr(self, "_plate_overlay_visible", True))
-            self._fit_camera_btn.setVisible(bool(visible) and overlay_visible)
 
     def set_plate_overlay_visible(self, visible: bool):
         value = bool(visible)
         self._plate_overlay_visible = value
         if hasattr(self, "_plate_actions") and self._plate_actions is not None:
             self._plate_actions.setVisible(value)
-        if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
-            self._fit_camera_btn.setVisible(value and bool(getattr(self, "_view_cube", None) is not None and self._view_cube.isVisible()))
         if value:
             self._position_plate_action_strip()
-            self._position_fit_camera_button()
 
-    def _build_fit_camera_button(self):
-        parent = cast(QtWidgets.QWidget, self)
-        self._fit_camera_btn = QtWidgets.QToolButton(parent)
-        self._fit_camera_btn.setObjectName("FitCameraButton")
-        self._fit_camera_btn.setAutoRaise(True)
-        self._fit_camera_btn.setCursor(QtCore.Qt.PointingHandCursor)
-        self._fit_camera_btn.setToolTip(
-            self._t(
-                "viewer.plate.fit_camera.tooltip",
-                "Fit camera to scene or selected object.",
-            )
+    def _orbit_from_cube(self, azimuth_delta: float, elevation_delta: float):
+        if hasattr(self, "stop_view_animation") and callable(getattr(self, "stop_view_animation")):
+            self.stop_view_animation()
+        if hasattr(self, "set_projection_mode") and callable(getattr(self, "set_projection_mode")):
+            self.set_projection_mode("perspective")
+        if hasattr(self, "orbit"):
+            self.orbit(float(azimuth_delta), float(elevation_delta))
+        self._sync_view_cube()
+
+    def _show_view_cube_menu(self, anchor: QtCore.QPoint):
+        menu = QtWidgets.QMenu(cast(QtWidgets.QWidget, self))
+        menu.setObjectName("NavigatorMenu")
+        bg = theme_qcolor("popup_bg")
+        border = theme_qcolor("popup_border")
+        text = theme_qcolor("popup_text")
+        hover = theme_qcolor("menu_hover_bg")
+        menu.setStyleSheet(
+            "QMenu#NavigatorMenu {"
+            f"background-color: {self._rgba_css(bg, 242)};"
+            f"border: 1px solid {self._rgba_css(border, 242)};"
+            f"color: {self._rgba_css(text, 255)};"
+            "padding: 6px;"
+            "}"
+            "QMenu#NavigatorMenu::item {"
+            "padding: 6px 18px 6px 12px;"
+            "border-radius: 6px;"
+            "}"
+            "QMenu#NavigatorMenu::item:selected {"
+            f"background-color: {self._rgba_css(hover, 230)};"
+            "}"
         )
-        self._fit_camera_btn.setIcon(self._build_overlay_icon("fit"))
-        self._fit_camera_btn.clicked.connect(self.fit_camera_to_scene_or_selection)
+        reset_action = menu.addAction(self._t("shortcut.view_default", "Default View"))
+        reset_action.triggered.connect(lambda: getattr(self, "animate_reset_view", self.reset_view)())
+        menu.addSeparator()
+        perspective_action = menu.addAction(self._t("menu.view.use_perspective", "Use Perspective View"))
+        perspective_action.setCheckable(True)
+        ortho_action = menu.addAction(self._t("menu.view.use_orthogonal", "Use Orthogonal View"))
+        ortho_action.setCheckable(True)
+        current_mode = "perspective"
+        if hasattr(self, "projection_mode"):
+            current_mode = str(self.projection_mode() or "perspective")
+        perspective_action.setChecked(current_mode == "perspective")
+        ortho_action.setChecked(current_mode == "ortho")
+        perspective_action.triggered.connect(lambda: getattr(self, "set_projection_mode", lambda *_: None)("perspective"))
+        ortho_action.triggered.connect(lambda: getattr(self, "set_projection_mode", lambda *_: None)("ortho"))
+        self._navigator_menu = menu
+        menu.aboutToHide.connect(menu.deleteLater)
+        menu.popup(QtCore.QPoint(anchor))
 
     def _build_plate_action_strip(self):
         parent = cast(QtWidgets.QWidget, self)
@@ -1019,21 +1126,12 @@ class PanelMixin:
                 )
             )
         elif kind == "fit":
-            inset = max(2.5, size * 0.16)
-            rect = QtCore.QRectF(inset, inset, size - inset * 2, size - inset * 2)
-            radius = max(3.0, size * 0.16)
-            painter.drawRoundedRect(rect, radius, radius)
-            cross_inset = max(2.0, size * 0.14)
+            lens = QtCore.QRectF(size * 0.19, size * 0.19, size * 0.42, size * 0.42)
+            painter.drawEllipse(lens)
             painter.drawLine(
                 QtCore.QLineF(
-                    QtCore.QPointF(rect.left() + cross_inset, rect.center().y()),
-                    QtCore.QPointF(rect.right() - cross_inset, rect.center().y()),
-                )
-            )
-            painter.drawLine(
-                QtCore.QLineF(
-                    QtCore.QPointF(rect.center().x(), rect.top() + cross_inset),
-                    QtCore.QPointF(rect.center().x(), rect.bottom() - cross_inset),
+                    QtCore.QPointF(lens.right() - size * 0.02, lens.bottom() - size * 0.02),
+                    QtCore.QPointF(size * 0.82, size * 0.82),
                 )
             )
         else:
@@ -1051,17 +1149,13 @@ class PanelMixin:
                 cube_size = 84
         cube_size = max(96, cube_size)
 
-        action_btn = max(28, min(56, int(round(cube_size * 0.3))))
-        action_icon = max(16, min(28, int(round(action_btn * 0.56))))
-        fit_btn = max(34, min(64, int(round(cube_size * 0.34))))
-        fit_icon = max(16, min(30, int(round(fit_btn * 0.56))))
-        spacing = max(4, int(round(action_btn * 0.16)))
-        margin = max(3, int(round(action_btn * 0.12)))
+        action_btn = max(28, min(48, int(round(cube_size * 0.21))))
+        action_icon = max(14, min(24, int(round(action_btn * 0.5))))
+        spacing = max(8, int(round(action_btn * 0.24)))
+        margin = max(2, int(round(action_btn * 0.08)))
         return {
             "action_btn": action_btn,
             "action_icon": action_icon,
-            "fit_btn": fit_btn,
-            "fit_icon": fit_icon,
             "spacing": spacing,
             "margin": margin,
         }
@@ -1088,10 +1182,6 @@ class PanelMixin:
                 btn.setFixedSize(int(metrics["action_btn"]), int(metrics["action_btn"]))
                 btn.setIconSize(QtCore.QSize(int(metrics["action_icon"]), int(metrics["action_icon"])))
                 btn.setIcon(self._build_overlay_icon(kind, size=int(metrics["action_icon"])))
-        if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
-            self._fit_camera_btn.setFixedSize(int(metrics["fit_btn"]), int(metrics["fit_btn"]))
-            self._fit_camera_btn.setIconSize(QtCore.QSize(int(metrics["fit_icon"]), int(metrics["fit_icon"])))
-            self._fit_camera_btn.setIcon(self._build_overlay_icon("fit", size=int(metrics["fit_icon"])))
         self._apply_plate_overlay_theme()
 
     def _apply_plate_overlay_theme(self):
@@ -1104,46 +1194,29 @@ class PanelMixin:
         panel_radius = max(6, int(round(self._plate_actions.sizeHint().width() * 0.06)))
         btn_radius = 4
         if hasattr(self, "_plate_remove_btn") and self._plate_remove_btn is not None:
-            btn_radius = max(4, int(round(self._plate_remove_btn.height() * 0.18)))
+            btn_radius = max(8, int(round(self._plate_remove_btn.height() * 0.5)))
 
         self._plate_actions.setStyleSheet(
             "QFrame#PlateActions {"
-            f"background-color: {self._rgba_css(bg, 84)};"
-            f"border: 1px solid {self._rgba_css(border, 150)};"
+            "background-color: transparent;"
+            "border: none;"
             f"border-radius: {panel_radius}px;"
             "}"
             "QToolButton#PlateActionButton {"
-            "border: 1px solid transparent;"
+            f"background-color: {self._rgba_css(bg, 158)};"
+            f"border: 1px solid {self._rgba_css(border, 180)};"
             f"border-radius: {btn_radius}px;"
-            "padding: 2px;"
+            "padding: 0;"
             "}"
             "QToolButton#PlateActionButton:hover {"
             f"background-color: {self._rgba_css(hover, 190)};"
-            f"border-color: {self._rgba_css(border, 200)};"
+            f"border-color: {self._rgba_css(active, 210)};"
             "}"
             "QToolButton#PlateActionButton:checked {"
             f"background-color: {self._rgba_css(active, 220)};"
             f"border-color: {self._rgba_css(active, 255)};"
             "}"
         )
-        if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
-            fit_radius = max(6, int(round(self._fit_camera_btn.height() * 0.26)))
-            self._fit_camera_btn.setStyleSheet(
-                "QToolButton#FitCameraButton {"
-                f"background-color: {self._rgba_css(bg, 104)};"
-                f"border: 1px solid {self._rgba_css(border, 180)};"
-                f"border-radius: {fit_radius}px;"
-                "padding: 0;"
-                "}"
-                "QToolButton#FitCameraButton:hover {"
-                f"background-color: {self._rgba_css(hover, 190)};"
-                f"border-color: {self._rgba_css(active, 220)};"
-                "}"
-                "QToolButton#FitCameraButton:pressed {"
-                f"background-color: {self._rgba_css(active, 170)};"
-                f"border-color: {self._rgba_css(active, 255)};"
-                "}"
-            )
 
         icon_map = {
             "_plate_remove_btn": "remove",
@@ -1158,23 +1231,6 @@ class PanelMixin:
                 continue
             icon_px = max(14, int(btn.iconSize().width()))
             btn.setIcon(self._build_overlay_icon(kind, size=icon_px))
-        if hasattr(self, "_fit_camera_btn") and self._fit_camera_btn is not None:
-            fit_icon_px = max(14, int(self._fit_camera_btn.iconSize().width()))
-            self._fit_camera_btn.setIcon(self._build_overlay_icon("fit", size=fit_icon_px))
-
-    def _position_fit_camera_button(self):
-        if not hasattr(self, "_fit_camera_btn") or self._fit_camera_btn is None:
-            return
-        if not hasattr(self, "_view_cube") or self._view_cube is None:
-            return
-        margin = max(10, int(round(self._view_cube.sizeHint().width() * 0.1)))
-        cube_rect = self._view_cube.geometry()
-        x = cube_rect.right() + margin
-        y = int(round(cube_rect.center().y() + cube_rect.height() * 0.16 - self._fit_camera_btn.height() * 0.5))
-        max_x = max(0, self.width() - self._fit_camera_btn.width())
-        max_y = max(0, self.height() - self._fit_camera_btn.height())
-        self._fit_camera_btn.move(max(0, min(max_x, x)), max(0, min(max_y, y)))
-        self._fit_camera_btn.raise_()
 
     def _plate_overlay_anchor(self) -> Tuple[float, float, float, float] | None:
         if not hasattr(self, "_project_world_to_screen") or not hasattr(self, "_bed_bounds"):

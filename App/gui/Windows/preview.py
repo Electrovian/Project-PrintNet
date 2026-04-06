@@ -1577,6 +1577,13 @@ class PreviewView(QtCore.QObject):
         self._update_nozzle_info()
 
     def hide(self):
+        if self._play_timer.isActive() or self._is_playing:
+            if self._play_btn.isChecked():
+                self._play_btn.setChecked(False)
+            else:
+                self._is_playing = False
+                self._play_timer.stop()
+                self._update_play_button_state(False)
         self._preview_panel.hide()
         self._action_panel.hide()
         self._timeline_panel.hide()

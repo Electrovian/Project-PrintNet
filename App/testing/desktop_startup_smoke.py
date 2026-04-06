@@ -9,7 +9,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Mapping
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_OPENGL", "software")
@@ -43,6 +43,24 @@ def _utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _viewer_runtime_diagnostics(viewer: object, renderer_mode: str) -> dict[str, object]:
+    fallback = {
+        "renderer_mode": renderer_mode,
+        "viewer_runtime_degraded": False,
+        "viewer_runtime_error": "",
+        "viewer_runtime_failure_count": 0,
+    }
+    if viewer is None or not hasattr(viewer, "runtime_diagnostics"):
+        return fallback
+    try:
+        raw = viewer.runtime_diagnostics()  # type: ignore[call-arg]
+    except Exception:
+        return fallback
+    if isinstance(raw, Mapping):
+        return dict(raw)
+    return fallback
+
+
 @contextmanager
 def _isolated_runtime_environment() -> Iterator[Path]:
     with tempfile.TemporaryDirectory(prefix="desktop_startup_smoke_") as tmp:
@@ -73,12 +91,14 @@ def _isolated_runtime_environment() -> Iterator[Path]:
 def run_startup_smoke() -> dict[str, object]:
     started = time.perf_counter()
     with _isolated_runtime_environment() as runtime_root:
+        renderer_mode = app_main.configure_opengl_mode()
         bootstrap_config = mark_setup_completed(bootstrap_defaults())
         save_bootstrap_config(bootstrap_config)
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["desktop-startup-smoke"])
         app.setApplicationName("EON-OpenSlicer")
         app.setQuitOnLastWindowClosed(False)
+        app.setProperty("eon_opengl_mode", renderer_mode)
 
         ensured_bootstrap = app_main._ensure_bootstrap_configuration(app)
         ui_language = str(ensured_bootstrap.get("ui_language", "en")).strip() or "en"
@@ -112,6 +132,8 @@ def run_startup_smoke() -> dict[str, object]:
 
         window_title = str(window.windowTitle() or "").strip()
         duration_s = max(0.0, time.perf_counter() - started)
+        viewer = getattr(window, "viewer", None)
+        diagnostics = _viewer_runtime_diagnostics(viewer, renderer_mode)
         report = {
             "ok": True,
             "started_at_utc": _utc_iso(),
@@ -123,6 +145,10 @@ def run_startup_smoke() -> dict[str, object]:
             "window_visible": bool(window.isVisible()),
             "window_maximized": bool(window.isMaximized()),
             "runtime_root": str(runtime_root),
+            "renderer_mode": str(diagnostics.get("renderer_mode") or renderer_mode),
+            "viewer_runtime_degraded": bool(diagnostics.get("viewer_runtime_degraded")),
+            "viewer_runtime_error": str(diagnostics.get("viewer_runtime_error") or ""),
+            "viewer_runtime_failure_count": int(diagnostics.get("viewer_runtime_failure_count") or 0),
         }
 
         splash.close()

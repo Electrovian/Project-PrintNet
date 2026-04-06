@@ -194,7 +194,7 @@ function Invoke-ComposeSmoke {
     Write-Step "Docker compose smoke"
     Push-Location $RepoRoot
     try {
-        & $DockerExe compose up --build -d frontend backend worker redis mongo
+        & $DockerExe compose up --build -d frontend backend worker redis mongo mailpit
         if ($LASTEXITCODE -ne 0) {
             throw "docker compose up failed"
         }

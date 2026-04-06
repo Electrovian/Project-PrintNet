@@ -27,11 +27,13 @@ class VisualAuditEntrypointTests(unittest.TestCase):
 
             self.assertTrue(report["ok"])
             self.assertEqual(report["scenario"], "demo")
-            self.assertGreaterEqual(report["screenshot_count"], 7)
+            self.assertGreaterEqual(report["screenshot_count"], 9)
+            self.assertEqual(report["renderer_mode"], "software")
+            self.assertFalse(report["viewer_runtime_degraded"])
             self.assertTrue(output_dir.exists())
 
             png_files = sorted(output_dir.glob("*.png"))
-            self.assertGreaterEqual(len(png_files), 7)
+            self.assertGreaterEqual(len(png_files), 9)
             for path in png_files:
                 self.assertRegex(path.name, r"^\d{8}T\d{6}\d{6}Z_[a-z0-9_]+\.png$")
                 self.assertGreater(path.stat().st_size, 0)
@@ -42,6 +44,8 @@ class VisualAuditEntrypointTests(unittest.TestCase):
             self.assertTrue(manifest["ok"])
             self.assertEqual(manifest["scenario"], "demo")
             self.assertEqual(manifest["screenshot_count"], len(png_files))
+            self.assertEqual(manifest["renderer_mode"], "software")
+            self.assertFalse(manifest["viewer_runtime_degraded"])
 
             names = {item["name"] for item in manifest["screenshots"]}
             self.assertIn("startup", names)
@@ -49,7 +53,9 @@ class VisualAuditEntrypointTests(unittest.TestCase):
             self.assertIn("files_populated", names)
             self.assertIn("activity_banners", names)
             self.assertIn("prepare_default", names)
+            self.assertIn("prepare_navigator_closeup", names)
             self.assertIn("preview_tree_support", names)
+            self.assertIn("preview_navigator_closeup", names)
             self.assertIn("preview_organic_support", names)
             self.assertIn("device_live_status", names)
             self.assertIn("control_calibration", names)

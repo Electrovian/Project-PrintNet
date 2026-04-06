@@ -42,6 +42,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
     plateSelectionChanged = QtCore.pyqtSignal(int)
     plateLockChanged = QtCore.pyqtSignal(bool)
     plateNameChanged = QtCore.pyqtSignal(str)
+    projectionModeChanged = QtCore.pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -54,6 +55,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
             self.opts["elevation"] = float(self._default_view["elevation"]) # pyright: ignore[reportArgumentType]
         if "azimuth" not in self.opts:
             self.opts["azimuth"] = float(self._default_view["azimuth"]) # pyright: ignore[reportArgumentType]
+        self._perspective_fov = max(1.0, min(179.0, self._coerce_float(self.opts.get("fov"), 60.0)))
         self._coerce_distance()
 
         self.scene_state = SceneState()
@@ -70,6 +72,10 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._selection_info = None
         self._interaction_enabled = True
         self._interaction_requested = True
+        self._renderer_mode = "desktop" if str(os.environ.get("EON_OPENGL_MODE", "")).strip().lower() == "desktop" else "software"
+        self._viewer_runtime_degraded = False
+        self._viewer_runtime_error = ""
+        self._viewer_runtime_failure_count = 0
         self._plate_overlay_visible = True
         self._plate_grid_items: dict[int, gl.GLGridItem] = {}
         self._plate_texture_items: dict[int, gl.GLImageItem] = {}
@@ -134,6 +140,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._build_print_stats_panel()
         self._build_preview_object_panel()
         self._build_simplify_warning()
+        self._build_viewer_runtime_warning()
 
         self._preview_data = None
         self._preview_layer_index = None
@@ -186,6 +193,13 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._platform_visible = True
         self._nozzle_visible = False
         self._nozzle = None
+        self._view_animation_timer = QtCore.QTimer(self)
+        self._view_animation_timer.setInterval(16)
+        self._view_animation_timer.timeout.connect(self._advance_view_animation)
+        self._view_animation_clock = QtCore.QElapsedTimer()
+        self._view_animation_duration_ms = 0
+        self._view_animation_start = (0.0, 0.0)
+        self._view_animation_target = (0.0, 0.0)
         self._sync_scene_from_state()
 
     # -------------------- hardening --------------------
@@ -219,6 +233,27 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
             return False
         return True
 
+    @staticmethod
+    def _is_transient_gl_clear_error(exc: Exception) -> bool:
+        text = str(exc or "")
+        lower = text.lower()
+        return "glclearcolor" in lower and "invalid operation" in lower
+
+    def _gl_context_ready(self) -> bool:
+        try:
+            widget_context = self.context()
+            current_context = QtGui.QOpenGLContext.currentContext()
+        except Exception:
+            return False
+        if widget_context is None or current_context is None:
+            return False
+        try:
+            if not widget_context.isValid() or not current_context.isValid():
+                return False
+        except Exception:
+            return False
+        return widget_context == current_context
+
     def _update_gl_line(self, item, color):
         pos = item.pos if item.pos is not None else np.zeros((0, 3), dtype=float)
         color_arr = self._color_array(color, len(pos))
@@ -229,11 +264,23 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._sync_view_cube()
         if hasattr(self, "_position_plate_action_strip"):
             self._position_plate_action_strip()
-        if hasattr(self, "_position_fit_camera_button"):
-            self._position_fit_camera_button()
         if hasattr(self, "_position_plate_labels"):
             self._position_plate_labels()
-        return super().paintGL(*args, **kwargs)
+        if hasattr(self, "_position_viewer_runtime_warning"):
+            self._position_viewer_runtime_warning()
+        if self._viewer_runtime_degraded:
+            return None
+        if not self.updatesEnabled() or not self.isVisible():
+            return None
+        if not self._gl_context_ready():
+            return None
+        try:
+            return super().paintGL(*args, **kwargs)
+        except Exception as exc:
+            if self._is_transient_gl_clear_error(exc):
+                return None
+            self._enter_runtime_degraded(exc)
+            return None
 
     # -------------------- public helpers --------------------
 
@@ -368,6 +415,153 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._sync_view_cube()
         self.update()
 
+    def projection_mode(self) -> str:
+        try:
+            fov = float(self.opts.get("fov", 60.0))
+        except Exception:
+            fov = 60.0
+        return "ortho" if abs(fov) <= 1e-6 else "perspective"
+
+    def set_projection_mode(self, mode: str, *, emit_signal: bool = True) -> str:
+        normalized = "ortho" if str(mode or "").strip().lower() == "ortho" else "perspective"
+        current = self.projection_mode()
+        if normalized == "ortho":
+            current_fov = self._coerce_float(self.opts.get("fov"), self._perspective_fov)
+            if current_fov > 1e-6:
+                self._perspective_fov = max(1.0, min(179.0, current_fov))
+            self.opts["fov"] = 0.0  # pyright: ignore[reportArgumentType]
+        else:
+            self.opts["fov"] = float(self._perspective_fov)  # pyright: ignore[reportArgumentType]
+        self.update()
+        if emit_signal and current != normalized:
+            self.projectionModeChanged.emit(normalized)
+        return normalized
+
+    def renderer_mode(self) -> str:
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            value = str(app.property("eon_opengl_mode") or "").strip().lower()
+            if value in {"software", "desktop"}:
+                self._renderer_mode = value
+        return str(self._renderer_mode or "software")
+
+    def is_runtime_degraded(self) -> bool:
+        return bool(self._viewer_runtime_degraded)
+
+    def runtime_diagnostics(self) -> dict[str, object]:
+        return {
+            "renderer_mode": self.renderer_mode(),
+            "viewer_runtime_degraded": bool(self._viewer_runtime_degraded),
+            "viewer_runtime_error": str(self._viewer_runtime_error or ""),
+            "viewer_runtime_failure_count": int(self._viewer_runtime_failure_count),
+        }
+
+    def _enter_runtime_degraded(self, exc: Exception | str) -> None:
+        self._viewer_runtime_failure_count += 1
+        error_text = f"{type(exc).__name__}: {exc}" if isinstance(exc, Exception) else str(exc or "").strip()
+        if error_text:
+            self._viewer_runtime_error = error_text
+        if self._viewer_runtime_degraded:
+            return
+        self._viewer_runtime_degraded = True
+        self._cancel_interaction()
+        warning = (
+            "3D rendering entered safe mode after a runtime OpenGL failure. "
+            "You can keep using Prepare, Preview, export, and the rest of the app. "
+            f"Renderer: {self.renderer_mode()}."
+        )
+        if self._viewer_runtime_error:
+            warning = f"{warning}\nLast error: {self._viewer_runtime_error}"
+        if hasattr(self, "_show_viewer_runtime_warning"):
+            self._show_viewer_runtime_warning(warning)
+        view_cube = getattr(self, "_view_cube", None)
+        if view_cube is not None:
+            view_cube.setEnabled(False)
+        self.update()
+
+    def projectionMatrix(self, region, viewport):
+        if self.projection_mode() != "ortho":
+            return super().projectionMatrix(region, viewport)
+
+        x0, y0, w, h = viewport
+        w = max(1.0, float(w))
+        h = max(1.0, float(h))
+        dist = max(1e-3, self._coerce_float(self.opts.get("distance"), float(self._default_view["distance"])))
+        near_clip = max(1e-3, dist * 0.001)
+        far_clip = max(near_clip + 1.0, dist * 1000.0)
+
+        fov = max(1.0, min(179.0, float(getattr(self, "_perspective_fov", 60.0) or 60.0)))
+        half_width = max(1e-3, dist * math.tan(0.5 * math.radians(fov)))
+        half_height = half_width * (h / w)
+
+        left = half_width * (((float(region[0]) - float(x0)) * (2.0 / w)) - 1.0)
+        right = half_width * (((float(region[0]) + float(region[2]) - float(x0)) * (2.0 / w)) - 1.0)
+        bottom = half_height * (((float(region[1]) - float(y0)) * (2.0 / h)) - 1.0)
+        top = half_height * (((float(region[1]) + float(region[3]) - float(y0)) * (2.0 / h)) - 1.0)
+
+        tr = QtGui.QMatrix4x4()
+        tr.ortho(left, right, bottom, top, near_clip, far_clip)
+        return tr
+
+    @staticmethod
+    def _normalize_azimuth(value: float) -> float:
+        azimuth = float(value)
+        while azimuth <= -180.0:
+            azimuth += 360.0
+        while azimuth > 180.0:
+            azimuth -= 360.0
+        return azimuth
+
+    @classmethod
+    def _shortest_azimuth_delta(cls, start: float, target: float) -> float:
+        return cls._normalize_azimuth(float(target) - float(start))
+
+    def stop_view_animation(self) -> None:
+        if self._view_animation_timer.isActive():
+            self._view_animation_timer.stop()
+
+    def animate_view_to(self, azimuth: float, elevation: float, *, duration_ms: int = 170) -> None:
+        start_az = self._coerce_float(self.opts.get("azimuth"), float(self._default_view["azimuth"]))
+        start_el = self._coerce_float(self.opts.get("elevation"), float(self._default_view["elevation"]))
+        target_az = self._normalize_azimuth(float(azimuth))
+        target_el = max(-90.0, min(90.0, float(elevation)))
+
+        self.stop_view_animation()
+        self._view_animation_duration_ms = max(1, int(duration_ms))
+        self._view_animation_start = (start_az, start_el)
+        self._view_animation_target = (
+            start_az + self._shortest_azimuth_delta(start_az, target_az),
+            target_el,
+        )
+        self._view_animation_clock.restart()
+        self._view_animation_timer.start()
+        self._advance_view_animation()
+
+    def animate_reset_view(self, *, duration_ms: int = 170) -> None:
+        self.set_projection_mode("perspective")
+        self.animate_view_to(
+            float(self._default_view["azimuth"]),
+            float(self._default_view["elevation"]),
+            duration_ms=duration_ms,
+        )
+
+    def _advance_view_animation(self) -> None:
+        if self._view_animation_duration_ms <= 0:
+            self.stop_view_animation()
+            return
+        elapsed = int(self._view_animation_clock.elapsed())
+        t = min(1.0, float(elapsed) / float(self._view_animation_duration_ms))
+        eased = 1.0 - pow(1.0 - t, 3)
+        start_az, start_el = self._view_animation_start
+        target_az, target_el = self._view_animation_target
+        self.set_view(
+            start_az + (target_az - start_az) * eased,
+            start_el + (target_el - start_el) * eased,
+            _from_animation=True,
+        )
+        if t >= 1.0:
+            self.stop_view_animation()
+
     def apply_theme(self):
         self.setBackgroundColor(theme_value("view_bg", (20, 22, 26)))
         if hasattr(self, "_apply_plate_visual_theme"):
@@ -409,6 +603,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._update_print_stats_style()
         self._update_preview_object_style()
         self._update_simplify_warning_style()
+        self._update_viewer_runtime_warning_style()
         self._update_marquee_style()
         self._update_gizmo()
         self._update_preview_lines()
@@ -1980,8 +2175,16 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
 
     def _view_cube_target_size(self) -> int:
         min_dim = max(1, int(min(self.width(), self.height())))
-        target = int(round(min_dim * 0.15))
-        return max(110, min(196, target))
+        dpi_scale = 1.0
+        try:
+            window_handle = self.windowHandle()
+            screen = window_handle.screen() if window_handle is not None else None
+            if screen is not None:
+                dpi_scale = max(1.0, float(screen.logicalDotsPerInch()) / 96.0)
+        except Exception:
+            dpi_scale = 1.0
+        target = int(round(min_dim * 0.18 * dpi_scale))
+        return max(138, min(236, target))
 
     def _position_view_cube(self):
         if not hasattr(self, "_view_cube") or self._view_cube is None:
@@ -1991,13 +2194,11 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         if hasattr(self, "_sync_overlay_button_metrics"):
             self._sync_overlay_button_metrics()
         size = self._view_cube.sizeHint()
-        margin = max(12, int(round(size.width() * 0.18)))
+        margin = max(16, int(round(size.width() * 0.12)))
         x = margin
         y = max(0, self.height() - size.height() - margin)
         self._view_cube.setGeometry(x, y, size.width(), size.height())
         self._view_cube.raise_()
-        if hasattr(self, "_position_fit_camera_button"):
-            self._position_fit_camera_button()
         if hasattr(self, "_position_plate_action_strip"):
             self._position_plate_action_strip()
 
@@ -2007,89 +2208,44 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         az = self._coerce_float(self.opts.get("azimuth"), float(self._default_view["azimuth"]))
         el = self._coerce_float(self.opts.get("elevation"), float(self._default_view["elevation"]))
         self._view_cube.set_camera(az, el)
-        if hasattr(self, "_position_fit_camera_button"):
-            self._position_fit_camera_button()
         if hasattr(self, "_position_plate_action_strip"):
             self._position_plate_action_strip()
 
     def _set_view_from_cube(self, face: str):
-        invert_x = getattr(self._view_cube, "invert_x", False)
-        invert_y = getattr(self._view_cube, "invert_y", False)
-        invert_z = getattr(self._view_cube, "invert_z", False)
-
-        def invert_view(azimuth: float, elevation: float):
-            az = float(azimuth) + 180.0
-            el = -float(elevation)
-            if az > 180.0:
-                az -= 360.0
-            return az, el
-
+        direction = np.zeros(3, dtype=float)
+        mode = "perspective"
         if face.startswith("iso:"):
-            parts = face.split(":")
-            if len(parts) == 4:
-                x_name, y_name, z_name = parts[1], parts[2], parts[3]
-                x_sign = self._view_cube._face_sign("x", x_name)
-                y_sign = self._view_cube._face_sign("y", y_name)
-                z_sign = self._view_cube._face_sign("z", z_name)
-                if x_sign is None or y_sign is None or z_sign is None:
-                    return
-                az = math.degrees(math.atan2(y_sign, x_sign))
-                el = math.degrees(math.atan2(z_sign, math.hypot(x_sign, y_sign)))
-                az, el = invert_view(az, el)
-                self.set_view(az, el)
+            names = [part for part in face.split(":")[1:] if part]
+        elif face.startswith("edge:"):
+            names = [part for part in face.split(":")[1:] if part]
+        else:
+            names = [str(face or "").strip().lower()]
+            mode = "ortho"
+
+        for name in names:
+            vector = getattr(self._view_cube, "_SNAP_VECTORS", {}).get(str(name).strip().lower())
+            if vector is None:
+                continue
+            direction = direction + np.asarray(vector, dtype=float)
+
+        length = float(np.linalg.norm(direction))
+        if length <= 1e-6:
             return
-
-        if face.startswith("edge:"):
-            parts = face.split(":")
-            if len(parts) == 3:
-                a_name, b_name = parts[1], parts[2]
-                signs = {"x": 0.0, "y": 0.0, "z": 0.0}
-
-                for axis in ("x", "y", "z"):
-                    sign = self._view_cube._face_sign(axis, a_name)
-                    if sign is not None:
-                        signs[axis] = sign
-                        break
-                for axis in ("x", "y", "z"):
-                    sign = self._view_cube._face_sign(axis, b_name)
-                    if sign is not None and signs[axis] == 0.0:
-                        signs[axis] = sign
-                        break
-
-                x_sign = signs["x"]
-                y_sign = signs["y"]
-                z_sign = signs["z"]
-                if x_sign == 0.0 and y_sign == 0.0:
-                    return
-                az = math.degrees(math.atan2(y_sign, x_sign))
-                el = math.degrees(math.atan2(z_sign, math.hypot(x_sign, y_sign)))
-                az, el = invert_view(az, el)
-                self.set_view(az, el)
-            return
-
-        views = {
-            "front": (90.0, 0.0),
-            "back": (-90.0, 0.0),
-            "right": (0.0, 0.0),
-            "left": (180.0, 0.0),
-            "top": (0.0, 90.0),
-            "bottom": (0.0, -90.0),
-        }
-        if invert_x:
-            views["left"], views["right"] = views["right"], views["left"]
-        if invert_y:
-            views["front"], views["back"] = views["back"], views["front"]
-        if invert_z:
-            views["top"], views["bottom"] = views["bottom"], views["top"]
-        view = views.get(face)
-        if view is None:
-            return
-        az, el = invert_view(view[0], view[1])
-        self.set_view(az, el)
+        direction = direction / length
+        azimuth = math.degrees(math.atan2(float(direction[1]), float(direction[0])))
+        elevation = math.degrees(math.atan2(float(direction[2]), math.hypot(float(direction[0]), float(direction[1]))))
+        if hasattr(self, "set_projection_mode"):
+            self.set_projection_mode(mode)
+        if hasattr(self, "animate_view_to"):
+            self.animate_view_to(azimuth, elevation)
+        else:
+            self.set_view(azimuth, elevation)
 
     def resizeEvent(self, e: QtGui.QResizeEvent):
         super().resizeEvent(e)
         self._position_view_cube()
         self._position_bottom_left_panels()
+        if hasattr(self, "_position_viewer_runtime_warning"):
+            self._position_viewer_runtime_warning()
 
     

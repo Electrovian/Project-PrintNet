@@ -1644,6 +1644,9 @@ class UiMixin(UiMixinBase):
             "calibration": "control",
             "layout": "prepare",
         }.get(mode, mode)
+        viewer_visible_mode = mode in {"prepare", "preview"}
+        if hasattr(self.viewer, "setUpdatesEnabled"):
+            self.viewer.setUpdatesEnabled(bool(viewer_visible_mode))
         if mode != "preview":
             prev = getattr(self, "_preview_wireframe_prev", None)
             if prev is not None and hasattr(self.viewer, "set_wireframe_enabled"):
@@ -1674,6 +1677,8 @@ class UiMixin(UiMixinBase):
             if hasattr(self.viewer, "set_preview_object_visible"):
                 self.viewer.set_preview_object_visible(False)
             self._auto_slice_prepare()
+            if viewer_visible_mode and hasattr(self.viewer, "update"):
+                self.viewer.update()
             QtCore.QTimer.singleShot(0, self.prepare_view.position_panels)
         elif mode == "preview":
             self.prepare_view.hide()
@@ -1704,6 +1709,8 @@ class UiMixin(UiMixinBase):
                 self.viewer.set_preview_object_visible(True)
             if hasattr(self.preview_view, "sync_preview_toggles"):
                 self.preview_view.sync_preview_toggles()
+            if viewer_visible_mode and hasattr(self.viewer, "update"):
+                self.viewer.update()
             QtCore.QTimer.singleShot(0, self.preview_view.position_panels)
         elif mode == "device":
             self.prepare_view.hide()
@@ -2649,11 +2656,32 @@ class UiMixin(UiMixinBase):
         self.viewer.set_view(float(azimuth), float(elevation))
 
     def _set_projection_mode(self, mode: str):
-        if mode == "ortho":
-            self.viewer.opts["fov"] = 0  # pyright: ignore[reportArgumentType]
+        normalized = "ortho" if str(mode or "").strip().lower() == "ortho" else "perspective"
+        if hasattr(self.viewer, "set_projection_mode"):
+            normalized = str(self.viewer.set_projection_mode(normalized))
         else:
-            self.viewer.opts["fov"] = 60  # pyright: ignore[reportArgumentType]
-        self.viewer.update()
+            if normalized == "ortho":
+                self.viewer.opts["fov"] = 0  # pyright: ignore[reportArgumentType]
+            else:
+                self.viewer.opts["fov"] = 60  # pyright: ignore[reportArgumentType]
+            self.viewer.update()
+        self._sync_projection_action_state(normalized)
+
+    def _sync_projection_action_state(self, mode: str):
+        normalized = "ortho" if str(mode or "").strip().lower() == "ortho" else "perspective"
+        perspective_action = getattr(self, "_perspective_action", None)
+        ortho_action = getattr(self, "_ortho_action", None)
+        if perspective_action is not None:
+            block = perspective_action.blockSignals(True)
+            perspective_action.setChecked(normalized == "perspective")
+            perspective_action.blockSignals(block)
+        if ortho_action is not None:
+            block = ortho_action.blockSignals(True)
+            ortho_action.setChecked(normalized == "ortho")
+            ortho_action.blockSignals(block)
+
+    def _on_viewer_projection_mode_changed(self, mode: str):
+        self._sync_projection_action_state(mode)
 
     def _toggle_view_cube(self, checked: bool):
         self.viewer.set_view_cube_visible(bool(checked))

@@ -112,7 +112,19 @@ def theme_qcolor(key: str):
     if isinstance(value, str):
         return QtGui.QColor(value)
     if isinstance(value, (tuple, list)):
-        return QtGui.QColor(*value)
+        components = list(value)
+        if components and all(isinstance(component, float) and 0.0 <= component <= 1.0 for component in components[:4]):
+            while len(components) < 4:
+                components.append(1.0)
+            return QtGui.QColor.fromRgbF(
+                float(components[0]),
+                float(components[1]),
+                float(components[2]),
+                float(components[3]),
+            )
+        if components and all(isinstance(component, (int, float)) for component in components[:4]):
+            ints = [int(round(float(component))) for component in components[:4]]
+            return QtGui.QColor(*ints)
     return QtGui.QColor()
 
 

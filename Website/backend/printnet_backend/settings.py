@@ -32,6 +32,7 @@ class BackendSettings:
     auth_verification_code_ttl_seconds: int = 600
     auth_verification_max_attempts: int = 5
     auth_expose_debug_code: bool = False
+    auth_email_require_smtp: bool = False
     auth_email_from: str = "no-reply@printnet.local"
     smtp_host: str = ""
     smtp_port: int = 587
@@ -155,6 +156,11 @@ class BackendSettings:
             key="BACKEND_AUTH_EXPOSE_DEBUG_CODE",
             default=False,
         )
+        auth_email_require_smtp = _read_bool(
+            source,
+            key="BACKEND_AUTH_EMAIL_REQUIRE_SMTP",
+            default=False,
+        )
         auth_email_from = str(source.get("BACKEND_AUTH_EMAIL_FROM", "no-reply@printnet.local")).strip()
         smtp_host = str(source.get("BACKEND_SMTP_HOST", "")).strip()
         smtp_port = _read_int(
@@ -208,6 +214,7 @@ class BackendSettings:
             auth_verification_code_ttl_seconds=auth_verification_code_ttl_seconds,
             auth_verification_max_attempts=auth_verification_max_attempts,
             auth_expose_debug_code=auth_expose_debug_code,
+            auth_email_require_smtp=auth_email_require_smtp,
             auth_email_from=auth_email_from,
             smtp_host=smtp_host,
             smtp_port=smtp_port,

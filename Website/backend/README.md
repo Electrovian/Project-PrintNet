@@ -25,6 +25,8 @@ python main.py
 If `fastapi` and `uvicorn` are installed, this starts the HTTP server on `127.0.0.1:8000`.
 If not installed, the compatibility layer still allows test automation to run.
 
+This direct backend path is local-only. For LAN website sharing, QR generation, and email-capture defaults, use the repository-root Docker launcher in `scripts/launch-website-docker.ps1`.
+
 ## Runtime Data
 
 Runtime uploads are written under `Website/backend/runtime/uploads` by default.

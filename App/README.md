@@ -35,5 +35,7 @@ The parity runner now fails fast if the manifest references missing meshes or if
 - `App/Tests/run_tests.py` is the entrypoint for the curated smoke suite.
 - `App/testing/desktop_startup_smoke.py` verifies real offscreen startup without hanging in the full event loop.
 - `App/testing/fff_parity.py` works both as a module and as a direct script.
+- The desktop app now defaults to `desktop` OpenGL on interactive Windows sessions and `software` OpenGL for headless/offscreen test runs.
+- You can still force a specific renderer with `EON_OPENGL_MODE=desktop` or `EON_OPENGL_MODE=software` before launching `python main.py`.
 - `docs/LAUNCH_READINESS.md` is the authoritative repo-wide launch runbook.
 - If you are looking for repo-wide task tracking, start with `docs/TASKS.md`.

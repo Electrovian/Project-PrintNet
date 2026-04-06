@@ -45,6 +45,7 @@ class BackendState:
     auth_verification_code_ttl_seconds: int = 600
     auth_verification_max_attempts: int = 5
     auth_expose_debug_code: bool = False
+    auth_email_require_smtp: bool = False
     auth_email_from: str = "no-reply@printnet.local"
     smtp_host: str = ""
     smtp_port: int = 587
@@ -118,6 +119,7 @@ class BackendState:
             maximum=10,
         )
         self.auth_expose_debug_code = bool(self.auth_expose_debug_code)
+        self.auth_email_require_smtp = bool(self.auth_email_require_smtp)
         self.auth_email_from = str(self.auth_email_from or "no-reply@printnet.local").strip() or "no-reply@printnet.local"
         self.smtp_host = str(self.smtp_host or "").strip()
         self.smtp_port = _as_bounded_int(
@@ -418,8 +420,15 @@ class BackendState:
                         client.login(self.smtp_username, self.smtp_password)
                     client.send_message(message)
                 return "smtp", destination
-            except Exception:
-                pass
+            except Exception as exc:
+                if self.auth_email_require_smtp:
+                    raise BackendOrchestrationError(
+                        f"AUTH_VERIFICATION_DELIVERY_FAILED: unable to send verification email via SMTP ({exc})."
+                    ) from exc
+        if self.auth_email_require_smtp:
+            raise BackendOrchestrationError(
+                "AUTH_VERIFICATION_DELIVERY_UNAVAILABLE: SMTP delivery is required but SMTP is not configured."
+            )
         print(
             f"AUTH_VERIFICATION_CODE user={target_user_id} code={code} expires_at={expires_at_utc}",
             flush=True,

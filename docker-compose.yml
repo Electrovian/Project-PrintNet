@@ -12,11 +12,23 @@ services:
       BACKEND_QUEUE_NAME: default
       BACKEND_QUEUE_WORKER_MAX_JOBS_PER_TICK: "5"
       BACKEND_QUEUE_WORKER_HEARTBEAT_TTL_SECONDS: "60"
+      BACKEND_SUPER_ADMIN_EMAIL: ${BACKEND_SUPER_ADMIN_EMAIL:-}
+      BACKEND_SUPER_ADMIN_PASSWORD: ${BACKEND_SUPER_ADMIN_PASSWORD:-}
+      BACKEND_AUTH_EXPOSE_DEBUG_CODE: ${BACKEND_AUTH_EXPOSE_DEBUG_CODE:-0}
+      BACKEND_AUTH_EMAIL_REQUIRE_SMTP: ${BACKEND_AUTH_EMAIL_REQUIRE_SMTP:-1}
+      BACKEND_AUTH_EMAIL_FROM: ${BACKEND_AUTH_EMAIL_FROM:-no-reply@printnet.local}
+      BACKEND_SMTP_HOST: ${BACKEND_SMTP_HOST:-mailpit}
+      BACKEND_SMTP_PORT: ${BACKEND_SMTP_PORT:-1025}
+      BACKEND_SMTP_USERNAME: ${BACKEND_SMTP_USERNAME:-}
+      BACKEND_SMTP_PASSWORD: ${BACKEND_SMTP_PASSWORD:-}
+      BACKEND_SMTP_STARTTLS: ${BACKEND_SMTP_STARTTLS:-0}
+      BACKEND_SMTP_USE_SSL: ${BACKEND_SMTP_USE_SSL:-0}
     ports:
       - "8000:8000"
     depends_on:
       - mongo
       - redis
+      - mailpit
 
   worker:
     build:
@@ -60,6 +72,13 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
 
 volumes:
   mongo_data:

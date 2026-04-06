@@ -8,7 +8,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_OPENGL", "software")
@@ -35,6 +35,12 @@ try:  # pragma: no cover - import path depends on caller cwd / sys.path setup
 except Exception:  # pragma: no cover
     _bootstrap_import_paths()
     from App.gui.main_window import MainWindow  # type: ignore  # noqa: E402
+
+try:  # pragma: no cover - import path depends on caller cwd / sys.path setup
+    import main as app_main  # type: ignore  # noqa: E402
+except Exception:  # pragma: no cover
+    _bootstrap_import_paths()
+    from App import main as app_main  # type: ignore  # noqa: E402
 
 try:  # pragma: no cover - import path depends on caller cwd / sys.path setup
     from slicer_v2.legacy_gcode_preview import parse_gcode_preview  # type: ignore  # noqa: E402
@@ -73,12 +79,34 @@ def _utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _viewer_runtime_diagnostics(viewer: object, renderer_mode: str) -> dict[str, object]:
+    fallback = {
+        "renderer_mode": renderer_mode,
+        "viewer_runtime_degraded": False,
+        "viewer_runtime_error": "",
+        "viewer_runtime_failure_count": 0,
+    }
+    if viewer is None or not hasattr(viewer, "runtime_diagnostics"):
+        return fallback
+    try:
+        raw = viewer.runtime_diagnostics()  # type: ignore[call-arg]
+    except Exception:
+        return fallback
+    if isinstance(raw, Mapping):
+        return dict(raw)
+    return fallback
+
+
 def _ensure_app() -> QtWidgets.QApplication:
+    renderer_mode = app_main.configure_opengl_mode()
     app = QtWidgets.QApplication.instance()
     if app is not None:
+        app.setProperty("eon_opengl_mode", renderer_mode)
         return app
     argv = ["visual-audit"]
-    return QtWidgets.QApplication(argv)
+    app = QtWidgets.QApplication(argv)
+    app.setProperty("eon_opengl_mode", renderer_mode)
+    return app
 
 
 def _build_printers() -> list[dict[str, object]]:
@@ -269,6 +297,32 @@ def _capture_widget(window: MainWindow, output_dir: Path, name: str, mode: str) 
     )
 
 
+def _capture_rect(widget: QtWidgets.QWidget, rect: QtCore.QRect, output_dir: Path, name: str, mode: str) -> ScreenshotRecord:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"{_utc_token()}_{name}.png"
+    path = output_dir / filename
+    pixmap = widget.grab(rect)
+    if pixmap.isNull():
+        raise VisualAuditError(f"VISUAL_AUDIT_CAPTURE_FAILED:{name}")
+    if not pixmap.save(str(path), "PNG"):
+        raise VisualAuditError(f"VISUAL_AUDIT_SAVE_FAILED:{name}")
+    return ScreenshotRecord(
+        name=name,
+        path=str(path),
+        mode=mode,
+        width=int(pixmap.width()),
+        height=int(pixmap.height()),
+    )
+
+
+def _capture_navigator_closeup(window: MainWindow, output_dir: Path, name: str, mode: str) -> ScreenshotRecord:
+    viewer = getattr(window, "viewer", None)
+    overlay = getattr(viewer, "_view_cube", None) if viewer is not None else None
+    if viewer is None or overlay is None:
+        raise VisualAuditError(f"VISUAL_AUDIT_NAVIGATOR_UNAVAILABLE:{name}")
+    return _capture_rect(overlay, overlay.rect(), output_dir, name, mode)
+
+
 def _write_manifest(output_dir: Path, payload: dict[str, object]) -> Path:
     manifest = output_dir / "visual_audit_manifest.json"
     manifest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -330,6 +384,7 @@ def run_demo_audit(*, output_dir: str | Path | None = None) -> dict[str, object]
         app.processEvents()
         QtTest.QTest.qWait(60)
         records.append(_capture_widget(window, output_path, "prepare_default", "prepare"))
+        records.append(_capture_navigator_closeup(window, output_path, "prepare_navigator_closeup", "prepare"))
 
         # Preview after slice with support diagnostics.
         preview = parse_gcode_preview(_build_preview_gcode())
@@ -341,6 +396,7 @@ def run_demo_audit(*, output_dir: str | Path | None = None) -> dict[str, object]
         app.processEvents()
         QtTest.QTest.qWait(80)
         records.append(_capture_widget(window, output_path, "preview_tree_support", "preview"))
+        records.append(_capture_navigator_closeup(window, output_path, "preview_navigator_closeup", "preview"))
 
         window.preview_view.update_stats(_build_preview_stats("organic"))
         app.processEvents()
@@ -366,6 +422,11 @@ def run_demo_audit(*, output_dir: str | Path | None = None) -> dict[str, object]
         QtTest.QTest.qWait(60)
         records.append(_capture_widget(window, output_path, "control_calibration", "control"))
 
+        diagnostics = _viewer_runtime_diagnostics(
+            getattr(window, "viewer", None),
+            str(app.property("eon_opengl_mode") or "software"),
+        )
+
         window.close()
         app.processEvents()
         QtTest.QTest.qWait(40)
@@ -377,6 +438,10 @@ def run_demo_audit(*, output_dir: str | Path | None = None) -> dict[str, object]
         "output_dir": str(output_path),
         "screenshot_count": len(records),
         "screenshots": [record.to_dict() for record in records],
+        "renderer_mode": str(diagnostics.get("renderer_mode") or app.property("eon_opengl_mode") or "software"),
+        "viewer_runtime_degraded": bool(diagnostics.get("viewer_runtime_degraded")),
+        "viewer_runtime_error": str(diagnostics.get("viewer_runtime_error") or ""),
+        "viewer_runtime_failure_count": int(diagnostics.get("viewer_runtime_failure_count") or 0),
     }
     _write_manifest(output_path, payload)
     return payload

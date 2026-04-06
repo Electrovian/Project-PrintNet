@@ -127,6 +127,8 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiM
             self.viewer.simplifyRequested.connect(self._open_simplify_dialog)
         if hasattr(self.viewer, "sceneChanged"):
             self.viewer.sceneChanged.connect(self._on_viewer_scene_changed)
+        if hasattr(self.viewer, "projectionModeChanged"):
+            self.viewer.projectionModeChanged.connect(self._on_viewer_projection_mode_changed)
         if hasattr(self.viewer, "plateAutoOrientRequested"):
             self.viewer.plateAutoOrientRequested.connect(lambda: self._on_auto_orient_requested("default"))
         if hasattr(self.viewer, "plateArrangeRequested"):

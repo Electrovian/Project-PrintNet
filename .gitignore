@@ -3,6 +3,8 @@
 /App/Tests/test objects
 logs
 /logs
+.pytest_cache/
+coverage/
 __pycache__/
 *.pyc
 Test Files
@@ -191,4 +193,5 @@ Website/backend/Website/backend/uploads/
 Website/backend/backend-live.*.log
 Website/backend/worker-smoke.*.log
 App/testing/visual_audit_output/
+App/testing/app_shell_audit_output/
 app-live.*.log
