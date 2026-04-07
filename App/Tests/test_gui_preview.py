@@ -192,6 +192,22 @@ class PreviewViewTests(QtTestCase):
         self.assertFalse(view._play_timer.isActive())
         self.assertFalse(view._play_btn.isChecked())
 
+    def test_preview_panel_caps_height_to_viewer_space(self):
+        view, main, viewer = self._build()
+        self.addCleanup(main.close)
+        self.addCleanup(viewer.close)
+        viewer.resize(700, 400)
+        main.resize(700, 400)
+        main.show()
+        viewer.show()
+        QtWidgets.QApplication.processEvents()
+
+        view.show()
+        QtWidgets.QApplication.processEvents()
+
+        self.assertLessEqual(view._preview_panel.maximumHeight(), 368)
+        self.assertLessEqual(view._preview_panel.height(), 368)
+
 
 if TYPE_CHECKING:
     from PyQt5 import QtWidgets as _QtWidgets

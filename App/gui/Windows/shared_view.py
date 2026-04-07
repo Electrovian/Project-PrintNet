@@ -224,6 +224,8 @@ class SharedView(QtCore.QObject):
         title_label = QtWidgets.QLabel(self._t("topbar.project_title", "Untitled"), head_row)
         title_label.setObjectName("TopbarProjectTitle")
         title_label.setAlignment(QtCore.Qt.AlignCenter)
+        title_label.setMinimumWidth(0)
+        title_label.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
         head_layout.addWidget(title_label)
 
         head_layout.addStretch(1)
@@ -268,6 +270,7 @@ class SharedView(QtCore.QObject):
             btn.setAutoExclusive(True)
             btn.setCursor(QtCore.Qt.PointingHandCursor)
             btn.setObjectName("ModeTab")
+            btn.setToolTip(btn.text())
             mode_group.addButton(btn)
             mode_layout.addWidget(btn)
             mode_tabs.append(btn)
@@ -286,6 +289,7 @@ class SharedView(QtCore.QObject):
         slice_btn = QtWidgets.QPushButton(self._t("topbar.action.slice_plate", "Slice plate"), mode_row)
         slice_btn.setObjectName("TopbarActionButton")
         slice_btn.setProperty("kind", "primary")
+        slice_btn.setToolTip(slice_btn.text())
         slice_handler = getattr(self.main, "slice_current_plate", None)
         if not callable(slice_handler):
             slice_handler = getattr(self.main, "slice_current_model", None)
@@ -296,6 +300,7 @@ class SharedView(QtCore.QObject):
         print_btn = QtWidgets.QPushButton(self._t("topbar.action.print", "Select print"), mode_row)
         print_btn.setObjectName("TopbarActionButton")
         print_btn.setProperty("kind", "secondary")
+        print_btn.setToolTip(print_btn.text())
         print_btn.clicked.connect(self.main._open_device_view)
         mode_layout.addWidget(print_btn)
 
@@ -394,7 +399,7 @@ class SharedView(QtCore.QObject):
             "  border-radius: 4px;"
             "}"
             "QToolButton#ModeTab {"
-            "  padding: 6px 10px;"
+            "  padding: 5px 6px;"
             "  border-radius: 5px;"
             "}"
             "QToolButton#ModeTab:checked {"
@@ -413,7 +418,7 @@ class SharedView(QtCore.QObject):
             f"  color: {theme_css('action_button_text')};"
             f"  border: 1px solid {theme_css('action_panel_border')};"
             "  border-radius: 13px;"
-            "  padding: 4px 14px;"
+            "  padding: 4px 10px;"
             "  font-weight: 600;"
             "}"
             "QPushButton#TopbarActionButton[kind=\"primary\"] {"

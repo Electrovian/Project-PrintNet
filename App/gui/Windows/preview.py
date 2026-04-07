@@ -330,11 +330,25 @@ class PreviewView(QtCore.QObject):
         self._set_mode_page("line_type")
         self._stack.setUpdatesEnabled(True)
 
-    def _build_line_type_page(self):
-        page = QtWidgets.QWidget(self._stack)
+    def _build_scroll_page(self):
+        scroll = QtWidgets.QScrollArea(self._stack)
+        scroll.setObjectName("PreviewPageScroll")
+        scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        scroll.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+
+        page = QtWidgets.QWidget(scroll)
+        page.setObjectName("PreviewPageBody")
         layout = QtWidgets.QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
+        scroll.setWidget(page)
+        return scroll, page, layout
+
+    def _build_line_type_page(self):
+        scroll, page, layout = self._build_scroll_page()
 
         self._line_table = QtWidgets.QTableWidget(0, 5, page)
         self._line_table.setHorizontalHeaderLabels(
@@ -424,13 +438,10 @@ class PreviewView(QtCore.QObject):
         self._diagnostics_value.setMaximumHeight(220)
         layout.addWidget(self._diagnostics_value)
 
-        return page
+        return scroll
 
     def _build_filament_page(self):
-        page = QtWidgets.QWidget(self._stack)
-        layout = QtWidgets.QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        scroll, page, layout = self._build_scroll_page()
 
         header = QtWidgets.QLabel("Filament")
         header.setObjectName("PreviewHeader")
@@ -499,13 +510,10 @@ class PreviewView(QtCore.QObject):
         layout.addWidget(options_table)
         self._options_tables["filament"] = options_table
 
-        return page
+        return scroll
 
     def _build_legend_page(self, title: str, mode_key: str):
-        page = QtWidgets.QWidget(self._stack)
-        layout = QtWidgets.QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        scroll, page, layout = self._build_scroll_page()
 
         header = QtWidgets.QLabel(title)
         header.setObjectName("PreviewHeader")
@@ -535,7 +543,7 @@ class PreviewView(QtCore.QObject):
         layout.addWidget(options_table)
         self._options_tables[mode_key] = options_table
 
-        return page
+        return scroll
 
     def _build_gcode_page(self):
         page = QtWidgets.QWidget(self._stack)
@@ -1047,6 +1055,13 @@ class PreviewView(QtCore.QObject):
             "QStackedWidget {"
             "  background: transparent;"
             "}"
+            "QScrollArea#PreviewPageScroll {"
+            "  background: transparent;"
+            "  border: none;"
+            "}"
+            "QWidget#PreviewPageBody {"
+            "  background: transparent;"
+            "}"
             "QFrame#PreviewSeparator {"
             f"  background: {panel_border};"
             "  max-height: 1px;"
@@ -1251,6 +1266,9 @@ class PreviewView(QtCore.QObject):
         max_width = min(560, available)
         target = min(self._preview_panel.sizeHint().width(), max_width)
         target = max(380, int(target))
+        available_height = max(220, self.viewer.height() - margin * 2)
+        self._preview_panel.setMinimumHeight(0)
+        self._preview_panel.setMaximumHeight(available_height)
         self._preview_panel.setFixedWidth(target)
 
     def update_stats(self, stats):

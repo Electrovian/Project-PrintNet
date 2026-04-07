@@ -128,6 +128,19 @@ class _FakeViewer(QtWidgets.QWidget):
         return []
 
 
+class _SizedPage(QtWidgets.QWidget):
+    def __init__(self, size_hint: QtCore.QSize, minimum_size_hint: QtCore.QSize, parent=None):
+        super().__init__(parent)
+        self._size_hint = QtCore.QSize(size_hint)
+        self._minimum_size_hint = QtCore.QSize(minimum_size_hint)
+
+    def sizeHint(self):
+        return QtCore.QSize(self._size_hint)
+
+    def minimumSizeHint(self):
+        return QtCore.QSize(self._minimum_size_hint)
+
+
 class MainWindowGuiTests(QtTestCase):
     def setUp(self):
         settings = QtCore.QSettings("EON", "OpenSlicer")
@@ -231,6 +244,25 @@ class MainWindowGuiTests(QtTestCase):
         QtWidgets.QApplication.processEvents()
         self.assertIs(window._central_stack.currentWidget(), window.viewer)
         self.assertTrue(window._settings_dock.isVisible())
+
+    def test_active_page_stacked_widget_uses_current_page_hints(self):
+        from gui.main_window import _ActivePageStackedWidget
+
+        stack = _ActivePageStackedWidget()
+        self.addCleanup(stack.deleteLater)
+
+        compact = _SizedPage(QtCore.QSize(320, 200), QtCore.QSize(280, 180), stack)
+        wide = _SizedPage(QtCore.QSize(960, 720), QtCore.QSize(900, 680), stack)
+        stack.addWidget(compact)
+        stack.addWidget(wide)
+
+        stack.setCurrentWidget(compact)
+        self.assertEqual(stack.sizeHint(), QtCore.QSize(320, 200))
+        self.assertEqual(stack.minimumSizeHint(), QtCore.QSize(280, 180))
+
+        stack.setCurrentWidget(wide)
+        self.assertEqual(stack.sizeHint(), QtCore.QSize(960, 720))
+        self.assertEqual(stack.minimumSizeHint(), QtCore.QSize(900, 680))
 
     def test_printer_selection_and_refresh_stay_in_sync_across_views(self):
         window = self._build_window()

@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_CONTACT_FORM,
   DEFAULT_PRINT_OPTIONS,
-  resolveApiBaseUrl
+  inspectFrontendShareUrl,
+  resolveApiBaseUrl,
+  resolveFrontendShareUrl
 } from "../src/config.js";
 import {
   FrontendContractError,
@@ -29,6 +31,32 @@ test("resolveApiBaseUrl uses location-like fallback", () => {
 test("resolveApiBaseUrl uses backend default port when ui uses another port", () => {
   const value = resolveApiBaseUrl("", { protocol: "http:", hostname: "127.0.0.1", port: "8080" });
   assert.equal(value, "http://127.0.0.1:8000/api/v1");
+});
+
+test("resolveFrontendShareUrl prefers explicit and runtime share overrides", () => {
+  assert.equal(resolveFrontendShareUrl("https://printnet.school.edu/launch"), "https://printnet.school.edu/launch");
+  globalThis.__PRINTNET_FRONTEND_SHARE_URL = "http://192.168.1.145:8080/signin";
+  try {
+    assert.equal(resolveFrontendShareUrl("", { origin: "http://localhost:8080" }), "http://192.168.1.145:8080/signin");
+  } finally {
+    delete globalThis.__PRINTNET_FRONTEND_SHARE_URL;
+  }
+});
+
+test("resolveFrontendShareUrl derives signin link from current frontend origin", () => {
+  const value = resolveFrontendShareUrl("", { origin: "https://printnet.school.edu" });
+  assert.equal(value, "https://printnet.school.edu/signin");
+});
+
+test("inspectFrontendShareUrl flags loopback and private-network targets", () => {
+  const local = inspectFrontendShareUrl("http://127.0.0.1:8080/signin");
+  assert.equal(local.isLoopback, true);
+  assert.equal(local.supportsLanSharing, false);
+  assert.match(local.message, /LAN URL/i);
+
+  const lan = inspectFrontendShareUrl("http://192.168.1.145:8080/signin");
+  assert.equal(lan.isPrivateNetwork, true);
+  assert.equal(lan.supportsLanSharing, true);
 });
 
 test("default form and print options are stable", () => {

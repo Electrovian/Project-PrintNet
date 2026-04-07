@@ -26,6 +26,46 @@ if TYPE_CHECKING:
 ASSETS_DIR = assets_dir()
 
 
+class _ActivePageStackedWidget(QtWidgets.QStackedWidget):
+    """Size the stack from the active page instead of every hidden page."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.currentChanged.connect(self._refresh_geometry)
+
+    def _refresh_geometry(self, _index: int) -> None:
+        self.updateGeometry()
+        parent = self.parentWidget()
+        if parent is not None:
+            parent.updateGeometry()
+
+    @staticmethod
+    def _normalized_size(size: QtCore.QSize | None) -> QtCore.QSize:
+        if size is None or not size.isValid():
+            return QtCore.QSize(0, 0)
+        return QtCore.QSize(max(0, size.width()), max(0, size.height()))
+
+    def _current_page_size(self, attr_name: str) -> QtCore.QSize:
+        current = self.currentWidget()
+        if current is None:
+            size_getter = getattr(super(), attr_name)
+            return self._normalized_size(size_getter())
+
+        size_getter = getattr(current, attr_name, None)
+        hint = size_getter() if callable(size_getter) else QtCore.QSize()
+        hint = self._normalized_size(hint)
+        if hint.isEmpty():
+            hint = self._normalized_size(current.sizeHint())
+        hint = hint.expandedTo(self._normalized_size(current.minimumSize()))
+        return hint
+
+    def sizeHint(self) -> QtCore.QSize:
+        return self._current_page_size("sizeHint")
+
+    def minimumSizeHint(self) -> QtCore.QSize:
+        return self._current_page_size("minimumSizeHint")
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, printers, airtable_cfg, parent=None):
         super().__init__(parent)
@@ -64,7 +104,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.prepare_view = PrepareView(self)
         self.viewer = self.prepare_view.viewer
 
-        self._central_stack = QtWidgets.QStackedWidget(self)
+        self._central_stack = _ActivePageStackedWidget(self)
         self._central_stack.addWidget(self.viewer)
 
         self.device_view = DeviceView(self)

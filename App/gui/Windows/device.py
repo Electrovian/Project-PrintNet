@@ -113,7 +113,9 @@ class DeviceView(QtWidgets.QWidget):
         status_layout.addLayout(grid)
         left_col.addWidget(status_frame)
 
-        btn_row = QtWidgets.QHBoxLayout()
+        actions_layout = QtWidgets.QGridLayout()
+        actions_layout.setHorizontalSpacing(8)
+        actions_layout.setVerticalSpacing(8)
         self._send_btn = QtWidgets.QPushButton(tr("device.button.send", "Send to printer"))
         self._save_btn = QtWidgets.QPushButton(tr("device.button.save_gcode", "Save G-code"))
         self._email_btn = QtWidgets.QPushButton(tr("device.button.send_email", "Send email"))
@@ -122,13 +124,21 @@ class DeviceView(QtWidgets.QWidget):
         self._download_installer_btn = QtWidgets.QPushButton(
             tr("device.button.download_installer", "Download installer")
         )
-        btn_row.addWidget(self._send_btn)
-        btn_row.addWidget(self._save_btn)
-        btn_row.addWidget(self._email_btn)
-        btn_row.addWidget(self._add_printer_btn)
-        btn_row.addWidget(self._diagnostics_btn)
-        btn_row.addWidget(self._download_installer_btn)
-        left_col.addLayout(btn_row)
+        action_buttons = [
+            self._send_btn,
+            self._save_btn,
+            self._email_btn,
+            self._add_printer_btn,
+            self._diagnostics_btn,
+            self._download_installer_btn,
+        ]
+        for index, button in enumerate(action_buttons):
+            button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            row, column = divmod(index, 3)
+            actions_layout.addWidget(button, row, column)
+        for column in range(3):
+            actions_layout.setColumnStretch(column, 1)
+        left_col.addLayout(actions_layout)
         left_col.addStretch(1)
 
         content_row.addLayout(left_col, 3)
