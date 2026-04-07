@@ -51,6 +51,15 @@ class PrinterProfileLookupTests(unittest.TestCase):
         self.assertEqual(resolved.get("machine_profile_path"), str(machine_nozzle.path))
         self.assertEqual(resolved.get("machine_model_path"), str(machine_model.path))
 
+    def test_custom_profile_resolves_eon_bed_texture_asset(self):
+        resolved = lookup.resolve_printer_plate_config({"name": "MyKlipper 0.4 nozzle"})
+        texture_path = Path(str(resolved.get("bed_texture_path") or ""))
+
+        self.assertTrue(texture_path.is_file())
+        self.assertEqual(texture_path.name, "eonslicer_bed_texture.svg")
+        self.assertTrue(str(resolved.get("machine_profile_path") or "").endswith("MyKlipper 0.4 nozzle.py"))
+        self.assertTrue(str(resolved.get("machine_model_path") or "").endswith("MyKlipper.py"))
+
 
 if __name__ == "__main__":
     unittest.main()

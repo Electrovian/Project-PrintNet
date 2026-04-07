@@ -1,0 +1,6 @@
+runtime/
+uploads/
+backend-live.*.log
+worker-smoke.*.log
+.pytest_cache/
+__pycache__/

@@ -949,34 +949,64 @@ def _apply_tree_branch_heuristics(
     if not layer_plans:
         return [], warnings
 
-    merge_ratio = max(0.5, min(4.0, float(branch_merge_distance_ratio)))
-    growth_ratio = max(1.0, min(2.0, float(branch_growth_ratio)))
+    merge_ratio = max(0.65, min(4.0, float(branch_merge_distance_ratio)))
+    growth_ratio = max(1.0, min(1.45, float(branch_growth_ratio)))
     min_radius = max(0.05, float(min_branch_radius_mm))
     style = _validate_support_style(support_style)
     organic_style = style == SUPPORT_STYLE_ORGANIC
-    base_branch_angle = max(5.0, min(85.0, float(branch_angle_deg)))
-    organic_branch_angle = max(5.0, min(85.0, float(branch_angle_organic_deg)))
+    base_branch_angle = max(20.0, min(60.0, float(branch_angle_deg)))
+    organic_branch_angle = max(20.0, min(55.0, float(branch_angle_organic_deg)))
     branch_angle = organic_branch_angle if organic_style else base_branch_angle
-    wall_count_clamped = max(0, min(8, int(wall_count)))
-    base_branch_diameter = max(min_radius * 2.0, float(branch_diameter_mm))
-    organic_branch_diameter = max(min_radius * 2.0, float(branch_diameter_organic_mm))
+    wall_count_clamped = max(0, min(4, int(wall_count)))
+    base_branch_diameter = max(
+        min_radius * 2.0,
+        min(max(0.8, float(support_spacing_mm) * 2.0), float(branch_diameter_mm)),
+    )
+    organic_branch_diameter = max(
+        min_radius * 2.0,
+        min(max(0.6, float(support_spacing_mm) * 1.35), float(branch_diameter_organic_mm)),
+    )
     branch_diameter = organic_branch_diameter if organic_style else base_branch_diameter
     tip_diameter = max(0.05, min(branch_diameter, float(tip_diameter_mm)))
-    branch_distance = max(0.05, float(branch_distance_organic_mm if organic_style else branch_distance_mm))
+    tree_branch_distance = max(
+        max(min_radius * 2.0, float(support_spacing_mm) * 0.5),
+        min(max(3.0, float(support_spacing_mm) * 3.0), float(branch_distance_mm)),
+    )
+    organic_branch_distance = max(
+        max(min_radius * 1.5, float(support_spacing_mm) * 0.25),
+        min(tree_branch_distance, float(branch_distance_organic_mm)),
+    )
+    branch_distance = organic_branch_distance if organic_style else tree_branch_distance
     top_rate = max(0.0, min(100.0, float(top_rate_percent)))
-    diameter_angle = max(0.0, min(89.0, float(branch_diameter_angle_deg)))
+    diameter_angle = max(0.0, min(35.0, float(branch_diameter_angle_deg)))
     auto_brim_enabled = bool(auto_brim)
-    brim_width = max(0.0, float(brim_width_mm))
-    angle_scale = 0.75 + (branch_angle / 120.0)
-    wall_scale = 1.0 + (wall_count_clamped * 0.1)
-    top_rate_scale = 1.0 + (top_rate * 0.002)
-    diameter_angle_scale = 1.0 + (diameter_angle / 180.0)
-    brim_scale = 1.0 + (min(12.0, brim_width) * 0.02 if auto_brim_enabled else 0.0)
-    growth_ratio = max(1.0, min(2.2, growth_ratio * (1.0 + (wall_count_clamped * 0.02)) * top_rate_scale))
+    brim_width = max(0.0, min(6.0, float(brim_width_mm)))
+    angle_scale = 0.82 + (branch_angle / 150.0)
+    wall_scale = 1.0 + (wall_count_clamped * 0.08)
+    top_rate_scale = 1.0 + (top_rate * 0.0015)
+    diameter_angle_scale = 1.0 + (diameter_angle / 220.0)
+    brim_scale = 1.0 + (brim_width * 0.02 if auto_brim_enabled else 0.0)
+    growth_ratio = max(1.0, min(1.6, growth_ratio * (1.0 + (wall_count_clamped * 0.015)) * top_rate_scale))
     min_radius = max(min_radius, tip_diameter * 0.5)
-    max_radius_cap = max(min_radius, (branch_diameter * 0.5) * wall_scale * brim_scale * diameter_angle_scale)
-    distance_scale = max(1.0, branch_distance / max(EPSILON, float(support_spacing_mm)))
-    merge_distance = max(min_radius, float(support_spacing_mm) * merge_ratio * angle_scale * distance_scale)
+    max_radius_cap = max(
+        min_radius,
+        min(
+            branch_diameter * wall_scale * brim_scale * diameter_angle_scale,
+            branch_distance * 0.7,
+        ),
+    )
+    distance_scale = max(1.0, min(2.0, branch_distance / max(EPSILON, float(support_spacing_mm))))
+    merge_distance = max(
+        min_radius,
+        min(
+            max(branch_distance * 3.0, float(support_spacing_mm) * 4.5),
+            float(support_spacing_mm) * merge_ratio * angle_scale * distance_scale,
+        ),
+    )
+    spawn_distance_factor = max(0.35, min(0.82, (0.44 + (branch_angle / 220.0)) - (top_rate * 0.0018)))
+    spawn_distance_threshold = max(min_radius, merge_distance * spawn_distance_factor)
+    merge_join_distance = max(min_radius, min(branch_distance * 1.35, merge_distance * 0.78))
+    reparent_distance_limit = max(min_radius, min(branch_distance * 2.4, merge_distance * 1.9))
     route_weight = max(0.0, float(parent_weight_route))
     load_weight = max(0.0, float(parent_weight_load))
     root_bonus_weight = max(0.0, float(parent_root_bonus))
@@ -995,6 +1025,14 @@ def _apply_tree_branch_heuristics(
         f":diameter_angle={diameter_angle:.2f}"
         f":auto_brim={1 if auto_brim_enabled else 0}"
         f":brim_width={brim_width:.3f}"
+    )
+    warnings.append(
+        "tree_support:bounds"
+        f":merge_distance={merge_distance:.3f}"
+        f":spawn_threshold={spawn_distance_threshold:.3f}"
+        f":merge_join={merge_join_distance:.3f}"
+        f":reparent_limit={reparent_distance_limit:.3f}"
+        f":max_radius={max_radius_cap:.3f}"
     )
 
     by_layer: dict[int, LayerSupportPlan] = {int(plan.layer_index): plan for plan in layer_plans}
@@ -1087,7 +1125,7 @@ def _apply_tree_branch_heuristics(
                     parent_branch.trunk_assignment = "trunk"
 
                 should_spawn_child = (
-                    best_dist >= (merge_distance * max(0.20, (0.45 + (branch_angle / 180.0)) - (top_rate * 0.0025)))
+                    best_dist >= spawn_distance_threshold
                     or best_path_collision_avoided
                     or len(best_path) > 2
                     or best_parent_score < 0.5
@@ -1216,7 +1254,7 @@ def _apply_tree_branch_heuristics(
                     continue
                 other = branches[other_id]
                 dist = _tree_distance(trunk.x_mm, trunk.y_mm, other.x_mm, other.y_mm)
-                if dist > merge_distance * 0.7:
+                if dist > merge_join_distance:
                     continue
                 trunk_point = Point2(float(trunk.x_mm), float(trunk.y_mm))
                 other_point = Point2(float(other.x_mm), float(other.y_mm))
@@ -1231,7 +1269,7 @@ def _apply_tree_branch_heuristics(
                     other.blocked_collision_count = int(other.blocked_collision_count + 1)
                     blocked_merges += 1
                     continue
-                if merge_path_length > (dist * 2.35) + max(min_radius, support_spacing_mm * 0.6):
+                if merge_path_length > (dist * 2.15) + max(min_radius, support_spacing_mm * 0.6):
                     trunk.blocked_collision_count = int(trunk.blocked_collision_count + 1)
                     other.blocked_collision_count = int(other.blocked_collision_count + 1)
                     blocked_merges += 1
@@ -1308,7 +1346,10 @@ def _apply_tree_branch_heuristics(
             child_redundant = (
                 branch.parent_branch_id is not None
                 and branch.connected_region_count <= 1
-                and branch.blocked_collision_count >= 1
+                and (
+                    branch.blocked_collision_count >= 1
+                    or branch.collision_avoidance_count >= 1
+                )
             )
             if active_ids:
                 nearest_parent: int | None = None
@@ -1324,7 +1365,7 @@ def _apply_tree_branch_heuristics(
                     if candidate_branch.pruned:
                         continue
                     distance = _tree_distance(branch.x_mm, branch.y_mm, candidate_branch.x_mm, candidate_branch.y_mm)
-                    if distance > (merge_distance * 1.9):
+                    if distance > reparent_distance_limit:
                         continue
                     reparent_path, reparent_collision_avoided, reparent_blocked, reparent_path_length = _route_branch_connection(
                         start=Point2(float(branch.x_mm), float(branch.y_mm)),
@@ -1335,7 +1376,7 @@ def _apply_tree_branch_heuristics(
                     if reparent_blocked:
                         blocked_reparent_attempts += 1
                         continue
-                    if reparent_path_length > (distance * 2.6) + max(min_radius, support_spacing_mm * 0.8):
+                    if reparent_path_length > (distance * 2.35) + max(min_radius, support_spacing_mm * 0.75):
                         blocked_reparent_attempts += 1
                         continue
                     waypoint_count = max(0, len(reparent_path) - 2)
@@ -1367,7 +1408,7 @@ def _apply_tree_branch_heuristics(
                     branch.blocked_collision_count = int(branch.blocked_collision_count + blocked_reparent_attempts)
                 if (
                     nearest_parent is not None
-                    and nearest_parent_dist <= (merge_distance * 1.9)
+                    and nearest_parent_dist <= reparent_distance_limit
                     and nearest_parent_score >= 0.42
                 ):
                     if branch.parent_branch_id != int(nearest_parent) and not _would_create_parent_cycle(
@@ -1675,7 +1716,6 @@ def build_support_plan(
     if not graphs:
         warnings.append("support_planning:no_layers")
     if normalized_type == SUPPORT_TYPE_TREE:
-        warnings.append("support_planning:tree_mode_mvp_estimate")
         warnings.append("support_planning:tree_branch_graph_enabled")
         warnings.append(f"support_planning:tree_style={normalized_style}")
         if bool(tree_support_strict_parity_mode):

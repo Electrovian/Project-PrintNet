@@ -8,19 +8,33 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+APP_ROOT = REPO_ROOT / "App"
+DEFAULT_MANIFEST_PATH = REPO_ROOT / "App/Tests/fixtures/fff_parity/corpus_manifest.json"
+DEFAULT_PROFILE_PATH = REPO_ROOT / "App/Tests/fixtures/fff_parity/profile_fff_default.json"
+
+
+def _bootstrap_import_paths() -> None:
+    for candidate in (APP_ROOT, REPO_ROOT):
+        candidate_text = str(candidate)
+        if candidate_text not in sys.path:
+            sys.path.insert(0, candidate_text)
+
+
+if __package__ in (None, ""):
+    _bootstrap_import_paths()
 
 try:  # pragma: no cover - import path depends on caller cwd / sys.path setup
     from slicer_v2.context import create_context
     from slicer_v2.pipeline import STAGE_SEQUENCE, run_pipeline
 except Exception:  # pragma: no cover
+    _bootstrap_import_paths()
     from App.slicer_v2.context import create_context  # type: ignore
     from App.slicer_v2.pipeline import STAGE_SEQUENCE, run_pipeline  # type: ignore
-
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_MANIFEST_PATH = REPO_ROOT / "App/Tests/fixtures/fff_parity/corpus_manifest.json"
-DEFAULT_PROFILE_PATH = REPO_ROOT / "App/Tests/fixtures/fff_parity/profile_fff_default.json"
 
 
 @dataclass(frozen=True)
@@ -39,6 +53,10 @@ class ParityTolerance:
             "bridge_ratio_abs": float(self.bridge_ratio_abs),
             "tree_count_ratio": float(self.tree_count_ratio),
         }
+
+
+class FffParityCorpusError(RuntimeError):
+    pass
 
 
 def _to_float(value: object, default: float = 0.0) -> float:
@@ -89,6 +107,44 @@ def _display_path(path: Path) -> str:
         return str(resolved.relative_to(REPO_ROOT)).replace("\\", "/")
     except ValueError:
         return str(resolved)
+
+
+def _collect_models(manifest_payload: dict[str, object]) -> list[dict[str, object]]:
+    raw_models = manifest_payload.get("models", []) if isinstance(manifest_payload, dict) else []
+    if not isinstance(raw_models, list) or not raw_models:
+        raise FffParityCorpusError("FFF_PARITY_MANIFEST_MODELS_EMPTY")
+
+    collected: list[dict[str, object]] = []
+    malformed: list[str] = []
+    missing: list[str] = []
+
+    for index, item in enumerate(raw_models):
+        if not isinstance(item, dict):
+            malformed.append(f"index_{index}:not_a_dict")
+            continue
+        mesh_value = str(item.get("path", "")).strip()
+        if not mesh_value:
+            malformed.append(f"{str(item.get('id', f'index_{index}'))}:missing_path")
+            continue
+        mesh_path = _resolve_mesh_path(mesh_value)
+        if not mesh_path.exists() or not mesh_path.is_file():
+            missing.append(_display_path(mesh_path))
+            continue
+        collected.append(
+            {
+                "id": str(item.get("id", f"index_{index}")).strip() or f"index_{index}",
+                "path": str(mesh_path),
+                "settings_override": item.get("settings_override", {}),
+            }
+        )
+
+    if malformed:
+        raise FffParityCorpusError("FFF_PARITY_MANIFEST_INVALID:" + ";".join(malformed))
+    if missing:
+        raise FileNotFoundError("FFF_PARITY_CORPUS_MISSING_MODELS:" + ";".join(missing))
+    if not collected:
+        raise FileNotFoundError("FFF_PARITY_CORPUS_NO_VALID_MODELS")
+    return collected
 
 
 def _extract_metrics(stage_artifacts: dict[str, dict], stage_order: list[str], resolved_settings: dict[str, object]) -> dict[str, object]:
@@ -156,53 +212,18 @@ def run_fff_corpus(
     if not isinstance(profile_payload, dict):
         raise ValueError("FFF_PARITY_PROFILE_INVALID")
 
-    raw_models = manifest_payload.get("models", []) if isinstance(manifest_payload, dict) else []
-    if not isinstance(raw_models, list):
-        raise ValueError("FFF_PARITY_MANIFEST_MODELS_INVALID")
+    selected_models = _collect_models(manifest_payload)
+    if max_models is not None:
+        selected_models = selected_models[: max(0, int(max_models))]
+    if not selected_models:
+        raise FileNotFoundError("FFF_PARITY_CORPUS_NO_EXECUTABLE_MODELS")
 
-    selected_models = raw_models[: max(0, int(max_models))] if max_models is not None else raw_models
     results: list[dict[str, object]] = []
     expected_stage_order = [stage_name for stage_name, _runner in STAGE_SEQUENCE]
 
     for index, item in enumerate(selected_models):
-        if not isinstance(item, dict):
-            results.append(
-                {
-                    "model_id": f"index_{index}",
-                    "mesh_path": "",
-                    "status": "skipped",
-                    "runtime_ms": 0.0,
-                    "error": "manifest_item_not_dict",
-                }
-            )
-            continue
-
         model_id = str(item.get("id", f"index_{index}")).strip() or f"index_{index}"
-        mesh_value = str(item.get("path", "")).strip()
-        if not mesh_value:
-            results.append(
-                {
-                    "model_id": model_id,
-                    "mesh_path": "",
-                    "status": "skipped",
-                    "runtime_ms": 0.0,
-                    "error": "mesh_path_missing",
-                }
-            )
-            continue
-
-        mesh_path = _resolve_mesh_path(mesh_value)
-        if not mesh_path.exists() or not mesh_path.is_file():
-            results.append(
-                {
-                    "model_id": model_id,
-                    "mesh_path": _display_path(mesh_path),
-                    "status": "skipped",
-                    "runtime_ms": 0.0,
-                    "error": "mesh_path_not_found",
-                }
-            )
-            continue
+        mesh_path = Path(str(item["path"]))
 
         settings = dict(profile_payload)
         override = item.get("settings_override", {})
@@ -412,6 +433,19 @@ def compare_report_payloads(
                 limit=0,
             )
 
+    if not compared_ids:
+        issues.append(
+            {
+                "model_id": "",
+                "severity": "error",
+                "code": "no_comparable_models",
+                "message": "No executable models were available for parity comparison.",
+                "current": current_payload.get("model_count", 0),
+                "baseline": baseline_payload.get("model_count", 0),
+                "tolerance": "exact",
+            }
+        )
+
     return {
         "ok": len(issues) == 0,
         "compared_model_count": len(compared_ids),
@@ -440,22 +474,36 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
-    report = run_fff_corpus(
-        manifest_path=args.manifest,
-        profile_path=args.profile,
-        max_models=(args.max_models if args.max_models > 0 else None),
-        continue_on_error=not bool(args.fail_fast),
-    )
+    try:
+        report = run_fff_corpus(
+            manifest_path=args.manifest,
+            profile_path=args.profile,
+            max_models=(args.max_models if args.max_models > 0 else None),
+            continue_on_error=not bool(args.fail_fast),
+        )
 
-    payload: dict[str, object] = dict(report)
-    if args.baseline:
-        baseline_payload = json.loads(Path(args.baseline).expanduser().read_text(encoding="utf-8"))
-        payload["comparison"] = compare_report_payloads(payload, baseline_payload)
+        payload: dict[str, object] = dict(report)
+        if args.baseline:
+            baseline_payload = json.loads(Path(args.baseline).expanduser().read_text(encoding="utf-8"))
+            payload["comparison"] = compare_report_payloads(payload, baseline_payload)
 
-    if args.output:
-        _write_json(Path(args.output).expanduser(), payload)
-    print(json.dumps(payload, indent=2))
-    return 0
+        if args.output:
+            _write_json(Path(args.output).expanduser(), payload)
+        print(json.dumps(payload, indent=2))
+        if args.baseline and isinstance(payload.get("comparison"), dict) and not bool(payload["comparison"].get("ok")):
+            return 1
+        return 0
+    except Exception as exc:
+        payload = {
+            "ok": False,
+            "error": str(exc),
+            "manifest_path": str(Path(args.manifest).expanduser()),
+            "profile_path": str(Path(args.profile).expanduser()),
+        }
+        if args.output:
+            _write_json(Path(args.output).expanduser(), payload)
+        print(json.dumps(payload, indent=2))
+        return 1
 
 
 if __name__ == "__main__":

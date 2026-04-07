@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,6 +23,43 @@ PROFILE_METADATA_KEYS = {
 
 SETTING_PROFILE_TYPES = {"machine", "machine_model", "process"}
 FILAMENT_PROFILE_TYPES = {"filament"}
+DEFAULT_CLI_CONFIG_IDENTIFIER = "profiles/BBL/cli_config.json"
+
+
+def _normalize_reference(value: str) -> str:
+    text = str(value).strip().replace("\\", "/")
+    while "//" in text:
+        text = text.replace("//", "/")
+    return text.strip()
+
+
+def _resolve_embedded_cli_config_identifier(value: str) -> str | None:
+    normalized = _normalize_reference(value)
+    if not normalized:
+        return None
+
+    lowered = normalized.casefold()
+    if lowered == DEFAULT_CLI_CONFIG_IDENTIFIER.casefold():
+        return DEFAULT_CLI_CONFIG_IDENTIFIER
+
+    if lowered.startswith("embedded:"):
+        lowered = lowered.removeprefix("embedded:")
+        if lowered == DEFAULT_CLI_CONFIG_IDENTIFIER.casefold():
+            return DEFAULT_CLI_CONFIG_IDENTIFIER
+
+    prefixes = (
+        "app/printer_presets/seed_resources/",
+        "printer_presets/seed_resources/",
+        "seed_resources/",
+    )
+    for prefix in prefixes:
+        index = lowered.find(prefix)
+        if index >= 0:
+            trimmed = normalized[index + len(prefix) :].strip("/")
+            if trimmed.casefold() == DEFAULT_CLI_CONFIG_IDENTIFIER.casefold():
+                return DEFAULT_CLI_CONFIG_IDENTIFIER
+
+    return None
 
 
 class ProfileCompatError(ValueError):
@@ -47,6 +85,7 @@ class ProfileMergeReport:
 @dataclass
 class CompatibilityLookupResult:
     downward_compatible_machine: list[str] = field(default_factory=list)
+    config_source: str = ""
     warnings: list[str] = field(default_factory=list)
 
 
@@ -79,18 +118,37 @@ def _load_json_object(path_value: str) -> tuple[str, dict[str, object]]:
 
 
 def _load_cli_config_object(path_value: str) -> tuple[str, dict[str, object]]:
-    text = str(path_value).strip()
-    if text:
-        path = Path(text).expanduser()
-        if path.exists() and path.is_file():
-            return _load_json_object(text)
+    text = str(path_value or "").strip()
+    if not text:
+        payload = get_cli_config_payload(DEFAULT_CLI_CONFIG_IDENTIFIER)
+        if payload is None:
+            raise ProfileCompatConfigError(
+                f"CLI_CONFIG_DEFAULT_UNAVAILABLE:{DEFAULT_CLI_CONFIG_IDENTIFIER}"
+            )
+        return f"embedded:{DEFAULT_CLI_CONFIG_IDENTIFIER}", {str(key): value for key, value in payload.items()}
 
-    payload = get_cli_config_payload(text or None)
-    if payload is not None:
+    path = Path(text).expanduser()
+    if path.exists() and path.is_file():
+        path_display = str(path.resolve())
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ProfileCompatConfigError(f"CLI_CONFIG_JSON_PARSE_ERROR:{path_display}:{exc}") from exc
+        if not isinstance(payload, dict):
+            raise ProfileCompatConfigError(f"CLI_CONFIG_JSON_NOT_OBJECT:{path_display}")
         normalized_payload = {str(key): value for key, value in payload.items()}
-        return "embedded:profiles/BBL/cli_config.json", normalized_payload
+        return path_display, normalized_payload
 
-    return _load_json_object(text)
+    embedded_identifier = _resolve_embedded_cli_config_identifier(text)
+    if embedded_identifier is not None:
+        payload = get_cli_config_payload(embedded_identifier)
+        if payload is None:
+            raise ProfileCompatConfigError(
+                f"CLI_CONFIG_EMBEDDED_UNAVAILABLE:{embedded_identifier}"
+            )
+        return f"embedded:{embedded_identifier}", {str(key): value for key, value in payload.items()}
+
+    raise ProfileCompatFileNotFoundError(f"MISSING_CLI_CONFIG_FILE:{text}")
 
 
 def _validate_profile_type(path: str, payload: dict[str, object], allowed_types: set[str]) -> str:
@@ -207,23 +265,24 @@ def resolve_downward_compatible_machines(
     model_payload = printer_node.get(model_key)
     if not isinstance(model_payload, dict):
         warnings.append(f"model_not_found:{model_key}")
-        return CompatibilityLookupResult(warnings=warnings)
+        return CompatibilityLookupResult(config_source=config_path, warnings=warnings)
 
     downward_payload = model_payload.get("downward_check")
     if not isinstance(downward_payload, dict):
         warnings.append(f"downward_check_not_found:{model_key}")
-        return CompatibilityLookupResult(warnings=warnings)
+        return CompatibilityLookupResult(config_source=config_path, warnings=warnings)
 
     machines = downward_payload.get(name_key)
     if machines is None:
         warnings.append(f"printer_name_not_found:{model_key}:{name_key}")
-        return CompatibilityLookupResult(warnings=warnings)
+        return CompatibilityLookupResult(config_source=config_path, warnings=warnings)
     if not isinstance(machines, list):
         warnings.append(f"downward_check_not_list:{model_key}:{name_key}")
-        return CompatibilityLookupResult(warnings=warnings)
+        return CompatibilityLookupResult(config_source=config_path, warnings=warnings)
 
     normalized = [str(item).strip() for item in machines if str(item).strip()]
     return CompatibilityLookupResult(
         downward_compatible_machine=normalized,
+        config_source=config_path,
         warnings=warnings,
     )

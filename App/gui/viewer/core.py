@@ -1,7 +1,7 @@
 import os
 import math
 from numbers import Real
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
@@ -19,6 +19,7 @@ from ..auto_orient import (
     select_candidate_normals,
 )
 from ..arrange_utils import positions_fit, spacing_candidates, spacing_with_base
+from ..scene_state import SceneState
 from ..theme import theme_value, theme_qcolor
 from config.defaults import DEFAULTS
 from .gizmos import GizmoMixin
@@ -34,11 +35,14 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
     modelRotated = QtCore.pyqtSignal(int, float, float, float)
     selectionChanged = QtCore.pyqtSignal(list)
     simplifyRequested = QtCore.pyqtSignal(int)
+    sceneChanged = QtCore.pyqtSignal()
     plateRemoveRequested = QtCore.pyqtSignal()
     plateAutoOrientRequested = QtCore.pyqtSignal()
     plateArrangeRequested = QtCore.pyqtSignal()
+    plateSelectionChanged = QtCore.pyqtSignal(int)
     plateLockChanged = QtCore.pyqtSignal(bool)
     plateNameChanged = QtCore.pyqtSignal(str)
+    projectionModeChanged = QtCore.pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -51,9 +55,11 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
             self.opts["elevation"] = float(self._default_view["elevation"]) # pyright: ignore[reportArgumentType]
         if "azimuth" not in self.opts:
             self.opts["azimuth"] = float(self._default_view["azimuth"]) # pyright: ignore[reportArgumentType]
+        self._perspective_fov = max(1.0, min(179.0, self._coerce_float(self.opts.get("fov"), 60.0)))
         self._coerce_distance()
 
-        self.models = {}
+        self.scene_state = SceneState()
+        self.models: dict[int, dict[str, Any]] = {}
         self._next_model_id = 1
 
         self._selected_model_id = None
@@ -66,9 +72,15 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._selection_info = None
         self._interaction_enabled = True
         self._interaction_requested = True
-        self._plate_locked = False
-        self._current_plate_name = "01"
+        self._renderer_mode = "desktop" if str(os.environ.get("EON_OPENGL_MODE", "")).strip().lower() == "desktop" else "software"
+        self._viewer_runtime_degraded = False
+        self._viewer_runtime_error = ""
+        self._viewer_runtime_failure_count = 0
         self._plate_overlay_visible = True
+        self._plate_grid_items: dict[int, gl.GLGridItem] = {}
+        self._plate_texture_items: dict[int, gl.GLImageItem] = {}
+        self._plate_name_labels: dict[int, QtWidgets.QLabel] = {}
+        self._plate_number_labels: dict[int, QtWidgets.QLabel] = {}
         self._print_stats_panel = None
         self._print_stats_data = None
         self._print_stats_visible = True
@@ -111,15 +123,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._gizmo_rotate_pivot = None
         self._gizmo_ring_points = {}
 
-        g = gl.GLGridItem()
-        grid_size = DEFAULTS["viewer"]["grid_size"]
-        grid_spacing = DEFAULTS["viewer"]["grid_spacing"]
-        g.setSize(grid_size[0], grid_size[1], grid_size[2])
-        g.setSpacing(grid_spacing[0], grid_spacing[1], grid_spacing[2])
-        g.translate(0, 0, 0)
-        g.setColor(theme_value("grid_color", (80, 80, 80, 255)))
-        self._grid_item = g
-        self.addItem(g)
+        self._grid_item = None
 
         printer_defaults = DEFAULTS.get("printer", {})
         self._bed_size = tuple(printer_defaults.get("bed_size", (200, 200)))
@@ -136,6 +140,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._build_print_stats_panel()
         self._build_preview_object_panel()
         self._build_simplify_warning()
+        self._build_viewer_runtime_warning()
 
         self._preview_data = None
         self._preview_layer_index = None
@@ -188,6 +193,14 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._platform_visible = True
         self._nozzle_visible = False
         self._nozzle = None
+        self._view_animation_timer = QtCore.QTimer(self)
+        self._view_animation_timer.setInterval(16)
+        self._view_animation_timer.timeout.connect(self._advance_view_animation)
+        self._view_animation_clock = QtCore.QElapsedTimer()
+        self._view_animation_duration_ms = 0
+        self._view_animation_start = (0.0, 0.0)
+        self._view_animation_target = (0.0, 0.0)
+        self._sync_scene_from_state()
 
     # -------------------- hardening --------------------
 
@@ -220,6 +233,27 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
             return False
         return True
 
+    @staticmethod
+    def _is_transient_gl_clear_error(exc: Exception) -> bool:
+        text = str(exc or "")
+        lower = text.lower()
+        return "glclearcolor" in lower and "invalid operation" in lower
+
+    def _gl_context_ready(self) -> bool:
+        try:
+            widget_context = self.context()
+            current_context = QtGui.QOpenGLContext.currentContext()
+        except Exception:
+            return False
+        if widget_context is None or current_context is None:
+            return False
+        try:
+            if not widget_context.isValid() or not current_context.isValid():
+                return False
+        except Exception:
+            return False
+        return widget_context == current_context
+
     def _update_gl_line(self, item, color):
         pos = item.pos if item.pos is not None else np.zeros((0, 3), dtype=float)
         color_arr = self._color_array(color, len(pos))
@@ -228,7 +262,25 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
     def paintGL(self, *args, **kwargs):
         self._coerce_distance()
         self._sync_view_cube()
-        return super().paintGL(*args, **kwargs)
+        if hasattr(self, "_position_plate_action_strip"):
+            self._position_plate_action_strip()
+        if hasattr(self, "_position_plate_labels"):
+            self._position_plate_labels()
+        if hasattr(self, "_position_viewer_runtime_warning"):
+            self._position_viewer_runtime_warning()
+        if self._viewer_runtime_degraded:
+            return None
+        if not self.updatesEnabled() or not self.isVisible():
+            return None
+        if not self._gl_context_ready():
+            return None
+        try:
+            return super().paintGL(*args, **kwargs)
+        except Exception as exc:
+            if self._is_transient_gl_clear_error(exc):
+                return None
+            self._enter_runtime_degraded(exc)
+            return None
 
     # -------------------- public helpers --------------------
 
@@ -240,6 +292,11 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         ids = [mid for mid in model_ids if mid in self.models]
         self._selected_model_ids = ids
         self._selected_model_id = ids[0] if ids else None
+        self.scene_state.selected_entity_ids = list(ids)
+        if ids:
+            instance = self.scene_state.get_instance(ids[0])
+            if instance is not None:
+                self.scene_state.set_selected_plate(int(instance.plate_id))
         self._update_gizmo()
         self._update_selection_info()
         if self._preview_object_visible:
@@ -259,9 +316,26 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
             self._hide_rotate_hud()
         self._update_gizmo()
 
+    def set_prepare_tool(self, tool_id: str):
+        resolved = str(tool_id or "move").strip() or "move"
+        self.scene_state.tool_state.active_tool = resolved
+        if resolved == "move":
+            self.set_gizmo_mode("move")
+        elif resolved == "rotate":
+            self.set_gizmo_mode("rotate")
+        else:
+            self._gizmo_drag_axis = None
+            self._gizmo_rotate_axis = None
+            if resolved not in {"rotate"}:
+                self._hide_rotate_hud()
+            self._update_gizmo()
+
+    def get_prepare_tool(self) -> str:
+        return str(self.scene_state.tool_state.active_tool or "move")
+
     def set_interaction_enabled(self, enabled: bool):
         self._interaction_requested = bool(enabled)
-        self._interaction_enabled = bool(enabled) and not bool(self._plate_locked)
+        self._interaction_enabled = bool(enabled) and not self.is_plate_locked()
         if not self._interaction_enabled:
             self._dragging = False
             self._gizmo_drag_axis = None
@@ -270,18 +344,23 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._update_gizmo()
 
     def is_plate_locked(self) -> bool:
-        return bool(self._plate_locked)
+        plate = self.scene_state.get_plate()
+        return bool(plate.locked) if plate is not None else False
 
     def set_plate_locked(self, locked: bool):
-        self._plate_locked = bool(locked)
+        plate = self.scene_state.get_plate()
+        if plate is not None:
+            plate.locked = bool(locked)
         if hasattr(self, "_plate_lock_btn") and self._plate_lock_btn is not None:
             prev = self._plate_lock_btn.blockSignals(True)
-            self._plate_lock_btn.setChecked(self._plate_locked)
+            self._plate_lock_btn.setChecked(bool(locked))
             self._plate_lock_btn.blockSignals(prev)
         self.set_interaction_enabled(bool(self._interaction_requested))
+        self.sceneChanged.emit()
 
     def get_current_plate_name(self) -> str:
-        text = str(self._current_plate_name or "").strip()
+        plate = self.scene_state.get_plate()
+        text = str(plate.name if plate is not None else "").strip()
         return text or "01"
 
     def set_current_plate_name(self, value: str):
@@ -289,15 +368,20 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         if not text:
             text = "01"
         text = text[:64]
-        if text == self._current_plate_name:
+        plate = self.scene_state.get_plate()
+        if plate is None:
             return
-        self._current_plate_name = text
+        if text == plate.name:
+            return
+        plate.name = text
+        self._update_plate_label_texts()
         self.plateNameChanged.emit(text)
+        self.sceneChanged.emit()
 
     def fit_camera_to_scene_or_selection(self):
         target_ids = self.get_selected_model_ids()
         if not target_ids:
-            target_ids = self.get_model_ids()
+            target_ids = self.get_all_model_ids()
         if not target_ids:
             self.reset_view()
             return
@@ -331,10 +415,157 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._sync_view_cube()
         self.update()
 
+    def projection_mode(self) -> str:
+        try:
+            fov = float(self.opts.get("fov", 60.0))
+        except Exception:
+            fov = 60.0
+        return "ortho" if abs(fov) <= 1e-6 else "perspective"
+
+    def set_projection_mode(self, mode: str, *, emit_signal: bool = True) -> str:
+        normalized = "ortho" if str(mode or "").strip().lower() == "ortho" else "perspective"
+        current = self.projection_mode()
+        if normalized == "ortho":
+            current_fov = self._coerce_float(self.opts.get("fov"), self._perspective_fov)
+            if current_fov > 1e-6:
+                self._perspective_fov = max(1.0, min(179.0, current_fov))
+            self.opts["fov"] = 0.0  # pyright: ignore[reportArgumentType]
+        else:
+            self.opts["fov"] = float(self._perspective_fov)  # pyright: ignore[reportArgumentType]
+        self.update()
+        if emit_signal and current != normalized:
+            self.projectionModeChanged.emit(normalized)
+        return normalized
+
+    def renderer_mode(self) -> str:
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            value = str(app.property("eon_opengl_mode") or "").strip().lower()
+            if value in {"software", "desktop"}:
+                self._renderer_mode = value
+        return str(self._renderer_mode or "software")
+
+    def is_runtime_degraded(self) -> bool:
+        return bool(self._viewer_runtime_degraded)
+
+    def runtime_diagnostics(self) -> dict[str, object]:
+        return {
+            "renderer_mode": self.renderer_mode(),
+            "viewer_runtime_degraded": bool(self._viewer_runtime_degraded),
+            "viewer_runtime_error": str(self._viewer_runtime_error or ""),
+            "viewer_runtime_failure_count": int(self._viewer_runtime_failure_count),
+        }
+
+    def _enter_runtime_degraded(self, exc: Exception | str) -> None:
+        self._viewer_runtime_failure_count += 1
+        error_text = f"{type(exc).__name__}: {exc}" if isinstance(exc, Exception) else str(exc or "").strip()
+        if error_text:
+            self._viewer_runtime_error = error_text
+        if self._viewer_runtime_degraded:
+            return
+        self._viewer_runtime_degraded = True
+        self._cancel_interaction()
+        warning = (
+            "3D rendering entered safe mode after a runtime OpenGL failure. "
+            "You can keep using Prepare, Preview, export, and the rest of the app. "
+            f"Renderer: {self.renderer_mode()}."
+        )
+        if self._viewer_runtime_error:
+            warning = f"{warning}\nLast error: {self._viewer_runtime_error}"
+        if hasattr(self, "_show_viewer_runtime_warning"):
+            self._show_viewer_runtime_warning(warning)
+        view_cube = getattr(self, "_view_cube", None)
+        if view_cube is not None:
+            view_cube.setEnabled(False)
+        self.update()
+
+    def projectionMatrix(self, region, viewport):
+        if self.projection_mode() != "ortho":
+            return super().projectionMatrix(region, viewport)
+
+        x0, y0, w, h = viewport
+        w = max(1.0, float(w))
+        h = max(1.0, float(h))
+        dist = max(1e-3, self._coerce_float(self.opts.get("distance"), float(self._default_view["distance"])))
+        near_clip = max(1e-3, dist * 0.001)
+        far_clip = max(near_clip + 1.0, dist * 1000.0)
+
+        fov = max(1.0, min(179.0, float(getattr(self, "_perspective_fov", 60.0) or 60.0)))
+        half_width = max(1e-3, dist * math.tan(0.5 * math.radians(fov)))
+        half_height = half_width * (h / w)
+
+        left = half_width * (((float(region[0]) - float(x0)) * (2.0 / w)) - 1.0)
+        right = half_width * (((float(region[0]) + float(region[2]) - float(x0)) * (2.0 / w)) - 1.0)
+        bottom = half_height * (((float(region[1]) - float(y0)) * (2.0 / h)) - 1.0)
+        top = half_height * (((float(region[1]) + float(region[3]) - float(y0)) * (2.0 / h)) - 1.0)
+
+        tr = QtGui.QMatrix4x4()
+        tr.ortho(left, right, bottom, top, near_clip, far_clip)
+        return tr
+
+    @staticmethod
+    def _normalize_azimuth(value: float) -> float:
+        azimuth = float(value)
+        while azimuth <= -180.0:
+            azimuth += 360.0
+        while azimuth > 180.0:
+            azimuth -= 360.0
+        return azimuth
+
+    @classmethod
+    def _shortest_azimuth_delta(cls, start: float, target: float) -> float:
+        return cls._normalize_azimuth(float(target) - float(start))
+
+    def stop_view_animation(self) -> None:
+        if self._view_animation_timer.isActive():
+            self._view_animation_timer.stop()
+
+    def animate_view_to(self, azimuth: float, elevation: float, *, duration_ms: int = 170) -> None:
+        start_az = self._coerce_float(self.opts.get("azimuth"), float(self._default_view["azimuth"]))
+        start_el = self._coerce_float(self.opts.get("elevation"), float(self._default_view["elevation"]))
+        target_az = self._normalize_azimuth(float(azimuth))
+        target_el = max(-90.0, min(90.0, float(elevation)))
+
+        self.stop_view_animation()
+        self._view_animation_duration_ms = max(1, int(duration_ms))
+        self._view_animation_start = (start_az, start_el)
+        self._view_animation_target = (
+            start_az + self._shortest_azimuth_delta(start_az, target_az),
+            target_el,
+        )
+        self._view_animation_clock.restart()
+        self._view_animation_timer.start()
+        self._advance_view_animation()
+
+    def animate_reset_view(self, *, duration_ms: int = 170) -> None:
+        self.set_projection_mode("perspective")
+        self.animate_view_to(
+            float(self._default_view["azimuth"]),
+            float(self._default_view["elevation"]),
+            duration_ms=duration_ms,
+        )
+
+    def _advance_view_animation(self) -> None:
+        if self._view_animation_duration_ms <= 0:
+            self.stop_view_animation()
+            return
+        elapsed = int(self._view_animation_clock.elapsed())
+        t = min(1.0, float(elapsed) / float(self._view_animation_duration_ms))
+        eased = 1.0 - pow(1.0 - t, 3)
+        start_az, start_el = self._view_animation_start
+        target_az, target_el = self._view_animation_target
+        self.set_view(
+            start_az + (target_az - start_az) * eased,
+            start_el + (target_el - start_el) * eased,
+            _from_animation=True,
+        )
+        if t >= 1.0:
+            self.stop_view_animation()
+
     def apply_theme(self):
         self.setBackgroundColor(theme_value("view_bg", (20, 22, 26)))
-        if getattr(self, "_grid_item", None) is not None:
-            self._grid_item.setColor(theme_value("grid_color", (80, 80, 80, 255)))
+        if hasattr(self, "_apply_plate_visual_theme"):
+            self._apply_plate_visual_theme()
 
         for axis, key in (("x", "gizmo_x"), ("y", "gizmo_y"), ("z", "gizmo_z")):
             line = self._gizmo_move_lines.get(axis)
@@ -372,58 +603,271 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._update_print_stats_style()
         self._update_preview_object_style()
         self._update_simplify_warning_style()
+        self._update_viewer_runtime_warning_style()
         self._update_marquee_style()
         self._update_gizmo()
         self._update_preview_lines()
 
+    # -------------------- scene model --------------------
+
+    def get_current_plate_id(self) -> int:
+        return int(self.scene_state.ensure_default_plate())
+
+    def get_plate_ids(self) -> list[int]:
+        return self.scene_state.get_plate_ids()
+
+    def _ordered_plates(self):
+        plate_ids = self.get_plate_ids()
+        return [self.scene_state.plates[plate_id] for plate_id in plate_ids if plate_id in self.scene_state.plates]
+
+    def _plate_origin(self, plate_id: int) -> tuple[float, float, float]:
+        plate_ids = self.get_plate_ids()
+        if not plate_ids:
+            return (0.0, 0.0, 0.0)
+        try:
+            index = plate_ids.index(int(plate_id))
+        except ValueError:
+            index = 0
+        count = len(plate_ids)
+        cols = 2 if count > 1 else 1
+        rows = int(math.ceil(count / float(cols)))
+        spacing_x = float(self._bed_size[0]) + max(40.0, float(self._bed_size[0]) * 0.2)
+        spacing_y = float(self._bed_size[1]) + max(40.0, float(self._bed_size[1]) * 0.2)
+        row = index // cols
+        col = index % cols
+        used_cols = min(cols, count)
+        total_width = (used_cols - 1) * spacing_x
+        total_height = (rows - 1) * spacing_y
+        x = (col * spacing_x) - (total_width * 0.5)
+        y = ((rows - 1 - row) * spacing_y) - (total_height * 0.5)
+        return (float(x), float(y), 0.0)
+
+    def _pick_plate_at(self, pos: QtCore.QPoint) -> int | None:
+        if not hasattr(self, "_project_world_to_screen"):
+            return None
+        click_x = float(pos.x())
+        click_y = float(pos.y())
+        best_plate_id = None
+        best_area = None
+        for plate_id in self.get_plate_ids():
+            min_x, max_x, min_y, max_y = self._bed_bounds(int(plate_id))
+            corners = (
+                np.array([min_x, min_y, 0.0], dtype=float),
+                np.array([max_x, min_y, 0.0], dtype=float),
+                np.array([max_x, max_y, 0.0], dtype=float),
+                np.array([min_x, max_y, 0.0], dtype=float),
+            )
+            projected = [self._project_world_to_screen(corner) for corner in corners]
+            projected = [point for point in projected if point is not None]
+            if len(projected) != 4:
+                continue
+            xs = [float(point[0]) for point in projected]
+            ys = [float(point[1]) for point in projected]
+            if min(xs) <= click_x <= max(xs) and min(ys) <= click_y <= max(ys):
+                area = abs((max(xs) - min(xs)) * (max(ys) - min(ys)))
+                if best_area is None or area < best_area:
+                    best_area = area
+                    best_plate_id = int(plate_id)
+        return best_plate_id
+
+    def get_plate_model_ids(self, plate_id: int | None = None) -> list[int]:
+        return self.scene_state.get_plate_instance_ids(plate_id)
+
+    def get_all_model_ids(self) -> list[int]:
+        return self.scene_state.get_all_instance_ids()
+
+    def get_model_ids(self):
+        return self.get_plate_model_ids()
+
+    def select_plate(self, plate_id: int | None, emit_signal: bool = True) -> int | None:
+        previous = self.scene_state.selected_plate_id
+        selected = self.scene_state.set_selected_plate(plate_id)
+        if selected is None:
+            return None
+        if previous != selected:
+            self._update_plate_label_texts()
+            self._sync_bed_grid()
+            for model in self.models.values():
+                self._update_bed_state(int(model["id"]))
+                self._apply_model_color(model)
+            if emit_signal:
+                self.plateSelectionChanged.emit(int(selected))
+            self.sceneChanged.emit()
+            self.update()
+        return int(selected)
+
+    def add_plate(self, name: str | None = None) -> int:
+        plate = self.scene_state.create_plate(name=name)
+        self._sync_scene_from_state()
+        self.select_plate(int(plate.id))
+        return int(plate.id)
+
+    def delete_current_plate(self) -> bool:
+        plate_id = self.scene_state.selected_plate_id
+        if plate_id is None:
+            return False
+        removed = self.scene_state.delete_plate(int(plate_id))
+        if removed:
+            current_ids = self.get_model_ids()
+            if self._selected_model_id not in current_ids:
+                self.set_selected_models(current_ids[:1], emit_signal=True)
+            self._sync_scene_from_state()
+        return bool(removed)
+
+    def serialize_scene(self) -> dict[str, Any]:
+        return self.scene_state.to_dict()
+
+    def restore_scene(self, payload: dict[str, Any]) -> None:
+        self.scene_state = SceneState.from_dict(payload)
+        self._sync_scene_from_state()
+        self.set_selected_models(self.scene_state.selected_entity_ids, emit_signal=False)
+        self.select_plate(self.scene_state.selected_plate_id, emit_signal=False)
+
+    def _sync_scene_from_state(self) -> None:
+        desired_ids = set(self.scene_state.get_all_instance_ids())
+        for model_id in list(self.models.keys()):
+            if model_id not in desired_ids:
+                self._remove_render_model(model_id)
+        for instance_id in desired_ids:
+            self._sync_instance_render(instance_id)
+        self._next_model_id = max(desired_ids, default=0) + 1
+        self._sync_bed_grid()
+        self._update_plate_label_texts()
+        self.sceneChanged.emit()
+        self.update()
+
+    def _remove_render_model(self, model_id: int) -> None:
+        m = self.models.get(model_id)
+        if not m:
+            return
+        for item in dict(m.get("annotation_items", {}) or {}).values():
+            if item is None:
+                continue
+            try:
+                self.removeItem(item)
+            except Exception:
+                pass
+        if m.get("overhang_item") is not None:
+            try:
+                self.removeItem(m["overhang_item"])
+            except Exception:
+                pass
+        if m.get("item") is not None:
+            try:
+                self.removeItem(m["item"])
+            except Exception:
+                pass
+        del self.models[model_id]
+
+    def _sync_instance_render(self, instance_id: int) -> bool:
+        instance = self.scene_state.get_instance(instance_id)
+        if instance is None:
+            self._remove_render_model(instance_id)
+            return False
+        obj = self.scene_state.get_object(int(instance.object_id))
+        if obj is None:
+            self._remove_render_model(instance_id)
+            return False
+        vertices, faces, face_ranges = self.scene_state.object_mesh_arrays(int(obj.id))
+        if vertices.size == 0 or faces.size == 0:
+            self._remove_render_model(instance_id)
+            return False
+
+        base_mn = vertices.min(axis=0)
+        base_mx = vertices.max(axis=0)
+        pivot = (base_mn + base_mx) / 2.0
+        model = self.models.get(instance_id)
+        if model is None:
+            model = {
+                "id": int(instance_id),
+                "item": None,
+                "overhang_item": None,
+                "annotation_items": {},
+                "wireframe": self.get_wireframe_enabled(),
+            }
+            self.models[instance_id] = model
+
+        model.update(
+            {
+                "id": int(instance_id),
+                "path": str(obj.source_path or ""),
+                "name": str(instance.name or obj.name or f"Object {int(obj.id)}"),
+                "base_vertices": np.asarray(vertices, dtype=float),
+                "faces": np.asarray(faces, dtype=int),
+                "base_volume": None,
+                "scale": np.asarray(instance.scale, dtype=float),
+                "rotation": np.asarray(instance.rotation, dtype=float),
+                "offset": np.asarray(instance.offset, dtype=float),
+                "pivot": np.asarray(pivot, dtype=float),
+                "bounds": model.get("bounds"),
+                "out_of_bounds": bool(model.get("out_of_bounds", False)),
+                "plate_id": int(instance.plate_id),
+                "object_id": int(obj.id),
+                "instance_id": int(instance.id),
+                "part_face_ranges": list(face_ranges),
+                "metadata": dict(instance.metadata or {}),
+                "object_metadata": dict(obj.metadata or {}),
+            }
+        )
+        self._create_or_update_mesh_item(int(instance_id))
+        self._update_annotation_overlays(int(instance_id))
+        return True
+
+    def _sync_instances_for_object(self, object_id: int) -> None:
+        for instance in list(self.scene_state.instances.values()):
+            if int(instance.object_id) == int(object_id):
+                self._sync_instance_render(int(instance.id))
+
     # -------------------- model management --------------------
 
+    def add_scene_object(
+        self,
+        name: str,
+        path: str,
+        parts: list[dict[str, Any]],
+        *,
+        plate_id: int | None = None,
+        object_metadata: dict[str, Any] | None = None,
+        instance_metadata: dict[str, Any] | None = None,
+    ) -> int:
+        instance = self.scene_state.add_imported_object(
+            name=name,
+            source_path=path,
+            parts=parts,
+            plate_id=plate_id,
+            object_metadata=object_metadata,
+            instance_metadata=instance_metadata,
+        )
+        self._sync_scene_from_state()
+
+        model_ids = self.get_all_model_ids()
+        if model_ids:
+            bounds_list = [self.get_model_bounds(mid) for mid in model_ids if self.get_model_bounds(mid) is not None]
+            if bounds_list:
+                mins = np.array([b[0] for b in bounds_list], dtype=float)
+                maxs = np.array([b[1] for b in bounds_list], dtype=float)
+                span = float(np.max(np.max(maxs, axis=0) - np.min(mins, axis=0)))
+            else:
+                span = max(float(self._bed_size[0]), float(self._bed_size[1]))
+            self.opts["center"] = pg.Vector(0.0, 0.0, 0.0) # pyright: ignore[reportArgumentType]
+            self.opts["distance"] = float(max(120.0, min(max(span * 2.0, 60.0), max(float(self._bed_size[0]), float(self._bed_size[1])) * 4.0))) # pyright: ignore[reportArgumentType]
+            self._coerce_distance()
+        return int(instance.id)
+
     def add_model_from_data(self, name: str, path: str, vertices, faces):
-        model_id = self._next_model_id
-        self._next_model_id += 1
-
-        safe_name = (name or "").strip() or os.path.basename(path) or f"Model {model_id}"
-
-        v = np.asarray(vertices, dtype=float)
-        f = np.asarray(faces, dtype=int)
-
-        base_mn = v.min(axis=0)
-        base_mx = v.max(axis=0)
-        pivot = (base_mn + base_mx) / 2.0
-
-        self.models[model_id] = {
-            "id": model_id,
-            "path": path,
-            "name": safe_name,
-            "base_vertices": v,
-            "faces": f,
-            "base_volume": None,
-            "item": None,
-            "scale": 1.0,
-            "rotation": np.array([0.0, 0.0, 0.0], dtype=float),
-            "offset": np.array([0.0, 0.0, 0.0], dtype=float),
-            "pivot": np.array(pivot, dtype=float),
-            "bounds": None,
-            "out_of_bounds": False,
-            "wireframe": self.get_wireframe_enabled(),
-        }
-
-        self._create_or_update_mesh_item(model_id)
-
-        mn = v.min(axis=0)
-        mx = v.max(axis=0)
-        size = float(np.max(mx - mn))
-        bed_span = max(float(self._bed_size[0]), float(self._bed_size[1]), size)
-
-        self.opts["center"] = pg.Vector(0.0, 0.0, 0.0) # pyright: ignore[reportArgumentType]
-        if len(self.models) <= 1:
-            focus_span = max(size * 4.0, 60.0)
-            self.opts["distance"] = float(max(120.0, min(focus_span, bed_span * 2.0))) # pyright: ignore[reportArgumentType]
-        else:
-            self.opts["distance"] = float(max(bed_span * 2.0, 200.0)) # pyright: ignore[reportArgumentType]
-        self._coerce_distance()
-        self.update()
-        return model_id
+        safe_name = (name or "").strip() or os.path.basename(path) or "Model"
+        return self.add_scene_object(
+            safe_name,
+            path,
+            [
+                {
+                    "name": safe_name,
+                    "vertices": np.asarray(vertices, dtype=float),
+                    "faces": np.asarray(faces, dtype=int),
+                    "source_path": path,
+                }
+            ],
+        )
 
     def replace_model_mesh(self, model_id: int, vertices, faces) -> bool:
         m = self.models.get(model_id)
@@ -433,37 +877,45 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         f = np.asarray(faces, dtype=int)
         if v.size == 0 or f.size == 0:
             return False
-        m["base_vertices"] = v
-        m["faces"] = f
-        m["base_volume"] = None
-        self._create_or_update_mesh_item(model_id)
+        object_id = int(m.get("object_id", 0))
+        obj = self.scene_state.get_object(object_id)
+        if obj is None or not obj.part_ids:
+            return False
+        first_part_id = int(obj.part_ids[0])
+        part = self.scene_state.parts.get(first_part_id)
+        if part is None:
+            return False
+        part.vertices = [[float(x), float(y), float(z)] for x, y, z in v.tolist()]
+        part.faces = [[int(a), int(b), int(c)] for a, b, c in f.tolist()]
+        for extra_part_id in list(obj.part_ids[1:]):
+            self.scene_state.parts.pop(int(extra_part_id), None)
+        obj.part_ids = [first_part_id]
+        self._sync_instances_for_object(object_id)
         self._update_selection_info()
         self.update()
         return True
 
     def remove_model(self, model_id: int):
-        m = self.models.get(model_id)
-        if not m:
+        if model_id not in self.models:
             return
-        if m.get("overhang_item") is not None:
-            self.removeItem(m["overhang_item"])
-        if m.get("item") is not None:
-            self.removeItem(m["item"])
-        del self.models[model_id]
+        self.scene_state.remove_instance(model_id, prune_orphans=True)
+        self._remove_render_model(model_id)
         if model_id in self._selected_model_ids:
             self._selected_model_ids = [mid for mid in self._selected_model_ids if mid != model_id]
         if self._selected_model_id == model_id:
             self._selected_model_id = self._selected_model_ids[0] if self._selected_model_ids else None
+        self._sync_scene_from_state()
         self._update_gizmo()
         self._update_selection_info()
         self.update()
 
     def clear_all_models(self):
-        for mid in list(self.models.keys()):
-            self.remove_model(mid)
-
-    def get_model_ids(self):
-        return list(self.models.keys())
+        for model_id in list(self.models.keys()):
+            self._remove_render_model(int(model_id))
+        self.scene_state = SceneState()
+        self._selected_model_id = None
+        self._selected_model_ids = []
+        self._sync_scene_from_state()
 
     def get_model_name(self, model_id: int):
         m = self.models.get(model_id)
@@ -505,9 +957,238 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         v, off, mn, mx = result
         if not np.allclose(off, np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)):
             m["offset"] = off
+            instance = self.scene_state.get_instance(int(model_id))
+            if instance is not None:
+                instance.offset = (float(off[0]), float(off[1]), float(off[2]))
         m["bounds"] = (mn, mx)
         self._update_bed_state(model_id)
         return v, m.get("faces")
+
+    def add_instance_for_model(self, model_id: int, offset_xyz=(10.0, 10.0, 0.0)) -> int | None:
+        model = self.models.get(int(model_id))
+        if model is None:
+            return None
+        instance = self.scene_state.get_instance(int(model_id))
+        if instance is None:
+            return None
+        duplicate = self.scene_state.duplicate_instance(int(model_id), offset=offset_xyz)
+        duplicate.name = str(model.get("name") or duplicate.name or f"Instance {duplicate.id}")
+        self._sync_scene_from_state()
+        return int(duplicate.id)
+
+    def _mesh_for_model(self, model_id: int) -> trimesh.Trimesh | None:
+        mesh_data = self.get_model_mesh_data(int(model_id))
+        if not mesh_data:
+            return None
+        vertices, faces = mesh_data
+        try:
+            return trimesh.Trimesh(vertices=np.asarray(vertices, dtype=float), faces=np.asarray(faces, dtype=int), process=False)
+        except Exception:
+            return None
+
+    def split_model_to_objects(self, model_id: int) -> list[int]:
+        model = self.models.get(int(model_id))
+        if model is None:
+            return []
+        mesh = self._mesh_for_model(int(model_id))
+        if mesh is None:
+            return []
+        components = list(mesh.split(only_watertight=False))
+        if len(components) <= 1:
+            return []
+        plate_id = int(model.get("plate_id", self.get_current_plate_id()))
+        plate_origin = np.asarray(self._plate_origin(plate_id), dtype=float)
+        source_path = str(model.get("path") or "")
+        base_name = str(model.get("name") or f"Object {model_id}")
+        self.scene_state.remove_instance(int(model_id), prune_orphans=True)
+        self._remove_render_model(int(model_id))
+        new_ids: list[int] = []
+        for index, component in enumerate(components, start=1):
+            local_vertices = np.asarray(component.vertices, dtype=float) - plate_origin
+            new_id = self.add_scene_object(
+                f"{base_name} {index}",
+                source_path,
+                [
+                    {
+                        "name": f"{base_name} {index}",
+                        "vertices": local_vertices,
+                        "faces": np.asarray(component.faces, dtype=int),
+                        "source_path": source_path,
+                    }
+                ],
+                plate_id=plate_id,
+            )
+            new_ids.append(int(new_id))
+        self._sync_scene_from_state()
+        return new_ids
+
+    def split_model_to_parts(self, model_id: int) -> bool:
+        model = self.models.get(int(model_id))
+        if model is None:
+            return False
+        instance = self.scene_state.get_instance(int(model_id))
+        if instance is None:
+            return False
+        mesh = self._mesh_for_model(int(model_id))
+        if mesh is None:
+            return False
+        components = list(mesh.split(only_watertight=False))
+        if len(components) <= 1:
+            return False
+        plate_id = int(model.get("plate_id", self.get_current_plate_id()))
+        plate_origin = np.asarray(self._plate_origin(plate_id), dtype=float)
+        source_path = str(model.get("path") or "")
+        old_object_id = int(instance.object_id)
+        recreated = self.scene_state.create_object(
+            name=str(model.get("name") or f"Object {old_object_id}"),
+            source_path=source_path,
+            parts=[
+                {
+                    "name": f"Part {index}",
+                    "vertices": np.asarray(component.vertices, dtype=float) - plate_origin,
+                    "faces": np.asarray(component.faces, dtype=int),
+                    "source_path": source_path,
+                }
+                for index, component in enumerate(components, start=1)
+            ],
+            metadata=dict(model.get("object_metadata") or {}),
+        )
+        instance.object_id = int(recreated.id)
+        instance.scale = (1.0, 1.0, 1.0)
+        instance.rotation = (0.0, 0.0, 0.0)
+        instance.offset = (0.0, 0.0, 0.0)
+        self.scene_state.prune_orphan_objects()
+        self._sync_instances_for_object(int(recreated.id))
+        self._sync_scene_from_state()
+        return True
+
+    def cut_model(
+        self,
+        model_id: int,
+        *,
+        axis: str = "x",
+        position_ratio: float = 0.5,
+        keep_mode: str = "both",
+    ) -> list[int]:
+        model = self.models.get(int(model_id))
+        if model is None:
+            return []
+        mesh = self._mesh_for_model(int(model_id))
+        if mesh is None:
+            return []
+        bounds = mesh.bounds
+        axis_index = {"x": 0, "y": 1, "z": 2}.get(str(axis).strip().lower(), 0)
+        ratio = max(0.0, min(1.0, float(position_ratio)))
+        plane_pos = float(bounds[0][axis_index] + ((bounds[1][axis_index] - bounds[0][axis_index]) * ratio))
+        plane_origin = np.array(mesh.centroid, dtype=float)
+        plane_origin[axis_index] = plane_pos
+        normal = np.zeros(3, dtype=float)
+        normal[axis_index] = 1.0
+        kept_meshes: list[trimesh.Trimesh] = []
+        try:
+            if keep_mode in {"upper", "both"}:
+                upper = mesh.slice_plane(plane_origin=plane_origin, plane_normal=normal, cap=False)
+                if upper is not None and not upper.is_empty:
+                    kept_meshes.append(upper)
+            if keep_mode in {"lower", "both"}:
+                lower = mesh.slice_plane(plane_origin=plane_origin, plane_normal=-normal, cap=False)
+                if lower is not None and not lower.is_empty:
+                    kept_meshes.append(lower)
+        except Exception:
+            return []
+        if not kept_meshes:
+            return []
+        plate_id = int(model.get("plate_id", self.get_current_plate_id()))
+        plate_origin = np.asarray(self._plate_origin(plate_id), dtype=float)
+        source_path = str(model.get("path") or "")
+        base_name = str(model.get("name") or f"Object {model_id}")
+        self.scene_state.remove_instance(int(model_id), prune_orphans=True)
+        self._remove_render_model(int(model_id))
+        new_ids: list[int] = []
+        for index, kept in enumerate(kept_meshes, start=1):
+            new_id = self.add_scene_object(
+                f"{base_name} Cut {index}",
+                source_path,
+                [
+                    {
+                        "name": f"{base_name} Cut {index}",
+                        "vertices": np.asarray(kept.vertices, dtype=float) - plate_origin,
+                        "faces": np.asarray(kept.faces, dtype=int),
+                        "source_path": source_path,
+                    }
+                ],
+                plate_id=plate_id,
+            )
+            new_ids.append(int(new_id))
+        self._sync_scene_from_state()
+        return new_ids
+
+    def boolean_models(self, model_ids: Sequence[int], operation: str = "union") -> int | None:
+        selected_ids = [int(model_id) for model_id in model_ids if int(model_id) in self.models]
+        if len(selected_ids) < 2:
+            return None
+        plate_ids = {int(self.models[mid].get("plate_id", self.get_current_plate_id())) for mid in selected_ids}
+        if len(plate_ids) != 1:
+            return None
+        meshes = [self._mesh_for_model(mid) for mid in selected_ids]
+        meshes = [mesh for mesh in meshes if mesh is not None]
+        if len(meshes) < 2:
+            return None
+        result = None
+        try:
+            op = str(operation or "union").strip().lower()
+            if op == "union":
+                result = trimesh.boolean.union(meshes, engine="manifold")
+            elif op == "difference":
+                result = trimesh.boolean.difference(meshes, engine="manifold")
+            else:
+                result = trimesh.boolean.intersection(meshes, engine="manifold")
+        except Exception:
+            try:
+                op = str(operation or "union").strip().lower()
+                if op == "union":
+                    result = trimesh.boolean.union(meshes)
+                elif op == "difference":
+                    result = trimesh.boolean.difference(meshes)
+                else:
+                    result = trimesh.boolean.intersection(meshes)
+            except Exception:
+                result = None
+        if result is None:
+            return None
+        if isinstance(result, list):
+            try:
+                result = trimesh.util.concatenate(result)
+            except Exception:
+                return None
+        if isinstance(result, trimesh.Scene):
+            try:
+                result = trimesh.util.concatenate(result.dump())
+            except Exception:
+                return None
+        if not isinstance(result, trimesh.Trimesh) or result.is_empty:
+            return None
+        plate_id = plate_ids.pop()
+        plate_origin = np.asarray(self._plate_origin(plate_id), dtype=float)
+        source_path = str(self.models[selected_ids[0]].get("path") or "")
+        for model_id in selected_ids:
+            self.scene_state.remove_instance(int(model_id), prune_orphans=True)
+            self._remove_render_model(int(model_id))
+        new_id = self.add_scene_object(
+            f"Boolean {str(operation or 'union').title()}",
+            source_path,
+            [
+                {
+                    "name": f"Boolean {str(operation or 'union').title()}",
+                    "vertices": np.asarray(result.vertices, dtype=float) - plate_origin,
+                    "faces": np.asarray(result.faces, dtype=int),
+                    "source_path": source_path,
+                }
+            ],
+            plate_id=plate_id,
+        )
+        self._sync_scene_from_state()
+        return int(new_id)
 
     def set_overhang_visible(self, visible: bool, angle: float | None = None):
         self._overhang_visible = bool(visible)
@@ -628,6 +1309,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         m = self.models.get(model_id)
         if not m:
             return
+        instance = self.scene_state.get_instance(int(model_id))
 
         changed = False
 
@@ -636,6 +1318,8 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
             cur_vec = self._normalize_scale(m.get("scale", 1.0))
             if not np.allclose(cur_vec, new_scale):
                 m["scale"] = new_scale
+                if instance is not None:
+                    instance.scale = (float(new_scale[0]), float(new_scale[1]), float(new_scale[2]))
                 changed = True
 
         if rotation_xyz is not None:
@@ -645,6 +1329,8 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
                 new_rot = cur_rot
             if not np.allclose(cur_rot, new_rot):
                 m["rotation"] = new_rot
+                if instance is not None:
+                    instance.rotation = (float(new_rot[0]), float(new_rot[1]), float(new_rot[2]))
                 changed = True
 
         if offset_xyz is not None:
@@ -663,16 +1349,138 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
             cur_offset = np.array(m.get("offset", [0.0, 0.0, 0.0]), dtype=float)
             if not np.allclose(cur_offset, new_offset):
                 m["offset"] = new_offset
+                if instance is not None:
+                    instance.offset = (float(new_offset[0]), float(new_offset[1]), float(new_offset[2]))
                 changed = True
 
         if not changed:
             return
 
         self._create_or_update_mesh_item(model_id)
+        self._update_annotation_overlays(model_id)
         if self._selected_model_id == model_id:
             self._update_gizmo()
             self._update_selection_info()
         self.update()
+
+    def _annotation_faces(self, model_id: int, mode: str) -> list[int]:
+        annotation = self.scene_state.tool_state.annotations.get(str(int(model_id)), {})
+        mode_payload = dict(annotation.get(str(mode), {}) or {})
+        faces = mode_payload.get("face_ids", [])
+        if not isinstance(faces, list):
+            return []
+        return [int(face_id) for face_id in faces]
+
+    def _set_annotation_faces(self, model_id: int, mode: str, faces: list[int]) -> None:
+        annotation = dict(self.scene_state.tool_state.annotations.get(str(int(model_id)), {}) or {})
+        if faces:
+            annotation[str(mode)] = {"face_ids": sorted({int(face_id) for face_id in faces})}
+            self.scene_state.tool_state.annotations[str(int(model_id))] = annotation
+        else:
+            annotation.pop(str(mode), None)
+            if annotation:
+                self.scene_state.tool_state.annotations[str(int(model_id))] = annotation
+            else:
+                self.scene_state.tool_state.annotations.pop(str(int(model_id)), None)
+        self._update_annotation_overlays(int(model_id))
+        self.sceneChanged.emit()
+
+    def clear_annotation_mode(self, mode: str, model_id: int | None = None) -> None:
+        target_ids = [int(model_id)] if model_id is not None else list(self.models.keys())
+        for target_id in target_ids:
+            self._set_annotation_faces(int(target_id), str(mode), [])
+
+    def _update_annotation_overlays(self, model_id: int) -> None:
+        model = self.models.get(int(model_id))
+        if model is None:
+            return
+        mesh_data = self.get_model_mesh_data(int(model_id))
+        if not mesh_data:
+            return
+        vertices, faces = mesh_data
+        vertices = np.asarray(vertices, dtype=float)
+        faces = np.asarray(faces, dtype=int)
+        item_map = dict(model.get("annotation_items", {}) or {})
+        mode_colors = {
+            "support": (0.20, 0.62, 1.0, 0.45),
+            "seam": (0.95, 0.25, 0.75, 0.45),
+            "fuzzy": (1.0, 0.78, 0.20, 0.45),
+        }
+        for mode, color in mode_colors.items():
+            face_ids = self._annotation_faces(int(model_id), mode)
+            overlay = item_map.get(mode)
+            if not face_ids:
+                if overlay is not None:
+                    overlay.setVisible(False)
+                continue
+            valid_ids = [face_id for face_id in face_ids if 0 <= int(face_id) < len(faces)]
+            if not valid_ids:
+                if overlay is not None:
+                    overlay.setVisible(False)
+                continue
+            selected_faces = faces[np.asarray(valid_ids, dtype=int)]
+            meshdata = gl.MeshData(vertexes=vertices.copy(), faces=selected_faces.copy())
+            if overlay is None:
+                overlay = gl.GLMeshItem(meshdata=meshdata, smooth=False, color=color, shader="shaded")
+                overlay.setGLOptions("translucent")
+                self.addItem(overlay)
+                item_map[mode] = overlay
+            else:
+                overlay.setMeshData(meshdata=meshdata)
+                overlay.setColor(color)
+                overlay.setGLOptions("translucent")
+            overlay.setVisible(True)
+        model["annotation_items"] = item_map
+
+    def _intersect_triangle(self, origin: np.ndarray, direction: np.ndarray, triangle: np.ndarray):
+        epsilon = 1e-9
+        v0, v1, v2 = triangle
+        edge1 = v1 - v0
+        edge2 = v2 - v0
+        pvec = np.cross(direction, edge2)
+        det = float(np.dot(edge1, pvec))
+        if abs(det) < epsilon:
+            return None
+        inv_det = 1.0 / det
+        tvec = origin - v0
+        u = float(np.dot(tvec, pvec) * inv_det)
+        if u < 0.0 or u > 1.0:
+            return None
+        qvec = np.cross(tvec, edge1)
+        v = float(np.dot(direction, qvec) * inv_det)
+        if v < 0.0 or (u + v) > 1.0:
+            return None
+        t = float(np.dot(edge2, qvec) * inv_det)
+        if t <= epsilon:
+            return None
+        point = origin + (direction * t)
+        return t, point
+
+    def pick_surface(self, pos: QtCore.QPoint, model_ids: Sequence[int] | None = None):
+        origin, direction = self._mouse_ray(pos)
+        if origin is None or direction is None:
+            return None
+        candidates = [mid for mid in (model_ids or self.get_model_ids()) if mid in self.models]
+        best = None
+        for model_id in candidates:
+            mesh_data = self.get_model_mesh_data(int(model_id))
+            if not mesh_data:
+                continue
+            vertices, faces = mesh_data
+            triangles = np.asarray(vertices, dtype=float)[np.asarray(faces, dtype=int)]
+            for face_index, triangle in enumerate(triangles):
+                hit = self._intersect_triangle(np.asarray(origin, dtype=float), np.asarray(direction, dtype=float), np.asarray(triangle, dtype=float))
+                if hit is None:
+                    continue
+                distance, point = hit
+                if best is None or float(distance) < float(best["distance"]):
+                    best = {
+                        "model_id": int(model_id),
+                        "face_index": int(face_index),
+                        "point": np.asarray(point, dtype=float),
+                        "distance": float(distance),
+                    }
+        return best
 
     # -------------------- mouse interaction --------------------
 
@@ -687,6 +1495,51 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         if ev.button() == QtCore.Qt.LeftButton:
             ctrl_down = bool(ev.modifiers() & QtCore.Qt.ControlModifier)
             shift_down = bool(ev.modifiers() & QtCore.Qt.ShiftModifier)
+            active_tool = self.get_prepare_tool()
+            if active_tool in {"support_paint", "seam_paint", "fuzzy_paint", "measure"}:
+                hit = self.pick_surface(ev.pos(), model_ids=self._selected_model_ids or self.get_model_ids())
+                if hit is not None:
+                    model_id = int(hit["model_id"])
+                    self.select_plate(int(self.models.get(model_id, {}).get("plate_id", self.get_current_plate_id())))
+                    self.set_selected_models([model_id], emit_signal=True)
+                    if active_tool == "measure":
+                        payload = dict(self.scene_state.tool_state.measure_payload or {})
+                        points = list(payload.get("points", []) or [])
+                        if len(points) >= 2:
+                            points = []
+                        points.append(
+                            {
+                                "model_id": model_id,
+                                "face_index": int(hit["face_index"]),
+                                "point": [float(v) for v in np.asarray(hit["point"], dtype=float).reshape(-1)],
+                            }
+                        )
+                        payload["points"] = points
+                        if len(points) == 2:
+                            a = np.asarray(points[0]["point"], dtype=float)
+                            b = np.asarray(points[1]["point"], dtype=float)
+                            delta = b - a
+                            payload["distance_mm"] = float(np.linalg.norm(delta))
+                            payload["delta_xyz_mm"] = [float(v) for v in delta.reshape(-1)]
+                        self.scene_state.tool_state.measure_payload = payload
+                        self.sceneChanged.emit()
+                    else:
+                        mode = {
+                            "support_paint": "support",
+                            "seam_paint": "seam",
+                            "fuzzy_paint": "fuzzy",
+                        }[active_tool]
+                        faces = self._annotation_faces(model_id, mode)
+                        face_index = int(hit["face_index"])
+                        if ctrl_down:
+                            faces = [face_id for face_id in faces if int(face_id) != face_index]
+                        elif face_index in faces:
+                            faces = [face_id for face_id in faces if int(face_id) != face_index]
+                        else:
+                            faces.append(face_index)
+                        self._set_annotation_faces(model_id, mode, faces)
+                    ev.accept()
+                    return
             if shift_down:
                 self._start_marquee(ev.pos(), additive=ctrl_down)
                 ev.accept()
@@ -721,6 +1574,17 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
                     else:
                         self.set_selected_models([picked])
                 self.modelPicked.emit(picked)
+                instance = self.scene_state.get_instance(int(picked))
+                if instance is not None:
+                    self.select_plate(int(instance.plate_id))
+            else:
+                plate_id = self._pick_plate_at(ev.pos())
+                if plate_id is not None:
+                    self.select_plate(int(plate_id))
+                    if not ctrl_down:
+                        self.set_selected_models([], emit_signal=True)
+                    ev.accept()
+                    return
 
             # 2) Allow drag of selected model even if pick missed (slicer-like behavior)
             if self._selected_model_id is not None:
@@ -1049,11 +1913,17 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         off = np.array(model.get("offset", [0.0, 0.0, 0.0]), dtype=float)
         rot = np.array(model.get("rotation", [0.0, 0.0, 0.0]), dtype=float)
         pivot = model.get("pivot", np.zeros(3, dtype=float))
+        plate_origin = np.array(self._plate_origin(int(model.get("plate_id", self.get_current_plate_id()))), dtype=float)
+        assembly_offset = np.zeros(3, dtype=float)
+        if self.scene_state.tool_state.assembly_mode:
+            value = self.scene_state.tool_state.assembly_offsets.get(str(int(model.get("instance_id", model.get("id", 0)))))
+            if isinstance(value, list) and len(value) == 3:
+                assembly_offset = np.asarray(value, dtype=float)
 
         v = (v0 - pivot) * s
         R = self._rotation_matrix(float(rot[0]), float(rot[1]), float(rot[2]))
         v = v @ R.T
-        v = v + pivot + off
+        v = v + pivot + off + plate_origin + assembly_offset
 
         mn = v.min(axis=0)
         if float(mn[2]) < 0.0:
@@ -1061,7 +1931,7 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
             off = np.array([float(off[0]), float(off[1]), float(off[2]) + lift], dtype=float)
             v = (v0 - pivot) * s
             v = v @ R.T
-            v = v + pivot + off
+            v = v + pivot + off + plate_origin + assembly_offset
             mn = v.min(axis=0)
         mx = v.max(axis=0)
         return v, off, mn, mx
@@ -1303,17 +2173,32 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         self._rotate_hud.setAlignment(QtCore.Qt.AlignCenter)
         self._update_rotate_hud_style()
 
+    def _view_cube_target_size(self) -> int:
+        min_dim = max(1, int(min(self.width(), self.height())))
+        dpi_scale = 1.0
+        try:
+            window_handle = self.windowHandle()
+            screen = window_handle.screen() if window_handle is not None else None
+            if screen is not None:
+                dpi_scale = max(1.0, float(screen.logicalDotsPerInch()) / 96.0)
+        except Exception:
+            dpi_scale = 1.0
+        target = int(round(min_dim * 0.18 * dpi_scale))
+        return max(138, min(236, target))
+
     def _position_view_cube(self):
         if not hasattr(self, "_view_cube") or self._view_cube is None:
             return
-        margin = 16
+        if hasattr(self._view_cube, "set_cube_size"):
+            self._view_cube.set_cube_size(self._view_cube_target_size())
+        if hasattr(self, "_sync_overlay_button_metrics"):
+            self._sync_overlay_button_metrics()
         size = self._view_cube.sizeHint()
+        margin = max(16, int(round(size.width() * 0.12)))
         x = margin
         y = max(0, self.height() - size.height() - margin)
         self._view_cube.setGeometry(x, y, size.width(), size.height())
         self._view_cube.raise_()
-        if hasattr(self, "_position_fit_camera_button"):
-            self._position_fit_camera_button()
         if hasattr(self, "_position_plate_action_strip"):
             self._position_plate_action_strip()
 
@@ -1323,89 +2208,44 @@ class Viewer3D(WireframeMixin, PreviewMixin, GizmoMixin, PanelMixin, SelectionMi
         az = self._coerce_float(self.opts.get("azimuth"), float(self._default_view["azimuth"]))
         el = self._coerce_float(self.opts.get("elevation"), float(self._default_view["elevation"]))
         self._view_cube.set_camera(az, el)
-        if hasattr(self, "_position_fit_camera_button"):
-            self._position_fit_camera_button()
         if hasattr(self, "_position_plate_action_strip"):
             self._position_plate_action_strip()
 
     def _set_view_from_cube(self, face: str):
-        invert_x = getattr(self._view_cube, "invert_x", False)
-        invert_y = getattr(self._view_cube, "invert_y", False)
-        invert_z = getattr(self._view_cube, "invert_z", False)
-
-        def invert_view(azimuth: float, elevation: float):
-            az = float(azimuth) + 180.0
-            el = -float(elevation)
-            if az > 180.0:
-                az -= 360.0
-            return az, el
-
+        direction = np.zeros(3, dtype=float)
+        mode = "perspective"
         if face.startswith("iso:"):
-            parts = face.split(":")
-            if len(parts) == 4:
-                x_name, y_name, z_name = parts[1], parts[2], parts[3]
-                x_sign = self._view_cube._face_sign("x", x_name)
-                y_sign = self._view_cube._face_sign("y", y_name)
-                z_sign = self._view_cube._face_sign("z", z_name)
-                if x_sign is None or y_sign is None or z_sign is None:
-                    return
-                az = math.degrees(math.atan2(y_sign, x_sign))
-                el = math.degrees(math.atan2(z_sign, math.hypot(x_sign, y_sign)))
-                az, el = invert_view(az, el)
-                self.set_view(az, el)
+            names = [part for part in face.split(":")[1:] if part]
+        elif face.startswith("edge:"):
+            names = [part for part in face.split(":")[1:] if part]
+        else:
+            names = [str(face or "").strip().lower()]
+            mode = "ortho"
+
+        for name in names:
+            vector = getattr(self._view_cube, "_SNAP_VECTORS", {}).get(str(name).strip().lower())
+            if vector is None:
+                continue
+            direction = direction + np.asarray(vector, dtype=float)
+
+        length = float(np.linalg.norm(direction))
+        if length <= 1e-6:
             return
-
-        if face.startswith("edge:"):
-            parts = face.split(":")
-            if len(parts) == 3:
-                a_name, b_name = parts[1], parts[2]
-                signs = {"x": 0.0, "y": 0.0, "z": 0.0}
-
-                for axis in ("x", "y", "z"):
-                    sign = self._view_cube._face_sign(axis, a_name)
-                    if sign is not None:
-                        signs[axis] = sign
-                        break
-                for axis in ("x", "y", "z"):
-                    sign = self._view_cube._face_sign(axis, b_name)
-                    if sign is not None and signs[axis] == 0.0:
-                        signs[axis] = sign
-                        break
-
-                x_sign = signs["x"]
-                y_sign = signs["y"]
-                z_sign = signs["z"]
-                if x_sign == 0.0 and y_sign == 0.0:
-                    return
-                az = math.degrees(math.atan2(y_sign, x_sign))
-                el = math.degrees(math.atan2(z_sign, math.hypot(x_sign, y_sign)))
-                az, el = invert_view(az, el)
-                self.set_view(az, el)
-            return
-
-        views = {
-            "front": (90.0, 0.0),
-            "back": (-90.0, 0.0),
-            "right": (0.0, 0.0),
-            "left": (180.0, 0.0),
-            "top": (0.0, 90.0),
-            "bottom": (0.0, -90.0),
-        }
-        if invert_x:
-            views["left"], views["right"] = views["right"], views["left"]
-        if invert_y:
-            views["front"], views["back"] = views["back"], views["front"]
-        if invert_z:
-            views["top"], views["bottom"] = views["bottom"], views["top"]
-        view = views.get(face)
-        if view is None:
-            return
-        az, el = invert_view(view[0], view[1])
-        self.set_view(az, el)
+        direction = direction / length
+        azimuth = math.degrees(math.atan2(float(direction[1]), float(direction[0])))
+        elevation = math.degrees(math.atan2(float(direction[2]), math.hypot(float(direction[0]), float(direction[1]))))
+        if hasattr(self, "set_projection_mode"):
+            self.set_projection_mode(mode)
+        if hasattr(self, "animate_view_to"):
+            self.animate_view_to(azimuth, elevation)
+        else:
+            self.set_view(azimuth, elevation)
 
     def resizeEvent(self, e: QtGui.QResizeEvent):
         super().resizeEvent(e)
         self._position_view_cube()
         self._position_bottom_left_panels()
+        if hasattr(self, "_position_viewer_runtime_warning"):
+            self._position_viewer_runtime_warning()
 
     

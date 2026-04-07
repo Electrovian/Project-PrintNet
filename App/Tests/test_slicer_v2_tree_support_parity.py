@@ -101,6 +101,14 @@ class TestSlicerV2TreeSupportParity(unittest.TestCase):
         self.assertIn("tree_branch_selection_score_avg", artifact)
         self.assertIn("tree_branch_reroute_cost_mm_total", artifact)
         self.assertIn("tree_branch_trunk_assignment_counts", artifact)
+        self.assertIn("preview_diagnostics", artifact)
+        self.assertEqual(artifact["preview_diagnostics"]["support_type"], SUPPORT_TYPE_TREE)
+        self.assertEqual(artifact["preview_diagnostics"]["support_style"], "tree")
+        self.assertTrue(artifact["preview_diagnostics"]["tree_support_strict_parity_mode"])
+        self.assertIn(
+            "support_planning:tree_strict_parity_mode",
+            artifact["preview_diagnostics"]["warnings"],
+        )
 
 
 if __name__ == "__main__":

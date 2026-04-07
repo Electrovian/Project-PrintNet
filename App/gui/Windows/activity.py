@@ -10,6 +10,7 @@ from ..theme import theme_css
 class ActivityView(QtWidgets.QWidget):
     """Activity dashboard with only Me/Printers tabs."""
     state_changed = QtCore.pyqtSignal(dict)
+    refresh_requested = QtCore.pyqtSignal()
 
     _DATE_FILTER_KEYS = (
         "activity.filter.any_time",
@@ -95,6 +96,12 @@ class ActivityView(QtWidgets.QWidget):
         self._compliance_banner.hide()
         layout.addWidget(self._compliance_banner)
 
+        self._cache_banner = QtWidgets.QLabel("", self)
+        self._cache_banner.setObjectName("ActivityCacheBanner")
+        self._cache_banner.setWordWrap(True)
+        self._cache_banner.hide()
+        layout.addWidget(self._cache_banner)
+
         stats_strip = QtWidgets.QFrame(self)
         stats_strip.setObjectName("ActivityStatsStrip")
         stats_layout = QtWidgets.QHBoxLayout(stats_strip)
@@ -132,7 +139,7 @@ class ActivityView(QtWidgets.QWidget):
         tabs_group.buttonClicked.connect(self._on_tab_changed)
         self._search_input.textChanged.connect(self._on_controls_changed)
         self._date_filter.currentIndexChanged.connect(self._on_controls_changed)
-        self._refresh_btn.clicked.connect(self._refresh_tables)
+        self._refresh_btn.clicked.connect(self.refresh_requested.emit)
 
         self.apply_theme()
         self._refresh_tables()
@@ -146,6 +153,15 @@ class ActivityView(QtWidgets.QWidget):
         prefix = tr("activity.compliance.banner", "Cloud activity is restricted:")
         self._compliance_banner.setText(f"{prefix} {text}")
         self._compliance_banner.show()
+
+    def set_cache_banner(self, message: str = ""):
+        text = str(message or "").strip()
+        if not text:
+            self._cache_banner.clear()
+            self._cache_banner.hide()
+            return
+        self._cache_banner.setText(text)
+        self._cache_banner.show()
 
     def _build_table(self, parent):
         table = QtWidgets.QTableWidget(0, 7, parent)
@@ -385,6 +401,13 @@ class ActivityView(QtWidgets.QWidget):
             f"  background: {theme_css('warning_bg')};"
             f"  color: {theme_css('warning_text')};"
             f"  border: 1px solid {theme_css('warning_border')};"
+            "  border-radius: 8px;"
+            "  padding: 6px 8px;"
+            "}"
+            "QLabel#ActivityCacheBanner {"
+            f"  background: {theme_css('popup_header_bg')};"
+            f"  color: {theme_css('popup_text')};"
+            f"  border: 1px solid {theme_css('action_panel_border')};"
             "  border-radius: 8px;"
             "  padding: 6px 8px;"
             "}"

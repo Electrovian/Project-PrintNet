@@ -39,12 +39,12 @@ _BASE_THEME = {
     "axis_y": "#4cd964",
     "axis_z": "#4aa3ff",
     "cube_panel": (18, 24, 34),
-    "cube_face": (23, 31, 45),
-    "cube_border": (102, 121, 156),
-    "cube_text": (240, 244, 252),
-    "cube_accent": (58, 116, 255),
-    "cube_hover": (84, 141, 255),
-    "cube_active": (105, 160, 255),
+    "cube_face": (50, 60, 79),
+    "cube_border": (122, 141, 178),
+    "cube_text": (247, 249, 253),
+    "cube_accent": (70, 123, 255),
+    "cube_hover": (98, 149, 255),
+    "cube_active": (122, 171, 255),
     "view_bg": (16, 21, 30),
     "grid_color": (58, 70, 92, 255),
     "mesh_color": (0.96, 0.9, 0.56, 1.0),
@@ -112,7 +112,19 @@ def theme_qcolor(key: str):
     if isinstance(value, str):
         return QtGui.QColor(value)
     if isinstance(value, (tuple, list)):
-        return QtGui.QColor(*value)
+        components = list(value)
+        if components and all(isinstance(component, float) and 0.0 <= component <= 1.0 for component in components[:4]):
+            while len(components) < 4:
+                components.append(1.0)
+            return QtGui.QColor.fromRgbF(
+                float(components[0]),
+                float(components[1]),
+                float(components[2]),
+                float(components[3]),
+            )
+        if components and all(isinstance(component, (int, float)) for component in components[:4]):
+            ints = [int(round(float(component))) for component in components[:4]]
+            return QtGui.QColor(*ints)
     return QtGui.QColor()
 
 

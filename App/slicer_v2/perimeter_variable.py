@@ -38,6 +38,7 @@ class VariableWidthLoopPlan:
     junction_carryover_ratio: float
     junction_count: int
     junction_compensation_ratio: float
+    points: tuple[Point2, ...] = field(default_factory=tuple)
     carryover_source_layer_index: int | None = None
     carryover_source_island_index: int | None = None
     carryover_strength: float = 0.0
@@ -802,6 +803,7 @@ def _build_loops_for_polygon(
                 carryover_source_island_index=source_island_index,
                 carryover_strength=float(max(0.0, carryover_strength)),
                 half_edge_redistribution_ratio=float(redistribution_ratio),
+                points=tuple(offset_polygon.points),
             )
         )
 

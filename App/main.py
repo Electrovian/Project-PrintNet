@@ -12,6 +12,96 @@ from gui.crash_reporter import CrashReporter
 from printer_presets import PresetValidationError, validate_preset_python_files
 
 
+_QT_DLL_DIRECTORY_HANDLES: list[object] = []
+_QT_DLL_DIRECTORY_PATHS: set[str] = set()
+
+
+def _qt_platform_name() -> str:
+    return str(os.environ.get("QT_QPA_PLATFORM", "")).strip().lower()
+
+
+def _default_opengl_mode() -> str:
+    platform_name = _qt_platform_name()
+    if platform_name in {"offscreen", "minimal", "minimalegl", "headless"}:
+        return "software"
+    return "desktop" if os.name == "nt" else "software"
+
+
+def _qt_library_bin_dir() -> Path | None:
+    library_info = getattr(QtCore, "QLibraryInfo", None)
+    if library_info is None:
+        return None
+    binaries_path = getattr(library_info, "BinariesPath", None)
+    if binaries_path is None:
+        return None
+    raw_path = ""
+    try:
+        if hasattr(library_info, "path"):
+            raw_path = str(library_info.path(binaries_path) or "")
+        elif hasattr(library_info, "location"):
+            raw_path = str(library_info.location(binaries_path) or "")
+    except Exception:
+        return None
+    candidate = Path(raw_path).expanduser() if raw_path else None
+    if candidate is None or not candidate.is_dir():
+        return None
+    return candidate
+
+
+def ensure_qt_runtime_path() -> str:
+    qt_bin_dir = _qt_library_bin_dir()
+    if qt_bin_dir is None:
+        return ""
+
+    qt_bin_text = str(qt_bin_dir)
+    path_key = qt_bin_text.lower()
+    current_path = os.environ.get("PATH", "")
+    path_entries = {entry.strip().lower() for entry in current_path.split(os.pathsep) if entry.strip()}
+    if path_key not in path_entries:
+        os.environ["PATH"] = qt_bin_text if not current_path else f"{qt_bin_text}{os.pathsep}{current_path}"
+
+    if os.name == "nt" and hasattr(os, "add_dll_directory") and path_key not in _QT_DLL_DIRECTORY_PATHS:
+        try:
+            handle = os.add_dll_directory(qt_bin_text)
+        except (FileNotFoundError, OSError):
+            handle = None
+        if handle is not None:
+            _QT_DLL_DIRECTORY_HANDLES.append(handle)
+            _QT_DLL_DIRECTORY_PATHS.add(path_key)
+    return qt_bin_text
+
+
+def normalize_opengl_mode(value: object | None) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"software", "desktop"}:
+        return normalized
+    return _default_opengl_mode()
+
+
+def configure_opengl_mode(mode: object | None = None) -> str:
+    ensure_qt_runtime_path()
+    source_mode = mode
+    if source_mode is None:
+        source_mode = os.environ.get("EON_OPENGL_MODE")
+    if source_mode is None or not str(source_mode).strip():
+        source_mode = os.environ.get("QT_OPENGL")
+    normalized = normalize_opengl_mode(source_mode)
+    os.environ["EON_OPENGL_MODE"] = normalized
+    os.environ["QT_OPENGL"] = "desktop" if normalized == "desktop" else "software"
+
+    app_instance = QtWidgets.QApplication.instance()
+    if app_instance is None:
+        software_attr = getattr(QtCore.Qt, "AA_UseSoftwareOpenGL", None)
+        desktop_attr = getattr(QtCore.Qt, "AA_UseDesktopOpenGL", None)
+        if software_attr is not None:
+            QtCore.QCoreApplication.setAttribute(software_attr, normalized == "software")
+        if desktop_attr is not None:
+            QtCore.QCoreApplication.setAttribute(desktop_attr, normalized == "desktop")
+    else:
+        app_instance.setProperty("eon_opengl_mode", normalized)
+    return normalized
+
+
 def _run_preset_startup_validation(app: QtWidgets.QApplication, splash: SplashScreen) -> None:
     splash.set_message("Validating preset modules...")
     splash.set_progress(0)
@@ -68,8 +158,10 @@ def _ensure_bootstrap_configuration(app: QtWidgets.QApplication) -> dict:
 
 
 def main() -> int:
+    renderer_mode = configure_opengl_mode()
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("EON-OpenSlicer")
+    app.setProperty("eon_opengl_mode", renderer_mode)
     try:
         bootstrap_config = _ensure_bootstrap_configuration(app)
     except RuntimeError as exc:

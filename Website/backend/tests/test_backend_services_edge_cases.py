@@ -60,7 +60,10 @@ class BackendServicesEdgeCasesTests(unittest.TestCase):
 
     def test_model_store_dir_normalization(self):
         resolved = _normalize_model_store_dir("")
-        self.assertTrue(resolved.endswith(os.path.join("Website", "backend", "uploads")))
+        self.assertTrue(resolved.endswith(os.path.join("Website", "backend", "runtime", "uploads")))
+        self.assertEqual(resolved, BackendState().model_store_dir)
+        self.assertEqual(_normalize_model_store_dir("Website/backend/uploads"), resolved)
+        self.assertEqual(_normalize_model_store_dir("Website/backend/Website/backend/uploads"), resolved)
         custom = _normalize_model_store_dir("Website/backend/custom_uploads")
         self.assertTrue(custom.endswith(os.path.join("Website", "backend", "custom_uploads")))
 

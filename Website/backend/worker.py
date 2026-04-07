@@ -44,6 +44,7 @@ WORKER_USER_ID = _env_text("WORKER_USER_ID", f"worker-{socket.gethostname()}")
 WORKER_ID = _env_text("WORKER_ID", WORKER_USER_ID)
 WORKER_POLL_SECONDS = _env_float("WORKER_POLL_SECONDS", default=2.0, minimum=0.25)
 WORKER_MAX_JOBS_PER_TICK = _env_int_optional("WORKER_MAX_JOBS_PER_TICK")
+WORKER_MAX_CYCLES = _env_int_optional("WORKER_MAX_CYCLES")
 HTTP_TIMEOUT_SECONDS = _env_float("WORKER_HTTP_TIMEOUT_SECONDS", default=10.0, minimum=1.0)
 
 
@@ -91,6 +92,7 @@ def _run_cycle(client: httpx.Client, token: str) -> None:
 
 def main() -> None:
     token = ""
+    completed_cycles = 0
     print(f"worker starting base_url={BACKEND_BASE_URL}{API_PREFIX} worker_id={WORKER_ID}", flush=True)
     with httpx.Client(timeout=HTTP_TIMEOUT_SECONDS) as client:
         while True:
@@ -99,6 +101,10 @@ def main() -> None:
                     token = _create_session(client)
                     print("worker auth session created", flush=True)
                 _run_cycle(client, token)
+                completed_cycles += 1
+                if WORKER_MAX_CYCLES is not None and completed_cycles >= WORKER_MAX_CYCLES:
+                    print(f"worker smoke complete cycles={completed_cycles}", flush=True)
+                    break
             except Exception as exc:
                 token = ""
                 print(f"worker cycle failed: {exc}", flush=True)

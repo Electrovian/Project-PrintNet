@@ -3,6 +3,8 @@
 /App/Tests/test objects
 logs
 /logs
+.pytest_cache/
+coverage/
 __pycache__/
 *.pyc
 Test Files
@@ -175,11 +177,21 @@ docs/_observability_security_release_readiness_summary*.txt
 **/.packages
 **/ios/Pods/
 **/android/.gradle/
-.codex_tmp_playwright
-<<<<<<< Updated upstream
-/.codex_tmp_playwright
+.codex_tmp_playwright/
 
 # Node workspace artifacts
 node_modules/
-=======
->>>>>>> Stashed changes
+
+# Launch-readiness runtime artifacts
+Website/frontend/dist/
+Website/frontend/test-results/
+Website/frontend/frontend-live.*.log
+Website/frontend/mobile-debug*.png
+Website/backend/runtime/
+Website/backend/uploads/
+Website/backend/Website/backend/uploads/
+Website/backend/backend-live.*.log
+Website/backend/worker-smoke.*.log
+App/testing/visual_audit_output/
+App/testing/app_shell_audit_output/
+app-live.*.log

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .context import create_context
+from .gcode_contract import resolve_output_settings_payload
 from .pipeline import run_pipeline
 
 
@@ -27,12 +28,16 @@ def slice_file(
     output_gcode_path: str | None = None,
     settings: object | None = None,
     runtime_settings: dict[str, object] | None = None,
+    printer: Mapping[str, object] | None = None,
 ) -> str:
     input_path = Path(str(stl_path)).expanduser().resolve()
     if not input_path.exists() or not input_path.is_file():
         raise FileNotFoundError(f"SLICER_V2_INPUT_MISSING:{input_path}")
 
-    resolved_settings = _resolved_settings_payload(settings)
+    resolved_settings = resolve_output_settings_payload(
+        _resolved_settings_payload(settings),
+        printer=printer,
+    )
     context = create_context(
         job_id=f"slicer-v2-{uuid.uuid4().hex[:12]}",
         mesh_path=str(input_path),

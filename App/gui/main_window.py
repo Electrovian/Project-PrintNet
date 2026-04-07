@@ -91,6 +91,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.shared_view.build_shortcut_actions()
         self.device_view.send_requested.connect(self.controller._on_device_send_requested)
         self.device_view.save_requested.connect(self.controller._on_device_save_requested)
+        self.device_view.email_requested.connect(self.controller._on_device_email_requested)
         self.files_view.add_files_requested.connect(self.open_stl_dialog)
         self.controller.initialize()
 

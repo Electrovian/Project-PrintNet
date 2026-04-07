@@ -6,14 +6,14 @@ import sys
 import threading
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import quote
 
 from PyQt5 import QtCore, QtGui
 
 
 def _utc_timestamp():
-    return datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _safe_text(value, max_len=200):
@@ -37,7 +37,7 @@ class CrashReporter:
         self.log_dir = log_dir or self._default_log_dir()
         self.issue_url = (
             issue_url
-            or "https://github.com/Electrovian/Project-EON-OpenSlicer/issues/new"
+            or "https://github.com/Electrovian/Project-PrintNet/issues/new"
         )
         self._installed = False
         self._handling = False

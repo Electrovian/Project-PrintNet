@@ -641,10 +641,10 @@ class SharedView(QtCore.QObject):
         view_actions = [
             ("view_top", (0.0, 90.0)),
             ("view_bottom", (0.0, -90.0)),
-            ("view_front", (90.0, 0.0)),
-            ("view_rear", (-90.0, 0.0)),
-            ("view_left", (180.0, 0.0)),
-            ("view_right", (0.0, 0.0)),
+            ("view_front", (0.0, 0.0)),
+            ("view_rear", (180.0, 0.0)),
+            ("view_left", (-90.0, 0.0)),
+            ("view_right", (90.0, 0.0)),
         ]
         for action_id, (az, el) in view_actions:
             action = QtWidgets.QAction(shortcut_label(action_id), self.main)
@@ -666,6 +666,8 @@ class SharedView(QtCore.QObject):
         ortho_action.triggered.connect(lambda: self.main._set_projection_mode("ortho"))
         self.main._view_menu.addAction(perspective_action)
         self.main._view_menu.addAction(ortho_action)
+        self.main._perspective_action = perspective_action
+        self.main._ortho_action = ortho_action
 
         self.main._view_menu.addSeparator()
 

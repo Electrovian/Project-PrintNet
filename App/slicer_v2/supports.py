@@ -16,6 +16,84 @@ def _update_parity_artifact(context: SlicerContext, payload: dict[str, object]) 
     context.stage_artifacts["parity"] = parity_artifact
 
 
+def _to_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    output: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if text:
+            output.append(text)
+    return output
+
+
+def _to_string_map(value: object) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    output: dict[str, int] = {}
+    for key, item in value.items():
+        text = str(key).strip()
+        if not text:
+            continue
+        output[text] = _to_int(item, 0)
+    return output
+
+
+def build_preview_support_diagnostics(payload: dict[str, object] | None) -> dict[str, object]:
+    artifact = dict(payload or {})
+    enabled = bool(artifact.get("support_enabled", False))
+    warnings = _to_string_list(artifact.get("warnings"))
+    preferred_status = str(
+        artifact.get("diagnostics_status", artifact.get("preview_status", ""))
+    ).strip().lower()
+    if preferred_status in {"disabled", "ok", "warnings", "fallback", "unavailable"}:
+        status = preferred_status
+    else:
+        status = "disabled"
+        if enabled:
+            status = "ok"
+            if any(warning.startswith("support_planning:fallback") for warning in warnings):
+                status = "fallback"
+            elif warnings:
+                status = "warnings"
+
+    return {
+        "enabled": enabled,
+        "status": status,
+        "diagnostics_source": str(artifact.get("diagnostics_source", "") or "").strip(),
+        "diagnostics_error": str(artifact.get("diagnostics_error", "") or "").strip(),
+        "support_type": str(artifact.get("support_type", "normal") or "normal"),
+        "support_style": str(artifact.get("support_style", "pillars") or "pillars"),
+        "support_build_plate_only": bool(artifact.get("support_build_plate_only", False)),
+        "support_critical_regions_only": bool(artifact.get("support_critical_regions_only", False)),
+        "support_remove_small_overhang": bool(artifact.get("support_remove_small_overhang", False)),
+        "support_interface_bottom_layers_effective": _to_int(
+            artifact.get("support_interface_bottom_layers_effective"),
+            0,
+        ),
+        "tree_support_strict_parity_mode": bool(artifact.get("tree_support_strict_parity_mode", False)),
+        "support_region_count": _to_int(artifact.get("support_region_count"), 0),
+        "support_path_count": _to_int(artifact.get("support_path_count"), 0),
+        "support_path_length_mm_total": _to_float(artifact.get("support_path_length_mm_total"), 0.0),
+        "support_interface_path_count_total": _to_int(artifact.get("support_interface_path_count_total"), 0),
+        "unsupported_island_count_total": _to_int(artifact.get("unsupported_island_count_total"), 0),
+        "tree_branch_count_total": _to_int(artifact.get("tree_branch_count_total"), 0),
+        "tree_merge_count_total": _to_int(artifact.get("tree_merge_count_total"), 0),
+        "tree_collision_avoid_count_total": _to_int(artifact.get("tree_collision_avoid_count_total"), 0),
+        "tree_pruned_branch_count_total": _to_int(artifact.get("tree_pruned_branch_count_total"), 0),
+        "tree_parent_assignment_count_total": _to_int(artifact.get("tree_parent_assignment_count_total"), 0),
+        "tree_trunk_count_total": _to_int(artifact.get("tree_trunk_count_total"), 0),
+        "tree_branch_load_score_avg": _to_float(artifact.get("tree_branch_load_score_avg"), 0.0),
+        "tree_branch_selection_score_avg": _to_float(artifact.get("tree_branch_selection_score_avg"), 0.0),
+        "tree_branch_reroute_cost_mm_total": _to_float(artifact.get("tree_branch_reroute_cost_mm_total"), 0.0),
+        "tree_branch_trunk_assignment_counts": _to_string_map(
+            artifact.get("tree_branch_trunk_assignment_counts")
+        ),
+        "warning_count": _to_int(artifact.get("warning_count"), len(warnings)),
+        "warnings": warnings,
+    }
+
+
 def _to_float(value: object, default: float) -> float:
     if isinstance(value, bool):
         return default
@@ -316,6 +394,7 @@ def run(context: SlicerContext) -> dict:
             "report": report.to_dict(),
             "layer_plans": layer_plans,
         }
+        artifact["preview_diagnostics"] = build_preview_support_diagnostics(artifact)
         _update_parity_artifact(
             context,
             {
@@ -419,6 +498,7 @@ def run(context: SlicerContext) -> dict:
         "warning_count": len(warnings),
         "warnings": warnings,
     }
+    artifact["preview_diagnostics"] = build_preview_support_diagnostics(artifact)
     _update_parity_artifact(
         context,
         {

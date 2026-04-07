@@ -145,6 +145,60 @@ def _infer_import_unit_scale(mesh: trimesh.Trimesh):
     return 1.0, "", extents
 
 
+def _coerce_loaded_parts(mesh_obj, source_path: str) -> tuple[list[dict[str, object]], trimesh.Trimesh]:
+    parts: list[dict[str, object]] = []
+    meshes: list[trimesh.Trimesh] = []
+
+    if isinstance(mesh_obj, trimesh.Scene):
+        geometry_items = list(mesh_obj.geometry.items())
+        for index, (geom_name, geom) in enumerate(geometry_items):
+            if not isinstance(geom, trimesh.Trimesh):
+                continue
+            mesh = geom.copy()
+            try:
+                mesh.process(validate=True)
+            except Exception:
+                pass
+            vertices = np.array(mesh.vertices, dtype=float)
+            faces = np.array(mesh.faces, dtype=int)
+            vertices, faces = _sanitize_mesh_arrays(vertices, faces)
+            part_name = str(geom_name or f"Part {index + 1}")
+            parts.append(
+                {
+                    "name": part_name,
+                    "vertices": vertices,
+                    "faces": faces,
+                    "source_path": source_path,
+                }
+            )
+            meshes.append(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+    else:
+        mesh = mesh_obj
+        if not isinstance(mesh, trimesh.Trimesh):
+            mesh = trimesh.util.concatenate(mesh)  # type: ignore[arg-type]
+        try:
+            mesh.process(validate=True)
+        except Exception:
+            pass
+        vertices = np.array(mesh.vertices, dtype=float)
+        faces = np.array(mesh.faces, dtype=int)
+        vertices, faces = _sanitize_mesh_arrays(vertices, faces)
+        parts.append(
+            {
+                "name": os.path.splitext(os.path.basename(source_path))[0] or os.path.basename(source_path),
+                "vertices": vertices,
+                "faces": faces,
+                "source_path": source_path,
+            }
+        )
+        meshes.append(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+
+    if not meshes:
+        raise ValueError("Empty mesh")
+    combined = trimesh.util.concatenate(meshes) if len(meshes) > 1 else meshes[0].copy()
+    return parts, combined
+
+
 class LoadMixin:
     def _prefer_manual_stl_entry(self) -> bool:
         if os.name != "nt":
@@ -328,27 +382,15 @@ class LoadMixin:
 
             try:
                 with _ProgressFile(p, emit_progress) as handle:
-                    mesh = trimesh.load(handle, file_type="stl", force="mesh")
+                    mesh = trimesh.load(handle, file_type="stl")
             except Exception:
-                mesh = trimesh.load(p, force="mesh")
-            if isinstance(mesh, trimesh.Scene):
-                mesh = trimesh.util.concatenate(mesh.dump())
-            elif not isinstance(mesh, trimesh.Trimesh):
-                # fallback: concatenate any geometry collection into a Trimesh
-                mesh = trimesh.util.concatenate(mesh)  # type: ignore[arg-type]
-            try:
-                mesh.process(validate=True)
-            except Exception:
-                pass
-            vertices = np.array(mesh.vertices, dtype=float)
-            faces = np.array(mesh.faces, dtype=int)
-            vertices, faces = _sanitize_mesh_arrays(vertices, faces)
-            unit_scale, unit_source, extents = _infer_import_unit_scale(mesh)
+                mesh = trimesh.load(p)
+            scene_parts, combined_mesh = _coerce_loaded_parts(mesh, p)
+            unit_scale, unit_source, extents = _infer_import_unit_scale(combined_mesh)
             return {
                 "path": p,
                 "name": os.path.basename(p),
-                "v": vertices,
-                "f": faces,
+                "parts": scene_parts,
                 "unit_scale_hint": float(unit_scale),
                 "unit_source_hint": unit_source,
                 "raw_extents": np.asarray(extents, dtype=float),
@@ -386,18 +428,19 @@ class LoadMixin:
                     QtWidgets.QMessageBox.Yes,
                 )
                 if answer == QtWidgets.QMessageBox.Yes:
-                    payload["v"] = np.asarray(payload["v"], dtype=float) * unit_scale
+                    for part in payload.get("parts", []) or []:
+                        part["vertices"] = np.asarray(part.get("vertices", []), dtype=float) * unit_scale
             try:
-                model_id = self.viewer.add_model_from_data(
+                model_id = self.viewer.add_scene_object(
                     payload["name"],
                     payload["path"],
-                    payload["v"],
-                    payload["f"],
+                    payload.get("parts", []),
                 )
             except Exception as exc:
                 on_err(str(exc))
                 return
-            self.model_panel.add_model(payload["name"], model_id)
+            if hasattr(self.model_panel, "refresh_from_viewer"):
+                self.model_panel.refresh_from_viewer(self.viewer)
 
             self.current_model_id = model_id
             self.viewer.set_selected_model(model_id)

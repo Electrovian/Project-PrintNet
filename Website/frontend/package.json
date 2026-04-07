@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "node ./node_modules/vite/bin/vite.js build",
     "preview": "vite preview",
-    "test:contract": "node --test tests/frontend_contracts.test.mjs"
+    "test:contract": "node --test tests/frontend_contracts.test.mjs",
+    "test:browser": "playwright test --config playwright.config.js"
   },
   "dependencies": {
     "react": "^18.3.1",

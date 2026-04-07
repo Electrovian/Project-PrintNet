@@ -96,6 +96,7 @@ class PreviewView(QtCore.QObject):
         super().__init__(main_window)
         self.main = main_window
         self.viewer = viewer
+        self._printers = [dict(item) for item in list(getattr(self.main, "printers", []) or []) if isinstance(item, dict)]
         self._preview_data = None
         self._layer_offsets = []
         self._total_steps = 0
@@ -410,14 +411,18 @@ class PreviewView(QtCore.QObject):
 
         layout.addWidget(self._make_separator())
 
-        ai_label = QtWidgets.QLabel("AI Checks")
-        ai_label.setObjectName("PreviewHeader")
-        layout.addWidget(ai_label)
+        diagnostics_label = QtWidgets.QLabel("Diagnostics")
+        diagnostics_label.setObjectName("PreviewHeader")
+        layout.addWidget(diagnostics_label)
 
-        self._ai_checks_value = QtWidgets.QLabel("All checks passed.")
-        self._ai_checks_value.setObjectName("PreviewValue")
-        self._ai_checks_value.setWordWrap(True)
-        layout.addWidget(self._ai_checks_value)
+        self._diagnostics_value = QtWidgets.QPlainTextEdit(page)
+        self._diagnostics_value.setObjectName("PreviewDiagnostics")
+        self._diagnostics_value.setReadOnly(True)
+        self._diagnostics_value.setPlaceholderText("Diagnostics will appear after slicing.")
+        self._diagnostics_value.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
+        self._diagnostics_value.setMinimumHeight(160)
+        self._diagnostics_value.setMaximumHeight(220)
+        layout.addWidget(self._diagnostics_value)
 
         return page
 
@@ -702,11 +707,17 @@ class PreviewView(QtCore.QObject):
         self._toggle_display_item_from_cell(table.item(row, column))
 
     def _populate_printers(self):
+        try:
+            self._printer_combo.currentIndexChanged.disconnect(self._emit_printer_changed)
+        except TypeError:
+            pass
         self._printer_combo.clear()
-        printers = getattr(self.main, "printers", []) or []
+        printers = list(self._printers or [])
+        self._printer_row.setVisible(bool(printers))
         if not printers:
             self._printer_combo.addItem("No printers configured")
             self._printer_combo.setEnabled(False)
+            self._printer_combo.currentIndexChanged.connect(self._emit_printer_changed)
             return
         self._printer_combo.setEnabled(True)
         default_name = ""
@@ -724,6 +735,14 @@ class PreviewView(QtCore.QObject):
         if default_index is not None:
             self._printer_combo.setCurrentIndex(default_index)
         self._printer_combo.currentIndexChanged.connect(self._emit_printer_changed)
+
+    def set_printers(self, printers):
+        previous_name = str(self._printer_combo.currentText() or "").strip()
+        self._printers = [dict(item) for item in list(printers or []) if isinstance(item, dict)]
+        self.main.printers = [dict(item) for item in self._printers]
+        self._populate_printers()
+        if previous_name:
+            self.select_printer_by_name(previous_name, emit=False)
 
     def set_preview_settings(self, settings):
         self._preview_settings = settings
@@ -808,7 +827,7 @@ class PreviewView(QtCore.QObject):
             self._emit_printer_changed(idx)
 
     def _emit_printer_changed(self, _index: int):
-        printers = getattr(self.main, "printers", []) or []
+        printers = list(self._printers or [])
         if not printers:
             return
         idx = self._printer_combo.currentIndex()
@@ -1037,6 +1056,11 @@ class PreviewView(QtCore.QObject):
             f"  color: {panel_text};"
             f"  border: 1px solid {panel_border};"
             "}"
+            "QPlainTextEdit#PreviewDiagnostics {"
+            f"  background: {inner_bg};"
+            f"  color: {panel_text};"
+            f"  border: 1px solid {panel_border};"
+            "}"
             "QScrollBar:vertical {"
             f"  background: {panel_bg};"
             "}"
@@ -1238,8 +1262,8 @@ class PreviewView(QtCore.QObject):
             self._prepare_time_value.setText("n/a")
             self._model_time_value.setText("n/a")
             self._total_time_value.setText("n/a")
-            if hasattr(self, "_ai_checks_value"):
-                self._ai_checks_value.setText("All checks passed.")
+            if hasattr(self, "_diagnostics_value"):
+                self._diagnostics_value.setPlainText(self._format_diagnostics_text({}))
             self._update_filament_view()
             return
         length = stats.get("length", "n/a")
@@ -1252,16 +1276,125 @@ class PreviewView(QtCore.QObject):
         time_val = stats.get("time", "n/a")
         self._model_time_value.setText(time_val)
         self._total_time_value.setText(time_val)
-        if hasattr(self, "_ai_checks_value"):
-            warnings = stats.get("ai_warnings") or []
-            suggestions = stats.get("ai_suggestions") or []
-            lines = []
-            if warnings:
-                lines.append("Warnings: " + " | ".join(warnings))
-            if suggestions:
-                lines.append("Suggestions: " + " | ".join(suggestions))
-            self._ai_checks_value.setText("All checks passed." if not lines else "\n".join(lines))
+        if hasattr(self, "_diagnostics_value"):
+            self._diagnostics_value.setPlainText(self._format_diagnostics_text(stats))
         self._update_filament_view()
+
+    def _diagnostics_bool_text(self, value) -> str:
+        return "Yes" if bool(value) else "No"
+
+    def _diagnostics_float_text(self, value, digits: int = 3) -> str:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return "n/a"
+        return f"{numeric:.{digits}f}"
+
+    def _format_diagnostics_text(self, stats) -> str:
+        stats = stats or {}
+        lines = ["AI Checks"]
+        ai_warnings = [str(item).strip() for item in list(stats.get("ai_warnings") or []) if str(item).strip()]
+        ai_suggestions = [str(item).strip() for item in list(stats.get("ai_suggestions") or []) if str(item).strip()]
+        if ai_warnings:
+            lines.append(f"Warnings ({len(ai_warnings)}):")
+            for item in ai_warnings:
+                lines.append(f"- {item}")
+        else:
+            lines.append("All checks passed.")
+        if ai_suggestions:
+            lines.append(f"Suggestions ({len(ai_suggestions)}):")
+            for item in ai_suggestions:
+                lines.append(f"- {item}")
+
+        lines.append("")
+        lines.append("Support Diagnostics")
+        support = stats.get("support_diagnostics")
+        if not isinstance(support, dict) or not support:
+            lines.append("No support diagnostics available.")
+            return "\n".join(lines)
+
+        lines.append(f"Status: {str(support.get('status', 'n/a') or 'n/a')}")
+        source = str(support.get("diagnostics_source", "") or "").strip()
+        if source:
+            lines.append(f"Source: {source}")
+        lines.append(f"Type: {str(support.get('support_type', 'n/a') or 'n/a')}")
+        lines.append(f"Style: {str(support.get('support_style', 'n/a') or 'n/a')}")
+        lines.append(
+            f"Build plate only: {self._diagnostics_bool_text(support.get('support_build_plate_only', False))}"
+        )
+        lines.append(
+            f"Critical regions only: {self._diagnostics_bool_text(support.get('support_critical_regions_only', False))}"
+        )
+        lines.append(
+            f"Remove small overhang: {self._diagnostics_bool_text(support.get('support_remove_small_overhang', False))}"
+        )
+        lines.append(
+            "Bottom interface layers: "
+            f"{int(support.get('support_interface_bottom_layers_effective', 0) or 0)}"
+        )
+        lines.append(
+            f"Strict parity mode: {self._diagnostics_bool_text(support.get('tree_support_strict_parity_mode', False))}"
+        )
+        lines.append(f"Support regions: {int(support.get('support_region_count', 0) or 0)}")
+        lines.append(f"Support paths: {int(support.get('support_path_count', 0) or 0)}")
+        lines.append(
+            "Support path length (mm): "
+            f"{self._diagnostics_float_text(support.get('support_path_length_mm_total', 0.0), digits=2)}"
+        )
+        lines.append(
+            f"Support interface paths: {int(support.get('support_interface_path_count_total', 0) or 0)}"
+        )
+        lines.append(
+            f"Unsupported islands: {int(support.get('unsupported_island_count_total', 0) or 0)}"
+        )
+        lines.append(f"Tree branches: {int(support.get('tree_branch_count_total', 0) or 0)}")
+        lines.append(f"Tree trunks: {int(support.get('tree_trunk_count_total', 0) or 0)}")
+        lines.append(f"Tree merges: {int(support.get('tree_merge_count_total', 0) or 0)}")
+        lines.append(
+            f"Collision avoids: {int(support.get('tree_collision_avoid_count_total', 0) or 0)}"
+        )
+        lines.append(
+            f"Pruned branches: {int(support.get('tree_pruned_branch_count_total', 0) or 0)}"
+        )
+        lines.append(
+            f"Parent assignments: {int(support.get('tree_parent_assignment_count_total', 0) or 0)}"
+        )
+        lines.append(
+            "Avg load score: "
+            f"{self._diagnostics_float_text(support.get('tree_branch_load_score_avg', 0.0), digits=3)}"
+        )
+        lines.append(
+            "Avg selection score: "
+            f"{self._diagnostics_float_text(support.get('tree_branch_selection_score_avg', 0.0), digits=3)}"
+        )
+        lines.append(
+            "Reroute cost (mm): "
+            f"{self._diagnostics_float_text(support.get('tree_branch_reroute_cost_mm_total', 0.0), digits=2)}"
+        )
+
+        assignment_counts = support.get("tree_branch_trunk_assignment_counts")
+        if isinstance(assignment_counts, dict) and assignment_counts:
+            summary = ", ".join(
+                f"{str(key).strip()}={int(value)}"
+                for key, value in sorted(assignment_counts.items(), key=lambda item: str(item[0]))
+                if str(key).strip()
+            )
+            if summary:
+                lines.append(f"Trunk assignments: {summary}")
+
+        warning_list = [str(item).strip() for item in list(support.get("warnings") or []) if str(item).strip()]
+        if warning_list:
+            lines.append(f"Warnings ({len(warning_list)}):")
+            for item in warning_list:
+                lines.append(f"- {item}")
+        else:
+            lines.append("Warnings: none")
+
+        diagnostics_error = str(support.get("diagnostics_error", "") or "").strip()
+        if diagnostics_error:
+            lines.append(f"Error: {diagnostics_error}")
+
+        return "\n".join(lines)
 
     def _update_filament_view(self):
         stats = self._preview_stats or {}
@@ -1444,6 +1577,13 @@ class PreviewView(QtCore.QObject):
         self._update_nozzle_info()
 
     def hide(self):
+        if self._play_timer.isActive() or self._is_playing:
+            if self._play_btn.isChecked():
+                self._play_btn.setChecked(False)
+            else:
+                self._is_playing = False
+                self._play_timer.stop()
+                self._update_play_button_state(False)
         self._preview_panel.hide()
         self._action_panel.hide()
         self._timeline_panel.hide()

@@ -1,10 +1,8 @@
-# Flutter Runner (Shared Mobile + Web)
+# Flutter Runner (Experimental)
 
-This workspace is a temporary Flutter runner layout that shares logic across:
+This workspace is an experimental Flutter runner layout that may be used for future shared mobile and web work.
 
-- Android
-- iOS
-- Web
+It is not the authoritative launch path for the April 2026 demo.
 
 Structure:
 
@@ -25,3 +23,5 @@ Mobile targets:
 flutter run -d android
 flutter run -d ios
 ```
+
+Use this runner only as future/experimental work. The current supported mobile launch path is the Toga/Briefcase app in `Mobile/app_mobile.py`.

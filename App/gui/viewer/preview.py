@@ -74,8 +74,20 @@ class PreviewMixin:
             layer_height = self._preview_layer_height
         if layer_height <= 0.0:
             layer_height = self._preview_layer_height
+        try:
+            bed_x = float(getattr(settings, "bed_x"))
+        except (TypeError, ValueError, AttributeError):
+            bed_x = float(getattr(self, "_preview_bed_x", 0.0) or 0.0)
+        try:
+            bed_y = float(getattr(settings, "bed_y"))
+        except (TypeError, ValueError, AttributeError):
+            bed_y = float(getattr(self, "_preview_bed_y", 0.0) or 0.0)
+        bed_x = max(0.0, bed_x)
+        bed_y = max(0.0, bed_y)
         if abs(base_width - self._preview_base_width) < 1e-6 and \
-                abs(layer_height - self._preview_layer_height) < 1e-6:
+                abs(layer_height - self._preview_layer_height) < 1e-6 and \
+                abs(bed_x - float(getattr(self, "_preview_bed_x", 0.0) or 0.0)) < 1e-6 and \
+                abs(bed_y - float(getattr(self, "_preview_bed_y", 0.0) or 0.0)) < 1e-6:
             updated = False
             try:
                 filament_color = getattr(settings, "filament_color", None)
@@ -92,6 +104,8 @@ class PreviewMixin:
             return
         self._preview_base_width = base_width
         self._preview_layer_height = layer_height
+        self._preview_bed_x = bed_x
+        self._preview_bed_y = bed_y
         try:
             filament_color = getattr(settings, "filament_color", None)
             if filament_color:
@@ -165,7 +179,7 @@ class PreviewMixin:
         seg = self._preview_segment_for_nozzle()
         if seg is None:
             return None
-        return (seg.end, float(seg.speed), bool(seg.is_extrude))
+        return (self._preview_world_point(seg.end), float(seg.speed), bool(seg.is_extrude))
 
     def get_preview_progress(self):
         if self._preview_data is None or not getattr(self._preview_data, "layers", None):
@@ -452,11 +466,33 @@ class PreviewMixin:
             return None
         return tuple(sorted(self._preview_feature_filter))
 
+    def _preview_coordinate_frame_key(self):
+        return (
+            round(float(getattr(self, "_preview_bed_x", 0.0) or 0.0), 6),
+            round(float(getattr(self, "_preview_bed_y", 0.0) or 0.0), 6),
+        )
+
+    def _preview_world_point(self, point: Tuple[float, float, float] | Sequence[float]) -> Tuple[float, float, float]:
+        x = float(point[0])
+        y = float(point[1])
+        z = float(point[2])
+        bed_x = float(getattr(self, "_preview_bed_x", 0.0) or 0.0)
+        bed_y = float(getattr(self, "_preview_bed_y", 0.0) or 0.0)
+        if bed_x > 0.0:
+            x -= bed_x * 0.5
+        if bed_y > 0.0:
+            y -= bed_y * 0.5
+        return (x, y, z)
+
+    def _preview_segment_pair(self, seg) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+        return self._preview_world_point(seg.start), self._preview_world_point(seg.end)
+
     def _preview_static_state_key(self, layer_index: int):
         return (
             id(self._preview_data),
             layer_index,
             self._preview_filter_key(),
+            self._preview_coordinate_frame_key(),
             round(float(self._preview_base_width), 6),
             round(float(self._preview_layer_height), 6),
         )
@@ -467,6 +503,7 @@ class PreviewMixin:
             layer_index,
             step_slice,
             self._preview_filter_key(),
+            self._preview_coordinate_frame_key(),
             round(float(self._preview_base_width), 6),
             round(float(self._preview_layer_height), 6),
         )
@@ -517,6 +554,7 @@ class PreviewMixin:
 
     def _preview_geometry_state_key(self, layer_index: int, step_slice: int | None):
         return (id(self._preview_data), layer_index, step_slice, self._preview_filter_key(),
+                self._preview_coordinate_frame_key(),
                 round(float(self._preview_base_width), 6), round(float(self._preview_layer_height), 6))
 
     def _preview_color_for_segment(self, seg) -> Tuple[float, float, float, float]:
@@ -595,7 +633,10 @@ class PreviewMixin:
                 extrude_segments[bucket].append(seg)
                 extrude_widths[bucket].append(width_value)
             else:
-                travel_points.extend([seg.start, seg.end])
+                travel_points.extend([
+                    self._preview_world_point(seg.start),
+                    self._preview_world_point(seg.end),
+                ])
         return extrude_segments, extrude_widths, travel_points
 
     def _collect_preview_geometry(self, layer_index: int, step_slice: int | None):
@@ -615,7 +656,10 @@ class PreviewMixin:
                     extrude_segments[bucket].append(seg)
                     extrude_widths[bucket].append(width_value)
                 else:
-                    travel_points.extend([seg.start, seg.end])
+                    travel_points.extend([
+                        self._preview_world_point(seg.start),
+                        self._preview_world_point(seg.end),
+                    ])
         return extrude_segments, extrude_widths, travel_points
 
     def _apply_preview_mesh_colors(self, items, meshes, segments_by_bin, cache: OrderedDict | None = None):
@@ -707,7 +751,7 @@ class PreviewMixin:
                     self._preview_color_cache_static.clear()
                 meshes = []
                 for segments, widths in zip(segments_by_bin, widths_by_bin):
-                    segment_pairs = [(seg.start, seg.end) for seg in segments]
+                    segment_pairs = [self._preview_segment_pair(seg) for seg in segments]
                     meshes.append(self._preview_mesh_for_segments(segment_pairs, widths))
                 self._preview_geometry_meshes = meshes
                 self._preview_geometry_key = geometry_key
@@ -770,7 +814,7 @@ class PreviewMixin:
                 self._preview_color_cache_static.clear()
             meshes = []
             for segments, widths in zip(segments_by_bin, widths_by_bin):
-                segment_pairs = [(seg.start, seg.end) for seg in segments]
+                segment_pairs = [self._preview_segment_pair(seg) for seg in segments]
                 meshes.append(self._preview_mesh_for_segments(segment_pairs, widths))
             self._preview_static_meshes = meshes
             self._preview_static_key = static_key
@@ -793,7 +837,7 @@ class PreviewMixin:
                 self._preview_color_cache_dynamic.clear()
             meshes = []
             for segments, widths in zip(segments_by_bin, widths_by_bin):
-                segment_pairs = [(seg.start, seg.end) for seg in segments]
+                segment_pairs = [self._preview_segment_pair(seg) for seg in segments]
                 meshes.append(self._preview_mesh_for_segments(segment_pairs, widths))
             self._preview_dynamic_meshes = meshes
             self._preview_dynamic_key = dynamic_key
@@ -949,11 +993,12 @@ class PreviewMixin:
             return
         if self._nozzle is None:
             return
-        seg = self._preview_segment_for_nozzle()
-        if seg is not None:
-            x = float(seg.end[0])
-            y = float(seg.end[1])
-            z = float(seg.end[2])
+        state = self.get_preview_nozzle_state()
+        if state is not None:
+            pos, _speed, _is_extrude = state
+            x = float(pos[0])
+            y = float(pos[1])
+            z = float(pos[2])
         else:
             x = 0.0
             y = 0.0

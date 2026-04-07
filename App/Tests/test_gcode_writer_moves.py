@@ -27,7 +27,7 @@ def test_move_travel_retracts_after_extrude():
     writer.move_travel(10, 0, 0.2, 120.0)
     assert any(line.startswith("G1 E") for line in writer.lines)
     assert writer.lines[-1].startswith("G0")
-    assert "X10" in writer.lines[-1]
+    assert "X120" in writer.lines[-1]
 
 
 def test_duplicate_extrusion_skips_e_increment():
@@ -75,4 +75,45 @@ def test_retract_noop_when_distance_zero():
     writer = GCodeWriter(settings=settings)
     writer.retract()
     assert writer.lines == []
+
+
+def test_move_extrude_translates_centered_coordinates_to_bed_space():
+    settings = SliceSettings(retract_distance=0.0, bed_x=300.0, bed_y=280.0)
+    writer = GCodeWriter(settings=settings)
+    writer.move_extrude(10, 5, 0.2, 30.0, extrusion=0.5)
+    assert any(line.startswith("G1 X160 Y145") for line in writer.lines)
+
+
+def test_header_footer_use_shared_contract_and_remove_demo_footer():
+    settings = SliceSettings(
+        start_gcode=["M117 START"],
+        end_gcode=["END_PRINT"],
+        retract_distance=0.0,
+    )
+    writer = GCodeWriter(settings=settings)
+    writer.write_header()
+    writer.write_footer()
+    gcode = writer.get_gcode()
+    assert "demo" not in gcode.lower()
+    assert "M117 START" in gcode
+    assert "M82 ; absolute extrusion" in gcode
+    assert gcode.rstrip().endswith("END_PRINT")
+    assert "M104 S0" not in writer.lines
+    assert "M140 S0" not in writer.lines
+    assert "M84" not in writer.lines
+
+
+def test_klipper_defaults_to_relative_extrusion_when_unset():
+    settings = SliceSettings(
+        firmware_flavor="klipper",
+        gcode_absolute_extrusion=None,
+        retract_distance=1.0,
+        retract_speed=25.0,
+    )
+    writer = GCodeWriter(settings=settings)
+    writer.write_header()
+    writer.move_extrude(5, 5, 0.2, 30.0, extrusion=0.5)
+    writer.move_travel(10, 5, 0.2, 120.0)
+    assert "M83 ; relative extrusion" in writer.lines
+    assert any("E-1" in line and line.endswith("; retract") for line in writer.lines)
 

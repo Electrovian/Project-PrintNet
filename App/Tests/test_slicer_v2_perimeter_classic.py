@@ -42,6 +42,19 @@ class TestSlicerV2PerimeterClassic(unittest.TestCase):
         self.assertEqual(report.loop_count_total, 3)
         self.assertGreater(report.path_length_mm_total, 0.0)
 
+    def test_classic_perimeter_loops_keep_vertices(self) -> None:
+        graph = build_layer_island_graph([_square(0.0, 0.0, 20.0)], layer_index=0, z_height_mm=0.2)
+        layer_plans, _report = build_classic_perimeters(
+            [graph],
+            perimeter_count=1,
+            line_width_mm=0.4,
+            wall_sequence=WALL_SEQUENCE_OUTER_TO_INNER,
+        )
+        loop = layer_plans[0].loops[0]
+        self.assertEqual(loop.point_count, len(loop.points))
+        self.assertEqual(len(loop.points), 4)
+        self.assertEqual(loop.points[0].as_tuple(), (0.0, 0.0))
+
     def test_first_layer_single_wall_override(self) -> None:
         graph0 = build_layer_island_graph([_square(0.0, 0.0, 20.0)], layer_index=0, z_height_mm=0.2)
         graph1 = build_layer_island_graph([_square(0.1, 0.1, 20.0)], layer_index=1, z_height_mm=0.4)
