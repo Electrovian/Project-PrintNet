@@ -26,8 +26,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-    env:
-      QT_QPA_PLATFORM: offscreen
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,7 +42,23 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r App/requirements.txt
 
-      - name: Run App smoke tests
+      - name: Run App smoke tests (Linux)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: xcb
+          QT_OPENGL: software
+          EON_OPENGL_MODE: software
+          QT_QUICK_BACKEND: software
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" python App/Tests/run_tests.py --scope smoke
+
+      - name: Run App smoke tests (Windows)
+        if: runner.os == 'Windows'
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_OPENGL: software
+          EON_OPENGL_MODE: software
+          QT_QUICK_BACKEND: software
         run: python App/Tests/run_tests.py --scope smoke
 
   app-full:
@@ -55,8 +69,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-    env:
-      QT_QPA_PLATFORM: offscreen
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,13 +87,24 @@ jobs:
 
       - name: Run App full tests with coverage gate (Linux)
         if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: xcb
+          QT_OPENGL: software
+          EON_OPENGL_MODE: software
+          QT_QUICK_BACKEND: software
+          LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           coverage erase
-          coverage run --source=App/slicer_v2,App/connectors,App/profiles_import --omit="App/slicer_v2/legacy_*.py,App/slicer_v2/legacy_slicer/*.py" -m App.Tests.run_tests --scope full
+          xvfb-run -a -s "-screen 0 1920x1080x24" coverage run --source=App/slicer_v2,App/connectors,App/profiles_import --omit="App/slicer_v2/legacy_*.py,App/slicer_v2/legacy_slicer/*.py" -m App.Tests.run_tests --scope full
           coverage report --fail-under=80 -m
 
       - name: Run App full tests (Windows)
         if: runner.os == 'Windows'
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_OPENGL: software
+          EON_OPENGL_MODE: software
+          QT_QUICK_BACKEND: software
         run: python App/Tests/run_tests.py --scope full
 
   website-backend-tests:

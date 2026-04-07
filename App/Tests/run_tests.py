@@ -3,6 +3,15 @@ import os
 import sys
 import unittest
 
+
+def _configure_qt_test_environment() -> None:
+    os.environ.setdefault("QT_OPENGL", "software")
+    os.environ.setdefault("EON_OPENGL_MODE", "software")
+    os.environ.setdefault("QT_QUICK_BACKEND", "software")
+
+
+_configure_qt_test_environment()
+
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
