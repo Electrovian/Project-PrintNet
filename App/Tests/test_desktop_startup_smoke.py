@@ -23,6 +23,7 @@ class DesktopStartupSmokeTests(unittest.TestCase):
         fake_window.windowTitle.return_value = "EON-OpenSlicer"
         fake_window.isVisible.return_value = True
         fake_window.isMaximized.return_value = False
+        fake_splash = mock.Mock()
 
         fake_activity_logger = mock.Mock()
         fake_crash_reporter = mock.Mock()
@@ -35,17 +36,18 @@ class DesktopStartupSmokeTests(unittest.TestCase):
                     return_value=([{"name": "Alpha"}], {}),
                 ):
                     with mock.patch.object(desktop_startup_smoke.app_main, "MainWindow", return_value=fake_window):
-                        with mock.patch.object(
-                            desktop_startup_smoke.app_main,
-                            "ActivityLogger",
-                            return_value=fake_activity_logger,
-                        ):
+                        with mock.patch.object(desktop_startup_smoke.app_main, "SplashScreen", return_value=fake_splash):
                             with mock.patch.object(
                                 desktop_startup_smoke.app_main,
-                                "CrashReporter",
-                                return_value=fake_crash_reporter,
+                                "ActivityLogger",
+                                return_value=fake_activity_logger,
                             ):
-                                report = desktop_startup_smoke.run_startup_smoke()
+                                with mock.patch.object(
+                                    desktop_startup_smoke.app_main,
+                                    "CrashReporter",
+                                    return_value=fake_crash_reporter,
+                                ):
+                                    report = desktop_startup_smoke.run_startup_smoke()
 
         self.assertTrue(report["ok"])
         self.assertEqual(report["printer_count"], 1)
@@ -58,9 +60,14 @@ class DesktopStartupSmokeTests(unittest.TestCase):
         fake_activity_logger.track_widget_tree.assert_called_once_with(fake_window)
         fake_window.showMaximized.assert_called_once()
         fake_window.close.assert_called_once()
+        fake_window.deleteLater.assert_called_once()
+        fake_splash.close.assert_called_once()
+        fake_splash.deleteLater.assert_called_once()
+        fake_activity_logger.uninstall.assert_called_once()
         fake_crash_reporter.install.assert_called_once()
         fake_crash_reporter.install_faulthandler.assert_called_once()
         fake_crash_reporter.install_watchdog.assert_called_once()
+        fake_crash_reporter.uninstall.assert_called_once()
         configure.assert_called_once_with()
 
     def test_run_startup_smoke_reports_desktop_renderer_override(self):
@@ -68,6 +75,11 @@ class DesktopStartupSmokeTests(unittest.TestCase):
         fake_window.windowTitle.return_value = "EON-OpenSlicer"
         fake_window.isVisible.return_value = True
         fake_window.isMaximized.return_value = True
+        fake_splash = mock.Mock()
+        app = desktop_startup_smoke.QtWidgets.QApplication.instance()
+        if app is None:
+            app = desktop_startup_smoke.QtWidgets.QApplication(["desktop-startup-smoke-test"])
+        baseline_quit_on_last_window_closed = bool(app.quitOnLastWindowClosed())
 
         with mock.patch.object(desktop_startup_smoke.app_main, "_run_preset_startup_validation"):
             with mock.patch.object(desktop_startup_smoke.app_main, "configure_opengl_mode", return_value="desktop"):
@@ -77,12 +89,14 @@ class DesktopStartupSmokeTests(unittest.TestCase):
                     return_value=([{"name": "Alpha"}], {}),
                 ):
                     with mock.patch.object(desktop_startup_smoke.app_main, "MainWindow", return_value=fake_window):
-                        with mock.patch.object(desktop_startup_smoke.app_main, "ActivityLogger", return_value=mock.Mock()):
-                            with mock.patch.object(desktop_startup_smoke.app_main, "CrashReporter", return_value=mock.Mock()):
-                                report = desktop_startup_smoke.run_startup_smoke()
+                        with mock.patch.object(desktop_startup_smoke.app_main, "SplashScreen", return_value=fake_splash):
+                            with mock.patch.object(desktop_startup_smoke.app_main, "ActivityLogger", return_value=mock.Mock()):
+                                with mock.patch.object(desktop_startup_smoke.app_main, "CrashReporter", return_value=mock.Mock()):
+                                    report = desktop_startup_smoke.run_startup_smoke()
 
         self.assertEqual(report["renderer_mode"], "desktop")
         self.assertFalse(report["viewer_runtime_degraded"])
+        self.assertEqual(bool(app.quitOnLastWindowClosed()), baseline_quit_on_last_window_closed)
 
     def test_main_writes_success_report(self):
         payload = {

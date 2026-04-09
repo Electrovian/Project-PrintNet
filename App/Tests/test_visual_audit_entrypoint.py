@@ -23,7 +23,13 @@ class VisualAuditEntrypointTests(unittest.TestCase):
     def test_demo_scenario_generates_timestamped_pngs_and_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp).joinpath("audit")
+            app = visual_audit.QtWidgets.QApplication.instance()
+            if app is None:
+                app = visual_audit.QtWidgets.QApplication(["visual-audit-test"])
+            baseline_top_levels = {id(widget) for widget in app.topLevelWidgets()}
             report = visual_audit.run_demo_audit(output_dir=output_dir)
+            visual_audit.QtWidgets.QApplication.processEvents()
+            remaining_top_levels = {id(widget) for widget in app.topLevelWidgets()}
 
             self.assertTrue(report["ok"])
             self.assertEqual(report["scenario"], "demo")
@@ -31,6 +37,7 @@ class VisualAuditEntrypointTests(unittest.TestCase):
             self.assertEqual(report["renderer_mode"], "software")
             self.assertFalse(report["viewer_runtime_degraded"])
             self.assertTrue(output_dir.exists())
+            self.assertEqual(remaining_top_levels - baseline_top_levels, set())
 
             png_files = sorted(output_dir.glob("*.png"))
             self.assertGreaterEqual(len(png_files), 9)

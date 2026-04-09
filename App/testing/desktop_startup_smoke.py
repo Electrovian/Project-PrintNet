@@ -38,6 +38,12 @@ except Exception:  # pragma: no cover
     from App import main as app_main  # type: ignore  # noqa: E402
     from App.config.bootstrap import bootstrap_defaults, mark_setup_completed, save_bootstrap_config  # type: ignore  # noqa: E402
 
+try:  # pragma: no cover - import path varies by caller cwd
+    from testing.qt_cleanup import dispose_created_top_levels, snapshot_top_level_widgets  # type: ignore  # noqa: E402
+except Exception:  # pragma: no cover
+    _bootstrap_import_paths()
+    from App.testing.qt_cleanup import dispose_created_top_levels, snapshot_top_level_widgets  # type: ignore  # noqa: E402
+
 
 def _utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -96,65 +102,79 @@ def run_startup_smoke() -> dict[str, object]:
         save_bootstrap_config(bootstrap_config)
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["desktop-startup-smoke"])
+        baseline_widget_ids = snapshot_top_level_widgets(app)
+        previous_quit_on_last_window_closed = bool(app.quitOnLastWindowClosed())
         app.setApplicationName("EON-OpenSlicer")
         app.setQuitOnLastWindowClosed(False)
         app.setProperty("eon_opengl_mode", renderer_mode)
+        activity_logger = None
+        crash_reporter = None
+        splash = None
+        window = None
+        try:
+            ensured_bootstrap = app_main._ensure_bootstrap_configuration(app)
+            ui_language = str(ensured_bootstrap.get("ui_language", "en")).strip() or "en"
+            region_code = str(ensured_bootstrap.get("region_code", "")).strip().upper()
+            os.environ["EON_UI_LANG"] = ui_language
+            if region_code:
+                os.environ["EON_REGION_CODE"] = region_code
 
-        ensured_bootstrap = app_main._ensure_bootstrap_configuration(app)
-        ui_language = str(ensured_bootstrap.get("ui_language", "en")).strip() or "en"
-        region_code = str(ensured_bootstrap.get("region_code", "")).strip().upper()
-        os.environ["EON_UI_LANG"] = ui_language
-        if region_code:
-            os.environ["EON_REGION_CODE"] = region_code
+            activity_logger = app_main.ActivityLogger()
+            activity_logger.install(app)
+            crash_reporter = app_main.CrashReporter(activity_logger=activity_logger)
+            crash_reporter.install()
+            crash_reporter.install_faulthandler()
+            crash_reporter.install_watchdog(app)
 
-        activity_logger = app_main.ActivityLogger()
-        activity_logger.install(app)
-        crash_reporter = app_main.CrashReporter(activity_logger=activity_logger)
-        crash_reporter.install()
-        crash_reporter.install_faulthandler()
-        crash_reporter.install_watchdog(app)
+            splash = app_main.SplashScreen()
+            splash.show()
+            splash.start_progress(50)
+            app.processEvents()
+            app_main._run_preset_startup_validation(app, splash)
 
-        splash = app_main.SplashScreen()
-        splash.show()
-        splash.start_progress(50)
-        app.processEvents()
-        app_main._run_preset_startup_validation(app, splash)
+            printers, airtable_cfg = app_main.load_printer_config()
+            window = app_main.MainWindow(printers=printers, airtable_cfg=airtable_cfg)
+            window.activity_logger = activity_logger
+            window.crash_reporter = crash_reporter
+            activity_logger.track_widget_tree(window)
+            window.showMaximized()
+            if hasattr(window, "apply_titlebar_theme"):
+                window.apply_titlebar_theme()
+            app.processEvents()
 
-        printers, airtable_cfg = app_main.load_printer_config()
-        window = app_main.MainWindow(printers=printers, airtable_cfg=airtable_cfg)
-        window.activity_logger = activity_logger
-        window.crash_reporter = crash_reporter
-        activity_logger.track_widget_tree(window)
-        window.showMaximized()
-        if hasattr(window, "apply_titlebar_theme"):
-            window.apply_titlebar_theme()
-        app.processEvents()
-
-        window_title = str(window.windowTitle() or "").strip()
-        duration_s = max(0.0, time.perf_counter() - started)
-        viewer = getattr(window, "viewer", None)
-        diagnostics = _viewer_runtime_diagnostics(viewer, renderer_mode)
-        report = {
-            "ok": True,
-            "started_at_utc": _utc_iso(),
-            "duration_s": round(duration_s, 3),
-            "bootstrap_language": ui_language,
-            "bootstrap_region": region_code,
-            "printer_count": len(printers),
-            "window_title": window_title,
-            "window_visible": bool(window.isVisible()),
-            "window_maximized": bool(window.isMaximized()),
-            "runtime_root": str(runtime_root),
-            "renderer_mode": str(diagnostics.get("renderer_mode") or renderer_mode),
-            "viewer_runtime_degraded": bool(diagnostics.get("viewer_runtime_degraded")),
-            "viewer_runtime_error": str(diagnostics.get("viewer_runtime_error") or ""),
-            "viewer_runtime_failure_count": int(diagnostics.get("viewer_runtime_failure_count") or 0),
-        }
-
-        splash.close()
-        window.close()
-        app.processEvents()
-        return report
+            window_title = str(window.windowTitle() or "").strip()
+            duration_s = max(0.0, time.perf_counter() - started)
+            viewer = getattr(window, "viewer", None)
+            diagnostics = _viewer_runtime_diagnostics(viewer, renderer_mode)
+            return {
+                "ok": True,
+                "started_at_utc": _utc_iso(),
+                "duration_s": round(duration_s, 3),
+                "bootstrap_language": ui_language,
+                "bootstrap_region": region_code,
+                "printer_count": len(printers),
+                "window_title": window_title,
+                "window_visible": bool(window.isVisible()),
+                "window_maximized": bool(window.isMaximized()),
+                "runtime_root": str(runtime_root),
+                "renderer_mode": str(diagnostics.get("renderer_mode") or renderer_mode),
+                "viewer_runtime_degraded": bool(diagnostics.get("viewer_runtime_degraded")),
+                "viewer_runtime_error": str(diagnostics.get("viewer_runtime_error") or ""),
+                "viewer_runtime_failure_count": int(diagnostics.get("viewer_runtime_failure_count") or 0),
+            }
+        finally:
+            app.setQuitOnLastWindowClosed(previous_quit_on_last_window_closed)
+            if crash_reporter is not None and hasattr(crash_reporter, "uninstall"):
+                try:
+                    crash_reporter.uninstall(app)
+                except Exception:
+                    pass
+            if activity_logger is not None and hasattr(activity_logger, "uninstall"):
+                try:
+                    activity_logger.uninstall(app)
+                except Exception:
+                    pass
+            dispose_created_top_levels(app, baseline_widget_ids, splash, window)
 
 
 def main(argv: list[str] | None = None) -> int:

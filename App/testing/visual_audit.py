@@ -48,6 +48,12 @@ except Exception:  # pragma: no cover
     _bootstrap_import_paths()
     from App.slicer_v2.legacy_gcode_preview import parse_gcode_preview  # type: ignore  # noqa: E402
 
+try:  # pragma: no cover - import path depends on caller cwd / sys.path setup
+    from testing.qt_cleanup import dispose_created_top_levels, snapshot_top_level_widgets  # type: ignore  # noqa: E402
+except Exception:  # pragma: no cover
+    _bootstrap_import_paths()
+    from App.testing.qt_cleanup import dispose_created_top_levels, snapshot_top_level_widgets  # type: ignore  # noqa: E402
+
 
 @dataclass(frozen=True)
 class ScreenshotRecord:
@@ -331,6 +337,7 @@ def _write_manifest(output_dir: Path, payload: dict[str, object]) -> Path:
 
 def run_demo_audit(*, output_dir: str | Path | None = None) -> dict[str, object]:
     app = _ensure_app()
+    baseline_widget_ids = snapshot_top_level_widgets(app)
     output_path = Path(output_dir).expanduser().resolve() if output_dir is not None else (
         REPO_ROOT / "App" / "testing" / "visual_audit_output" / _utc_token()
     )
@@ -339,97 +346,97 @@ def run_demo_audit(*, output_dir: str | Path | None = None) -> dict[str, object]
     with tempfile.TemporaryDirectory(prefix="visual_audit_demo_") as scratch:
         scratch_dir = Path(scratch)
         printers = _build_printers()
-        window = MainWindow(printers, {})
-        window.resize(1600, 1100)
-        window.show()
-        app.processEvents()
-        QtTest.QTest.qWait(100)
-
-        records: list[ScreenshotRecord] = []
-        records.append(_capture_widget(window, output_path, "startup", "prepare"))
-
-        sample_models = _write_sample_models(scratch_dir)
-        me_entries, printer_entries = _build_activity_rows()
-
-        # Empty files state.
-        window.files_view.set_models([])
-        _activate_mode(window, "files")
-        app.processEvents()
-        QtTest.QTest.qWait(60)
-        records.append(_capture_widget(window, output_path, "files_empty", "files"))
-
-        # Populated files state.
-        window.files_view.set_models(sample_models)
-        app.processEvents()
-        QtTest.QTest.qWait(60)
-        records.append(_capture_widget(window, output_path, "files_populated", "files"))
-
-        # Activity state with banners.
-        window.activity_view.set_me_activity(me_entries)
-        window.activity_view.set_printer_activity(printer_entries)
-        window.activity_view.set_compliance_banner("Cloud sync is disabled for the demo window.")
-        window.activity_view.set_cache_banner("Cached entries loaded from local replay state.")
-        _activate_mode(window, "activity")
-        app.processEvents()
-        QtTest.QTest.qWait(60)
-        if hasattr(window.activity_view, "_printers_btn"):
-            window.activity_view._printers_btn.click()
+        window = None
+        try:
+            window = MainWindow(printers, {})
+            window.resize(1600, 1100)
+            window.show()
             app.processEvents()
-            QtTest.QTest.qWait(40)
-        records.append(_capture_widget(window, output_path, "activity_banners", "activity"))
+            QtTest.QTest.qWait(100)
 
-        # Prepare default state.
-        _sync_printer_selection(window, "Demo Core")
-        _activate_mode(window, "prepare")
-        app.processEvents()
-        QtTest.QTest.qWait(60)
-        records.append(_capture_widget(window, output_path, "prepare_default", "prepare"))
-        records.append(_capture_navigator_closeup(window, output_path, "prepare_navigator_closeup", "prepare"))
+            records: list[ScreenshotRecord] = []
+            records.append(_capture_widget(window, output_path, "startup", "prepare"))
 
-        # Preview after slice with support diagnostics.
-        preview = parse_gcode_preview(_build_preview_gcode())
-        _activate_mode(window, "preview")
-        _sync_printer_selection(window, "Demo Core")
-        if hasattr(window.preview_view, "set_preview_data"):
-            window.preview_view.set_preview_data(preview)
-        window.preview_view.update_stats(_build_preview_stats("tree"))
-        app.processEvents()
-        QtTest.QTest.qWait(80)
-        records.append(_capture_widget(window, output_path, "preview_tree_support", "preview"))
-        records.append(_capture_navigator_closeup(window, output_path, "preview_navigator_closeup", "preview"))
+            sample_models = _write_sample_models(scratch_dir)
+            me_entries, printer_entries = _build_activity_rows()
 
-        window.preview_view.update_stats(_build_preview_stats("organic"))
-        app.processEvents()
-        QtTest.QTest.qWait(80)
-        records.append(_capture_widget(window, output_path, "preview_organic_support", "preview"))
+            # Empty files state.
+            window.files_view.set_models([])
+            _activate_mode(window, "files")
+            app.processEvents()
+            QtTest.QTest.qWait(60)
+            records.append(_capture_widget(window, output_path, "files_empty", "files"))
 
-        # Device live status.
-        _activate_mode(window, "device")
-        window.device_view.update_live_status(
-            head_pos=(123.456, 78.9, 12.345),
-            time_left_s=4891,
-            pla_remaining_m=3.14,
-            pla_low=False,
-        )
-        app.processEvents()
-        QtTest.QTest.qWait(60)
-        records.append(_capture_widget(window, output_path, "device_live_status", "device"))
+            # Populated files state.
+            window.files_view.set_models(sample_models)
+            app.processEvents()
+            QtTest.QTest.qWait(60)
+            records.append(_capture_widget(window, output_path, "files_populated", "files"))
 
-        # Control / calibration route.
-        _activate_mode(window, "control")
-        _sync_printer_selection(window, "Demo Core")
-        app.processEvents()
-        QtTest.QTest.qWait(60)
-        records.append(_capture_widget(window, output_path, "control_calibration", "control"))
+            # Activity state with banners.
+            window.activity_view.set_me_activity(me_entries)
+            window.activity_view.set_printer_activity(printer_entries)
+            window.activity_view.set_compliance_banner("Cloud sync is disabled for the demo window.")
+            window.activity_view.set_cache_banner("Cached entries loaded from local replay state.")
+            _activate_mode(window, "activity")
+            app.processEvents()
+            QtTest.QTest.qWait(60)
+            if hasattr(window.activity_view, "_printers_btn"):
+                window.activity_view._printers_btn.click()
+                app.processEvents()
+                QtTest.QTest.qWait(40)
+            records.append(_capture_widget(window, output_path, "activity_banners", "activity"))
 
-        diagnostics = _viewer_runtime_diagnostics(
-            getattr(window, "viewer", None),
-            str(app.property("eon_opengl_mode") or "software"),
-        )
+            # Prepare default state.
+            _sync_printer_selection(window, "Demo Core")
+            _activate_mode(window, "prepare")
+            app.processEvents()
+            QtTest.QTest.qWait(60)
+            records.append(_capture_widget(window, output_path, "prepare_default", "prepare"))
+            records.append(_capture_navigator_closeup(window, output_path, "prepare_navigator_closeup", "prepare"))
 
-        window.close()
-        app.processEvents()
-        QtTest.QTest.qWait(40)
+            # Preview after slice with support diagnostics.
+            preview = parse_gcode_preview(_build_preview_gcode())
+            _activate_mode(window, "preview")
+            _sync_printer_selection(window, "Demo Core")
+            if hasattr(window.preview_view, "set_preview_data"):
+                window.preview_view.set_preview_data(preview)
+            window.preview_view.update_stats(_build_preview_stats("tree"))
+            app.processEvents()
+            QtTest.QTest.qWait(80)
+            records.append(_capture_widget(window, output_path, "preview_tree_support", "preview"))
+            records.append(_capture_navigator_closeup(window, output_path, "preview_navigator_closeup", "preview"))
+
+            window.preview_view.update_stats(_build_preview_stats("organic"))
+            app.processEvents()
+            QtTest.QTest.qWait(80)
+            records.append(_capture_widget(window, output_path, "preview_organic_support", "preview"))
+
+            # Device live status.
+            _activate_mode(window, "device")
+            window.device_view.update_live_status(
+                head_pos=(123.456, 78.9, 12.345),
+                time_left_s=4891,
+                pla_remaining_m=3.14,
+                pla_low=False,
+            )
+            app.processEvents()
+            QtTest.QTest.qWait(60)
+            records.append(_capture_widget(window, output_path, "device_live_status", "device"))
+
+            # Control / calibration route.
+            _activate_mode(window, "control")
+            _sync_printer_selection(window, "Demo Core")
+            app.processEvents()
+            QtTest.QTest.qWait(60)
+            records.append(_capture_widget(window, output_path, "control_calibration", "control"))
+
+            diagnostics = _viewer_runtime_diagnostics(
+                getattr(window, "viewer", None),
+                str(app.property("eon_opengl_mode") or "software"),
+            )
+        finally:
+            dispose_created_top_levels(app, baseline_widget_ids, window)
 
     payload = {
         "ok": True,

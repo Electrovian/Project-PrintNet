@@ -53,6 +53,12 @@ except Exception:  # pragma: no cover
     _bootstrap_import_paths()
     from App.testing import visual_audit as _visual_audit  # type: ignore  # noqa: E402
 
+try:  # pragma: no cover - import path depends on caller cwd / sys.path setup
+    from testing.qt_cleanup import dispose_created_top_levels, snapshot_top_level_widgets  # type: ignore  # noqa: E402
+except Exception:  # pragma: no cover
+    _bootstrap_import_paths()
+    from App.testing.qt_cleanup import dispose_created_top_levels, snapshot_top_level_widgets  # type: ignore  # noqa: E402
+
 
 @dataclass(frozen=True)
 class ScreenshotRecord:
@@ -1024,39 +1030,41 @@ class ShellAuditHarness:
 
     def run(self) -> dict[str, object]:
         self.app = _ensure_app()
+        baseline_widget_ids = snapshot_top_level_widgets(self.app)
         with self._patches():
-            self.window = MainWindow(_visual_audit._build_printers(), {})
-            self.window.resize(1600, 1100)
-            self.window.show()
-            _wait(self.app, visible=self.visible, ms=120)
-            self._seed_window_state(self.window)
-            self._check_signal_receivers()
-            self._exercise_topbar_and_menus()
-            self._exercise_files()
-            self._exercise_activity()
-            self._exercise_prepare()
-            self._exercise_preview()
-            self._exercise_device()
-            self._exercise_control()
-            self._allowlist_equivalent_actions()
-            viewer_diagnostics = _viewer_runtime_diagnostics(
-                getattr(self.window, "viewer", None),
-                str(self.app.property("eon_opengl_mode") or "software"),
-            )
-            if bool(viewer_diagnostics.get("viewer_runtime_degraded")):
-                self.ledger.finding(
-                    "warning",
-                    "VIEWER_RUNTIME_DEGRADED",
-                    "Viewer entered degraded runtime mode during the shell audit.",
-                    target="viewer",
-                    details={
-                        "renderer_mode": str(viewer_diagnostics.get("renderer_mode") or ""),
-                        "viewer_runtime_error": str(viewer_diagnostics.get("viewer_runtime_error") or ""),
-                    },
+            try:
+                self.window = MainWindow(_visual_audit._build_printers(), {})
+                self.window.resize(1600, 1100)
+                self.window.show()
+                _wait(self.app, visible=self.visible, ms=120)
+                self._seed_window_state(self.window)
+                self._check_signal_receivers()
+                self._exercise_topbar_and_menus()
+                self._exercise_files()
+                self._exercise_activity()
+                self._exercise_prepare()
+                self._exercise_preview()
+                self._exercise_device()
+                self._exercise_control()
+                self._allowlist_equivalent_actions()
+                viewer_diagnostics = _viewer_runtime_diagnostics(
+                    getattr(self.window, "viewer", None),
+                    str(self.app.property("eon_opengl_mode") or "software"),
                 )
-            inventory = self._collect_inventory()
-            self.window.close()
-            _wait(self.app, visible=self.visible, ms=40)
+                if bool(viewer_diagnostics.get("viewer_runtime_degraded")):
+                    self.ledger.finding(
+                        "warning",
+                        "VIEWER_RUNTIME_DEGRADED",
+                        "Viewer entered degraded runtime mode during the shell audit.",
+                        target="viewer",
+                        details={
+                            "renderer_mode": str(viewer_diagnostics.get("renderer_mode") or ""),
+                            "viewer_runtime_error": str(viewer_diagnostics.get("viewer_runtime_error") or ""),
+                        },
+                    )
+                inventory = self._collect_inventory()
+            finally:
+                dispose_created_top_levels(self.app, baseline_widget_ids, self.window)
 
         manifest_path = self.output_dir / "app_shell_audit_manifest.json"
         inventory_path = self.output_dir / "control_inventory.json"

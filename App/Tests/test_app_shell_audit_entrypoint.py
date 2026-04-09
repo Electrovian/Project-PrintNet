@@ -23,7 +23,13 @@ class AppShellAuditEntrypointTests(unittest.TestCase):
     def test_full_shell_audit_generates_reports_and_inventory(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp).joinpath("audit")
+            app = app_shell_audit.QtWidgets.QApplication.instance()
+            if app is None:
+                app = app_shell_audit.QtWidgets.QApplication(["app-shell-audit-test"])
+            baseline_top_levels = {id(widget) for widget in app.topLevelWidgets()}
             report = app_shell_audit.run_full_shell_audit(output_dir=output_dir)
+            app_shell_audit.QtWidgets.QApplication.processEvents()
+            remaining_top_levels = {id(widget) for widget in app.topLevelWidgets()}
 
             self.assertTrue(report["ok"])
             self.assertEqual(report["scenario"], "full-shell")
@@ -32,6 +38,7 @@ class AppShellAuditEntrypointTests(unittest.TestCase):
             self.assertEqual(report["unknown_controls"], [])
             self.assertEqual(report["renderer_mode"], "software")
             self.assertFalse(report["viewer_runtime_degraded"])
+            self.assertEqual(remaining_top_levels - baseline_top_levels, set())
 
             manifest_path = output_dir / "app_shell_audit_manifest.json"
             inventory_path = output_dir / "control_inventory.json"
