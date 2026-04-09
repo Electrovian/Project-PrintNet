@@ -14,6 +14,7 @@ try:
     from gui.Windows.controller.activity_sync import (  # noqa: E402
         ActivitySyncMixin,
         _load_activity_jobs_cache,
+        _load_activity_sync_config,
         _normalize_job_payload,
         _rows_from_jobs_by_id,
         _save_activity_jobs_cache,
@@ -22,6 +23,7 @@ try:
 except Exception:
     ActivitySyncMixin = None
     _load_activity_jobs_cache = None
+    _load_activity_sync_config = None
     _normalize_job_payload = None
     _rows_from_jobs_by_id = None
     _save_activity_jobs_cache = None
@@ -141,6 +143,43 @@ class _Holder(ActivitySyncMixin if ActivitySyncMixin is not None else object):
 
 @unittest.skipIf(ActivitySyncMixin is None, "activity sync module unavailable")
 class ActivitySyncPersistenceTests(unittest.TestCase):
+    def test_activity_sync_config_loads_valid_payload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp).joinpath("activity_sync_config.json")
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "saved_at_utc": "2026-04-07T16:00:00+00:00",
+                        "base_url": "http://127.0.0.1:8000/api/v1",
+                        "service_token": "printnet-local-activity",
+                        "me_user": "operator@example.com",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            payload = _load_activity_sync_config(config_path)
+
+            self.assertTrue(payload["available"])
+            self.assertEqual(payload["base_url"], "http://127.0.0.1:8000/api/v1")
+            self.assertEqual(payload["service_token"], "printnet-local-activity")
+            self.assertEqual(payload["me_user"], "operator@example.com")
+
+    def test_refresh_rebuilds_activity_client_when_config_appears_late(self):
+        holder = _Holder(client=None)
+        with mock.patch("gui.Windows.controller.activity_sync.QtCore.QTimer", _FakeTimer):
+            holder._init_activity_sync()
+        self.assertIsNone(holder._activity_sync_client)
+        self.assertFalse(hasattr(holder, "worker"))
+
+        holder._client = object()
+        holder._on_activity_view_refresh_requested()
+
+        self.assertIs(holder._activity_sync_client, holder._client)
+        self.assertTrue(holder._activity_sync_timer.started)
+        self.assertTrue(hasattr(holder, "worker"))
+
     def test_cache_round_trip_preserves_normalized_jobs_and_cursor(self):
         with tempfile.TemporaryDirectory() as tmp:
             cache_path = Path(tmp).joinpath("activity_jobs_cache.json")

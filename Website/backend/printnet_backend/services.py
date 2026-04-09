@@ -9,6 +9,7 @@ import os
 import re
 import secrets
 import smtplib
+import stat
 from email.message import EmailMessage
 from typing import Any, Mapping
 
@@ -190,7 +191,7 @@ class BackendState:
             ),
         ]
         self._bootstrap_super_admin_account()
-        os.makedirs(self.model_store_dir, exist_ok=True)
+        _ensure_writable_directory(self.model_store_dir)
 
     def create_session(self, *, user_id: str, role: str, trusted_role: bool = False) -> SessionRecord:
         user = str(user_id or "").strip()
@@ -597,6 +598,7 @@ class BackendState:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
         stored_name = f"{stamp}_{normalized_user}_{normalized_name}"
         stored_path = os.path.join(self.model_store_dir, stored_name)
+        _ensure_writable_directory(self.model_store_dir)
         try:
             with open(stored_path, "wb") as handle:
                 handle.write(blob)
@@ -975,6 +977,44 @@ def _sanitize_upload_file_name(value: object) -> str:
     if lower.endswith(".stl") or lower.endswith(".step") or lower.endswith(".stp"):
         return cleaned
     return f"{cleaned}.stl"
+
+
+def _ensure_writable_directory(path: object) -> str:
+    directory = os.path.abspath(str(path or "").strip())
+    if not directory:
+        raise BackendValidationError("MODEL_STORE_DIR_REQUIRED: model_store_dir is required.")
+    chain = _directory_chain(directory)
+    if not chain:
+        raise BackendOrchestrationError(f"MODEL_STORE_DIR_INVALID: {directory}")
+    existing_ancestor = chain[0]
+    _ensure_owner_directory_access(existing_ancestor)
+    for candidate in chain[1:]:
+        os.makedirs(candidate, exist_ok=True)
+        _ensure_owner_directory_access(candidate)
+    return directory
+
+
+def _directory_chain(path: str) -> list[str]:
+    target = os.path.abspath(path)
+    pending: list[str] = []
+    current = target
+    while True:
+        pending.append(current)
+        if os.path.isdir(current):
+            return list(reversed(pending))
+        parent = os.path.dirname(current)
+        if parent == current:
+            return []
+        current = parent
+
+
+def _ensure_owner_directory_access(path: str) -> None:
+    if not os.path.isdir(path):
+        return
+    current_mode = stat.S_IMODE(os.stat(path).st_mode)
+    desired_mode = current_mode | stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
+    if desired_mode != current_mode:
+        os.chmod(path, desired_mode)
 
 
 def _normalize_user_id_set(values: object) -> tuple[str, ...]:

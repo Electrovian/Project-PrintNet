@@ -169,12 +169,29 @@ function Wait-HttpOk {
         [int]$TimeoutSeconds = 60
     )
 
+    $CurlExe = $null
+    if ($env:OS -eq "Windows_NT") {
+        $CurlCmd = Get-Command "curl.exe" -ErrorAction SilentlyContinue
+        if ($null -ne $CurlCmd) {
+            $CurlExe = [string]$CurlCmd.Source
+        }
+    }
+
     $Deadline = (Get-Date).AddSeconds([math]::Max(1, $TimeoutSeconds))
     while ((Get-Date) -lt $Deadline) {
         try {
-            $Response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 5
-            if ($Response.StatusCode -ge 200 -and $Response.StatusCode -lt 300) {
-                return
+            if ($Url -like "https://*" -and $CurlExe) {
+                $StatusText = & $CurlExe -k -L -s -o NUL -w "%{http_code}" $Url
+                $StatusCode = 0
+                if ([int]::TryParse([string]$StatusText, [ref]$StatusCode) -and $StatusCode -ge 200 -and $StatusCode -lt 300) {
+                    return
+                }
+            }
+            else {
+                $Response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 5
+                if ($Response.StatusCode -ge 200 -and $Response.StatusCode -lt 300) {
+                    return
+                }
             }
         }
         catch {
@@ -199,7 +216,7 @@ function Invoke-ComposeSmoke {
             throw "docker compose up failed"
         }
         Wait-HttpOk -Url "http://127.0.0.1:8000/api/v1/health/live" -TimeoutSeconds 90
-        Wait-HttpOk -Url "http://127.0.0.1:8080" -TimeoutSeconds 90
+        Wait-HttpOk -Url "https://127.0.0.1:8080" -TimeoutSeconds 90
     }
     finally {
         & $DockerExe compose down | Out-Null

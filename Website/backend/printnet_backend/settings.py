@@ -7,7 +7,7 @@ import os
 @dataclass(frozen=True)
 class BackendSettings:
     app_name: str = "EON-OpenSlicer Backend"
-    app_version: str = "0.1.0"
+    app_version: str = "1.0.0"
     api_prefix: str = "/api/v1"
     backend_env: str = "development"
     default_role: str = "student"
@@ -51,7 +51,7 @@ class BackendSettings:
     def from_env(env: dict[str, str] | None = None) -> "BackendSettings":
         source = env or dict(os.environ)
         app_name = str(source.get("BACKEND_APP_NAME", "EON-OpenSlicer Backend")).strip() or "EON-OpenSlicer Backend"
-        app_version = str(source.get("BACKEND_APP_VERSION", "0.1.0")).strip() or "0.1.0"
+        app_version = str(source.get("BACKEND_APP_VERSION", "1.0.0")).strip() or "1.0.0"
         api_prefix = str(source.get("BACKEND_API_PREFIX", "/api/v1")).strip() or "/api/v1"
         if not api_prefix.startswith("/"):
             api_prefix = "/" + api_prefix

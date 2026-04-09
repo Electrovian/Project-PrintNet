@@ -647,7 +647,47 @@ class PrintMixin:
             "yes",
             "on",
         )
-        support_diagnostics = _build_support_diagnostics_payload(settings, None, source="runtime_defaults")
+        support_enabled = bool(getattr(settings, "support_enabled", False))
+        support_diagnostics = _build_support_diagnostics_payload(
+            settings,
+            None,
+            status="unavailable" if support_enabled else None,
+            source="legacy_v2" if support_enabled else "runtime_defaults",
+            warnings=["support_planning:diagnostics_unavailable"] if support_enabled else None,
+        )
+
+        detailed_error: Exception | None = None
+        if slice_v2_trimesh_auto is not None and not force_semantic_only:
+            mesh_items: list[trimesh.Trimesh] = []
+            for mesh in meshes:
+                if mesh is None:
+                    continue
+                mesh_copy = mesh.copy()
+                if np.any(mesh_shift):
+                    try:
+                        mesh_copy.apply_translation(mesh_shift)
+                    except Exception:
+                        pass
+                mesh_items.append(mesh_copy)
+            if not mesh_items:
+                mesh_items = [mesh_for_v2]
+            try:
+                detailed_path = str(
+                    slice_v2_trimesh_auto(
+                        meshes=mesh_items,
+                        output_gcode_path=output_path,
+                        settings=settings,
+                        source_path=source_path,
+                        combined_mesh=mesh_for_v2,
+                    )
+                )
+                return {
+                    "gcode_path": detailed_path,
+                    "support_diagnostics": support_diagnostics,
+                }
+            except Exception as exc:
+                detailed_error = exc
+
         semantic_error: Exception | None = None
         semantic_lines: list[str] | None = None
         if create_v2_context is not None and run_v2_pipeline is not None:
@@ -687,11 +727,9 @@ class PrintMixin:
                 support_diagnostics = _build_support_diagnostics_payload(
                     settings,
                     None,
-                    status="unavailable" if bool(getattr(settings, "support_enabled", False)) else None,
+                    status="unavailable" if support_enabled else None,
                     source="semantic_pipeline",
-                    warnings=["support_planning:diagnostics_unavailable"]
-                    if bool(getattr(settings, "support_enabled", False))
-                    else None,
+                    warnings=["support_planning:diagnostics_unavailable"] if support_enabled else None,
                     error=exc,
                 )
             finally:
@@ -705,7 +743,7 @@ class PrintMixin:
                         os.remove(temp_path)
                     except Exception:
                         pass
-        elif bool(getattr(settings, "support_enabled", False)):
+        elif support_enabled:
             support_diagnostics = _build_support_diagnostics_payload(
                 settings,
                 None,
@@ -714,38 +752,6 @@ class PrintMixin:
                 warnings=["support_planning:diagnostics_unavailable"],
                 error="semantic pipeline is unavailable",
             )
-
-        detailed_error: Exception | None = None
-        if slice_v2_trimesh_auto is not None and not force_semantic_only:
-            mesh_items: list[trimesh.Trimesh] = []
-            for mesh in meshes:
-                if mesh is None:
-                    continue
-                mesh_copy = mesh.copy()
-                if np.any(mesh_shift):
-                    try:
-                        mesh_copy.apply_translation(mesh_shift)
-                    except Exception:
-                        pass
-                mesh_items.append(mesh_copy)
-            if not mesh_items:
-                mesh_items = [mesh_for_v2]
-            try:
-                detailed_path = str(
-                    slice_v2_trimesh_auto(
-                        meshes=mesh_items,
-                        output_gcode_path=output_path,
-                        settings=settings,
-                        source_path=source_path,
-                        combined_mesh=mesh_for_v2,
-                    )
-                )
-                return {
-                    "gcode_path": detailed_path,
-                    "support_diagnostics": support_diagnostics,
-                }
-            except Exception as exc:
-                detailed_error = exc
 
         if semantic_lines:
             with open(output_path, "w", encoding="utf-8", newline="\n") as handle:

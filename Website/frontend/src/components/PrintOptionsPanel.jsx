@@ -125,6 +125,7 @@ export function PrintOptionsPanel({ options, onOptionChange, onSend }) {
             placeholder="printer-01"
             onChange={(event) => onOptionChange("printerId", event.target.value)}
           />
+          <div className="muted">Leave blank to hand off the uploaded model in the desktop app queue.</div>
         </label>
       </div>
       <button type="button" className="primary-button" onClick={onSend}>

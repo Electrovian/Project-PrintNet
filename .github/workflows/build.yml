@@ -38,7 +38,7 @@ jobs:
         run: |
           choco install innosetup --no-progress -y
           $version = "${{ github.ref_name }}"
-          if ([string]::IsNullOrWhiteSpace($version)) { $version = "0.1.0" }
+          if ([string]::IsNullOrWhiteSpace($version)) { $version = "1.0.0" }
           if ($version.StartsWith("v")) { $version = $version.Substring(1) }
           powershell -ExecutionPolicy Bypass -File installer/windows/build_installer.ps1 -AppExePath "dist/EON-OpenSlicer.exe" -AppVersion $version
 
@@ -48,7 +48,7 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --windowed --name EON-OpenSlicer --paths App --add-data "App/assets:assets" App/main.py
           chmod +x dist/EON-OpenSlicer
           zip -j EON-OpenSlicer-linux.zip dist/EON-OpenSlicer
-          VERSION="${GITHUB_REF_NAME:-0.1.0}"
+          VERSION="${GITHUB_REF_NAME:-1.0.0}"
           VERSION="${VERSION#v}"
           bash installer/linux/build_deb.sh "dist/EON-OpenSlicer" "$VERSION" "amd64"
 

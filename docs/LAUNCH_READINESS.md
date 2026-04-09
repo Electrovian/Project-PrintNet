@@ -24,7 +24,7 @@ For live website sharing on the same private network, use:
 powershell -ExecutionPolicy Bypass -File .\scripts\launch-website-docker.ps1
 ```
 
-That launcher is the authoritative website-sharing path. It detects the current LAN URL, ensures the Private-profile firewall rule for `8080`, generates QR assets plus a launch manifest in `%TEMP%`, and reports whether auth email is using `real_smtp` or the local Mailpit capture sink.
+That launcher is the authoritative website-sharing path. It detects the current LAN URL, publishes the frontend over self-signed HTTPS on `:8080`, ensures the LAN firewall rule for `8080`, generates QR assets plus a launch manifest in `%TEMP%`, and reports whether auth email is using `real_smtp` or the local Mailpit capture sink.
 
 ## What It Runs
 

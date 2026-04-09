@@ -15,6 +15,8 @@ from integrations.web_backend_activity import WebBackendActivityClient, WebBacke
 
 
 _ACTIVITY_CACHE_VERSION = 1
+_ACTIVITY_SYNC_CONFIG_VERSION = 1
+_DEVICE_QUEUE_VISIBLE_STATUSES = frozenset({"pending_printer", "queued"})
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -164,8 +166,56 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _project_root_path() -> Path:
+    return Path(__file__).resolve().parents[4]
+
+
+def _web_queue_upload_dir() -> Path:
+    configured = str(os.environ.get("EON_WEB_QUEUE_UPLOAD_DIR", "")).strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return _project_root_path().joinpath("Website", "backend", "runtime", "uploads")
+
+
+def _resolve_uploaded_model_path(model_name: object) -> Path | None:
+    normalized_name = Path(str(model_name or "").strip()).name
+    if not normalized_name:
+        return None
+    candidate = _web_queue_upload_dir().joinpath(normalized_name)
+    if candidate.is_file():
+        return candidate
+    return None
+
+
 def _activity_jobs_cache_path() -> Path:
     return user_cache_dir().joinpath("activity_jobs_cache.json")
+
+
+def _activity_sync_config_path() -> Path:
+    return user_cache_dir().joinpath("activity_sync_config.json")
+
+
+def _load_activity_sync_config(path: Path | None = None) -> dict[str, Any]:
+    config_path = path or _activity_sync_config_path()
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"available": False, "base_url": "", "service_token": "", "me_user": ""}
+    if not isinstance(payload, Mapping):
+        return {"available": False, "base_url": "", "service_token": "", "me_user": ""}
+    if payload.get("version") != _ACTIVITY_SYNC_CONFIG_VERSION:
+        return {"available": False, "base_url": "", "service_token": "", "me_user": ""}
+    base_url = str(payload.get("base_url", "")).strip().rstrip("/")
+    service_token = str(payload.get("service_token", "")).strip()
+    me_user = str(payload.get("me_user", "")).strip().lower()
+    if not base_url or not service_token:
+        return {"available": False, "base_url": "", "service_token": "", "me_user": me_user}
+    return {
+        "available": True,
+        "base_url": base_url,
+        "service_token": service_token,
+        "me_user": me_user,
+    }
 
 
 def _load_activity_jobs_cache(path: Path | None = None) -> dict[str, Any]:
@@ -352,6 +402,41 @@ def _job_to_activity_entry(job: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _device_queue_rows_from_jobs_by_id(jobs_by_id: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+    ordered_jobs = sorted(
+        [dict(item) for item in jobs_by_id.values() if isinstance(item, Mapping)],
+        key=_job_sort_key,
+        reverse=True,
+    )
+    rows: list[dict[str, Any]] = []
+    for job in ordered_jobs:
+        status = str(job.get("status", "")).strip().lower()
+        if status not in _DEVICE_QUEUE_VISIBLE_STATUSES:
+            continue
+        model_name = str(job.get("model_name", "")).strip()
+        import_path = _resolve_uploaded_model_path(model_name)
+        if import_path is not None:
+            import_hint = str(import_path)
+        else:
+            expected_path = _web_queue_upload_dir().joinpath(Path(model_name).name) if model_name else _web_queue_upload_dir()
+            import_hint = f"Model file not found: {expected_path}"
+        rows.append(
+            {
+                "job_id": str(job.get("job_id", "")).strip(),
+                "job_label": model_name or str(job.get("job_id", "")).strip() or "job",
+                "model_name": model_name,
+                "status": str(job.get("status", "")).strip() or "unknown",
+                "user": str(job.get("requested_by", "")).strip() or "unknown",
+                "printer": str(job.get("printer_id", "")).strip() or "Unassigned",
+                "when": _format_when(_parse_iso_datetime(job.get("created_at_utc")), fallback=str(job.get("created_at_utc", ""))),
+                "importable": import_path is not None,
+                "import_path": str(import_path) if import_path is not None else "",
+                "import_hint": import_hint,
+            }
+        )
+    return rows
+
+
 class ActivitySyncMixin:
     def _init_activity_sync(self) -> None:
         timer = getattr(self, "_activity_sync_timer", None)
@@ -401,6 +486,7 @@ class ActivitySyncMixin:
             if self._activity_sync_client is not None:
                 self._activity_sync_timer.start()
         self._apply_compliance_banner()
+        self._refresh_device_queue_rows()
 
     def _refresh_compliance_status(self) -> None:
         client = getattr(self, "_activity_sync_client", None)
@@ -478,6 +564,16 @@ class ActivitySyncMixin:
         if hasattr(self, "activity_view"):
             self.activity_view.set_me_activity(me_rows)
             self.activity_view.set_printer_activity(normalized_rows)
+        self._refresh_device_queue_rows()
+
+    def _refresh_device_queue_rows(self) -> None:
+        if not hasattr(self, "device_view") or not hasattr(self.device_view, "set_queue_jobs"):
+            return
+        jobs_by_id = getattr(self, "_activity_jobs_by_id", {})
+        if not isinstance(jobs_by_id, Mapping):
+            self.device_view.set_queue_jobs([])
+            return
+        self.device_view.set_queue_jobs(_device_queue_rows_from_jobs_by_id(jobs_by_id))
 
     def _restore_activity_rows_from_cache(self, *, notice_key: str) -> bool:
         if bool(getattr(self, "_compliance_blocked", False)):
@@ -507,6 +603,12 @@ class ActivitySyncMixin:
         explicit = str(os.environ.get("EON_ACTIVITY_ME_USER", "")).strip().lower()
         if explicit:
             return explicit
+        config = _load_activity_sync_config()
+        configured = str(config.get("me_user", "")).strip().lower()
+        if configured:
+            return configured
+        if bool(config.get("available", False)):
+            return ""
         username = str(os.environ.get("USERNAME", "")).strip().lower()
         return username
 
@@ -515,11 +617,20 @@ class ActivitySyncMixin:
         if not enabled:
             return None
 
-        base_url = str(os.environ.get("EON_ACTIVITY_BACKEND_URL", "http://127.0.0.1:8000/api/v1")).strip()
+        config = _load_activity_sync_config()
+        base_url = str(os.environ.get("EON_ACTIVITY_BACKEND_URL", "")).strip()
+        if not base_url:
+            base_url = str(config.get("base_url", "")).strip()
+        if not base_url:
+            base_url = "http://127.0.0.1:8000/api/v1"
         if not base_url:
             return None
 
         service_token = str(os.environ.get("EON_ACTIVITY_SERVICE_TOKEN", "")).strip()
+        if not service_token:
+            service_token = str(os.environ.get("BACKEND_ACTIVITY_SERVICE_TOKEN", "")).strip()
+        if not service_token:
+            service_token = str(config.get("service_token", "")).strip()
         if not service_token:
             return None
         timeout_ms = _env_int(
@@ -537,11 +648,28 @@ class ActivitySyncMixin:
         except WebBackendActivityError:
             return None
 
+    def _ensure_activity_sync_client(self) -> WebBackendActivityClient | None:
+        client = getattr(self, "_activity_sync_client", None)
+        if client is not None:
+            return client
+        client = self._build_activity_sync_client()
+        if client is None:
+            return None
+        self._activity_sync_client = client
+        self._activity_me_user = self._resolve_activity_me_user()
+        self._refresh_compliance_status()
+        if not bool(getattr(self, "_compliance_blocked", False)):
+            timer = getattr(self, "_activity_sync_timer", None)
+            if timer is not None and hasattr(timer, "start"):
+                timer.start()
+        self._apply_compliance_banner()
+        return client
+
     def _on_activity_view_refresh_requested(self) -> None:
         if bool(getattr(self, "_compliance_blocked", False)):
             self._apply_compliance_banner()
             return
-        if self._activity_sync_client is not None:
+        if self._ensure_activity_sync_client() is not None:
             self._request_activity_refresh(force=True)
             return
         self._restore_activity_rows_from_cache(notice_key="activity.cache.notice.not_configured")
@@ -556,7 +684,7 @@ class ActivitySyncMixin:
             return
         if bool(getattr(self, "_compliance_blocked", False)):
             return
-        client = getattr(self, "_activity_sync_client", None)
+        client = self._ensure_activity_sync_client()
         if client is None:
             if force:
                 self._restore_activity_rows_from_cache(notice_key="activity.cache.notice.not_configured")
@@ -670,6 +798,32 @@ class ActivitySyncMixin:
                     "Showing cached activity because live sync is unavailable.",
                 )
             )
+
+    def _on_device_queue_import_requested(self, job: object) -> None:
+        if not isinstance(job, Mapping):
+            return
+        model_name = str(job.get("model_name", "")).strip()
+        job_id = str(job.get("job_id", "")).strip()
+        import_path = str(job.get("import_path", "")).strip()
+        resolved = Path(import_path) if import_path else _resolve_uploaded_model_path(model_name)
+        if resolved is None or not resolved.exists():
+            expected = _web_queue_upload_dir().joinpath(Path(model_name).name) if model_name else _web_queue_upload_dir()
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("device.queue.import.title", "Import queued job"),
+                tr(
+                    "device.queue.import.missing",
+                    "Queued model file is unavailable.\n\nExpected: {path}",
+                    path=str(expected),
+                ),
+            )
+            return
+        if hasattr(self, "_activate_mode"):
+            self._activate_mode("prepare")
+        if hasattr(self, "statusBar"):
+            label = model_name or job_id or resolved.name
+            self.statusBar().showMessage(f"Importing queued job: {label}")
+        self._add_model_from_path_async(str(resolved))
 
     def _build_me_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not rows:

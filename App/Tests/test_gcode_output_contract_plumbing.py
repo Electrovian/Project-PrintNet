@@ -81,6 +81,54 @@ class OutputContractPlumbingTests(unittest.TestCase):
         self.assertFalse(resolved_settings.gcode_absolute_extrusion)
         self.assertEqual(resolved_settings.firmware_flavor, "klipper")
 
+    def test_desktop_legacy_slice_path_skips_semantic_pipeline_when_detailed_path_succeeds(self) -> None:
+        controller = _PipelineController({"connector_type": "moonraker"})
+        mesh = _tiny_mesh()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_path = os.path.join(temp_dir, "legacy.gcode")
+            with mock.patch("gui.Windows.controller.print.slice_v2_trimesh_auto", return_value=out_path):
+                with mock.patch("gui.Windows.controller.print.create_v2_context") as patched_create_context:
+                    with mock.patch("gui.Windows.controller.print.run_v2_pipeline") as patched_run_pipeline:
+                        result = controller._slice_with_v2_pipeline(
+                            meshes=[mesh],
+                            combined_mesh=mesh,
+                            settings=SliceSettings(),
+                            source_path="C:/models/part.stl",
+                            output_gcode_path=out_path,
+                            perf={"max_threads": 1, "gpu_mode": "off"},
+                        )
+
+        self.assertEqual(result["gcode_path"], out_path)
+        patched_create_context.assert_not_called()
+        patched_run_pipeline.assert_not_called()
+
+    def test_desktop_legacy_slice_path_marks_support_diagnostics_unavailable_without_semantic_pass(self) -> None:
+        controller = _PipelineController({"connector_type": "moonraker"})
+        mesh = _tiny_mesh()
+        settings = SliceSettings(support_enabled=True, support_type="tree", support_style="organic")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_path = os.path.join(temp_dir, "legacy_supports.gcode")
+            with mock.patch("gui.Windows.controller.print.slice_v2_trimesh_auto", return_value=out_path):
+                with mock.patch("gui.Windows.controller.print.create_v2_context") as patched_create_context:
+                    result = controller._slice_with_v2_pipeline(
+                        meshes=[mesh],
+                        combined_mesh=mesh,
+                        settings=settings,
+                        source_path="C:/models/part.stl",
+                        output_gcode_path=out_path,
+                        perf={"max_threads": 1, "gpu_mode": "off"},
+                    )
+
+        self.assertEqual(result["support_diagnostics"]["status"], "unavailable")
+        self.assertEqual(result["support_diagnostics"]["support_style"], "organic")
+        self.assertIn(
+            "support_planning:diagnostics_unavailable",
+            result["support_diagnostics"]["warnings"],
+        )
+        patched_create_context.assert_not_called()
+
     def test_desktop_semantic_fallback_uses_strict_contract_settings(self) -> None:
         controller = _PipelineController({"connector_type": "moonraker"})
         mesh = _tiny_mesh()

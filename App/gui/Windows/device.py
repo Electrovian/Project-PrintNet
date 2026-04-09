@@ -10,6 +10,7 @@ class DeviceView(QtWidgets.QWidget):
     send_requested = QtCore.pyqtSignal(object)
     save_requested = QtCore.pyqtSignal()
     email_requested = QtCore.pyqtSignal()
+    queue_job_import_requested = QtCore.pyqtSignal(object)
     printer_changed = QtCore.pyqtSignal(object)
     add_printer_requested = QtCore.pyqtSignal()
     diagnostics_requested = QtCore.pyqtSignal(object)
@@ -18,6 +19,7 @@ class DeviceView(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._printers = []
+        self._queue_jobs = []
         self._build_ui()
 
     def _build_ui(self):
@@ -151,10 +153,40 @@ class DeviceView(QtWidgets.QWidget):
         queue_title = QtWidgets.QLabel(tr("device.queue.title", "Queue"), queue_frame)
         queue_title.setObjectName("DeviceSectionTitle")
         queue_layout.addWidget(queue_title)
-        queue_placeholder = QtWidgets.QLabel(tr("device.queue.empty", "No queued jobs yet."), queue_frame)
-        queue_placeholder.setObjectName("DeviceQueuePlaceholder")
-        queue_placeholder.setAlignment(QtCore.Qt.AlignCenter)
-        queue_layout.addWidget(queue_placeholder, 1)
+        self._queue_placeholder = QtWidgets.QLabel(tr("device.queue.empty", "No queued jobs yet."), queue_frame)
+        self._queue_placeholder.setObjectName("DeviceQueuePlaceholder")
+        self._queue_placeholder.setAlignment(QtCore.Qt.AlignCenter)
+        queue_layout.addWidget(self._queue_placeholder, 1)
+        self._queue_table = QtWidgets.QTableWidget(0, 4, queue_frame)
+        self._queue_table.setObjectName("DeviceQueueTable")
+        self._queue_table.setHorizontalHeaderLabels(
+            [
+                tr("activity.table.job", "Job"),
+                tr("activity.table.status", "Status"),
+                tr("activity.table.user", "User"),
+                tr("activity.table.printer", "Printer"),
+            ]
+        )
+        self._queue_table.verticalHeader().setVisible(False)
+        self._queue_table.setShowGrid(False)
+        self._queue_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self._queue_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self._queue_table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self._queue_table.setFocusPolicy(QtCore.Qt.NoFocus)
+        queue_header = self._queue_table.horizontalHeader()
+        queue_header.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
+        for idx in range(1, 4):
+            queue_header.setSectionResizeMode(idx, QtWidgets.QHeaderView.ResizeToContents)
+        self._queue_table.hide()
+        queue_layout.addWidget(self._queue_table, 1)
+        self._queue_import_btn = QtWidgets.QPushButton(
+            tr("device.queue.button.import", "Import Into App"),
+            queue_frame,
+        )
+        self._queue_import_btn.setObjectName("DeviceQueueImport")
+        self._queue_import_btn.setEnabled(False)
+        self._queue_import_btn.hide()
+        queue_layout.addWidget(self._queue_import_btn)
         right_col = QtWidgets.QVBoxLayout()
         right_col.setSpacing(16)
         right_col.addWidget(queue_frame, 2)
@@ -187,6 +219,9 @@ class DeviceView(QtWidgets.QWidget):
         self._send_btn.clicked.connect(self._emit_send)
         self._save_btn.clicked.connect(self.save_requested.emit)
         self._email_btn.clicked.connect(self.email_requested.emit)
+        self._queue_table.itemSelectionChanged.connect(self._update_queue_actions)
+        self._queue_table.itemDoubleClicked.connect(lambda _item: self._emit_queue_import())
+        self._queue_import_btn.clicked.connect(self._emit_queue_import)
         self._add_printer_btn.clicked.connect(self.add_printer_requested.emit)
         self._diagnostics_btn.clicked.connect(self._emit_diagnostics)
         self._download_installer_btn.clicked.connect(self.download_installer_requested.emit)
@@ -236,6 +271,10 @@ class DeviceView(QtWidgets.QWidget):
         if index < 0 or index >= len(self._printers):
             return None
         return self._printers[index]
+
+    def set_queue_jobs(self, jobs):
+        self._queue_jobs = [dict(item) for item in list(jobs or []) if isinstance(item, dict)]
+        self._populate_queue_jobs()
 
     def select_printer_by_name(self, name: str, emit: bool = True):
         target = str(name or "").strip().lower()
@@ -351,6 +390,55 @@ class DeviceView(QtWidgets.QWidget):
             return
         self.diagnostics_requested.emit(printer)
 
+    def _populate_queue_jobs(self):
+        if not hasattr(self, "_queue_table"):
+            return
+        rows = list(self._queue_jobs)
+        self._queue_table.clearContents()
+        self._queue_table.setRowCount(len(rows))
+        for row_idx, row in enumerate(rows):
+            values = (
+                str(row.get("job_label", row.get("job_id", "-")) or "-"),
+                str(row.get("status", "-") or "-"),
+                str(row.get("user", "-") or "-"),
+                str(row.get("printer", "-") or "-"),
+            )
+            for col_idx, value in enumerate(values):
+                item = QtWidgets.QTableWidgetItem(value)
+                if col_idx in (1, 2, 3):
+                    item.setTextAlignment(QtCore.Qt.AlignCenter)
+                self._queue_table.setItem(row_idx, col_idx, item)
+        has_rows = bool(rows)
+        self._queue_placeholder.setVisible(not has_rows)
+        self._queue_table.setVisible(has_rows)
+        self._queue_import_btn.setVisible(has_rows)
+        if has_rows:
+            self._queue_table.setCurrentCell(0, 0)
+        self._update_queue_actions()
+
+    def _current_queue_job(self):
+        row = int(self._queue_table.currentRow()) if hasattr(self, "_queue_table") else -1
+        if row < 0 or row >= len(self._queue_jobs):
+            return None
+        return dict(self._queue_jobs[row])
+
+    def _update_queue_actions(self):
+        if not hasattr(self, "_queue_import_btn"):
+            return
+        job = self._current_queue_job()
+        enabled = bool(job and job.get("importable", False))
+        self._queue_import_btn.setEnabled(enabled)
+        hint = ""
+        if isinstance(job, dict):
+            hint = str(job.get("import_hint", "") or "").strip()
+        self._queue_import_btn.setToolTip(hint)
+
+    def _emit_queue_import(self):
+        job = self._current_queue_job()
+        if job is None or not bool(job.get("importable", False)):
+            return
+        self.queue_job_import_requested.emit(job)
+
     def update_live_status(
         self,
         head_pos: tuple[float, float, float] | None = None,
@@ -419,6 +507,16 @@ class DeviceView(QtWidgets.QWidget):
             f"  border: 1px solid {theme_css('action_panel_border')};"
             f"  background: {theme_css('action_panel_bg')};"
             "  border-radius: 8px;"
+            "}"
+            "QTableWidget#DeviceQueueTable {"
+            f"  background: {theme_css('popup_bg')};"
+            f"  border: 1px solid {theme_css('action_panel_border')};"
+            "  border-radius: 6px;"
+            "  gridline-color: transparent;"
+            "}"
+            "QTableWidget#DeviceQueueTable::item {"
+            "  padding: 5px 8px;"
+            f"  border-bottom: 1px solid {theme_css('action_panel_border')};"
             "}"
             "QFrame#DeviceConnected {"
             f"  border: 1px solid {theme_css('action_panel_border')};"

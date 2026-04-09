@@ -9,6 +9,8 @@ services:
     restart: unless-stopped
     environment:
       BACKEND_API_PREFIX: /api/v1
+      BACKEND_OPERATOR_USER_IDS: ${BACKEND_OPERATOR_USER_IDS:-queue-worker}
+      BACKEND_ACTIVITY_SERVICE_TOKEN: ${BACKEND_ACTIVITY_SERVICE_TOKEN:-printnet-local-activity}
       BACKEND_QUEUE_NAME: default
       BACKEND_QUEUE_WORKER_MAX_JOBS_PER_TICK: "5"
       BACKEND_QUEUE_WORKER_HEARTBEAT_TTL_SECONDS: "60"
@@ -54,8 +56,14 @@ services:
       dockerfile: Dockerfile
     image: printnet-frontend:local
     restart: unless-stopped
+    environment:
+      PRINTNET_API_BASE_URL: ${PRINTNET_API_BASE_URL:-/api/v1}
+      PRINTNET_FRONTEND_SHARE_URL: ${PRINTNET_FRONTEND_SHARE_URL:-}
+      PRINTNET_TLS_COMMON_NAME: ${PRINTNET_TLS_COMMON_NAME:-localhost}
+      PRINTNET_TLS_ALT_IP: ${PRINTNET_TLS_ALT_IP:-127.0.0.1}
+      PRINTNET_TLS_ALT_DNS: ${PRINTNET_TLS_ALT_DNS:-localhost}
     ports:
-      - "8080:80"
+      - "8080:443"
     depends_on:
       - backend
 

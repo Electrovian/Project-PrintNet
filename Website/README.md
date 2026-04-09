@@ -16,6 +16,7 @@ The launcher:
 
 - starts `frontend`, `backend`, `worker`, `redis`, `mongo`, and `mailpit`
 - detects the current LAN URL for other devices on the same private network
+- publishes the frontend over self-signed HTTPS on port `8080`
 - creates or refreshes the Windows firewall rule for port `8080`
 - generates QR assets and a launch manifest under `%TEMP%\printnet_website_launch_<timestamp>\`
 - prints the effective email mode (`real_smtp` or `mail_capture`)
@@ -34,11 +35,11 @@ docker compose up --build -d frontend backend worker redis mongo mailpit
 
 Local URLs:
 
-- Frontend: `http://localhost:8080`
+- Frontend: `https://localhost:8080`
 - Backend health: `http://localhost:8000/api/v1/health/live`
 - Mail capture UI when using the default local email sink: `http://localhost:8025`
 
-The supported LAN-sharing path is the Docker frontend on port `8080`. Direct backend startup stays local-only and is not the QR target.
+The supported LAN-sharing path is the Docker frontend on port `8080` over HTTPS. The launcher QR points at the HTTPS `/signin` entry URL. Direct backend startup stays local-only and is not the QR target.
 
 The supported mobile launch path for this demo is the Toga/Briefcase app in `Mobile/app_mobile.py`.
 The Flutter runner under `Mobile/flutter_runner/` is experimental/future work and should not be treated as the launch target.

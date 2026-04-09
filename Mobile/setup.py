@@ -22,7 +22,7 @@ APP_ROOT = REPO_ROOT / "App"
 
 setup(
     name="eon-openslicer",
-    version="0.1.0",
+    version="1.0.0",
     description="EON-OpenSlicer desktop and mobile entry points",
     package_dir={"": str(REPO_ROOT)},
     packages=find_packages(where=str(REPO_ROOT), include=["App", "App.*"]),

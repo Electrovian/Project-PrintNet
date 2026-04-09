@@ -143,6 +143,8 @@ class MainController(LoadMixin, PrintMixin, ProjectMixin, ActivitySyncMixin, UiM
             self.device_view.printer_changed.connect(
                 lambda printer: self._apply_printer_profile(printer, source="device")
             )
+        if hasattr(self, "device_view") and hasattr(self.device_view, "queue_job_import_requested"):
+            self.device_view.queue_job_import_requested.connect(self._on_device_queue_import_requested)
         if hasattr(self, "device_view") and hasattr(self.device_view, "add_printer_requested"):
             self.device_view.add_printer_requested.connect(self._on_device_add_printer_requested)
         if hasattr(self, "device_view") and hasattr(self.device_view, "diagnostics_requested"):
