@@ -11,6 +11,10 @@ EON-OpenSlicer
 **Advisor:** Jeremy Hill
 
 ---
+## Project Description
+PrintNet is a web-based 3D printing management platform designed for university use. It allows students to upload models, configure print settings through an in-browser slicer, and submit jobs for approval. Administrators can manage queues and printers efficiently. The system improves accessibility, organization, and overall efficiency of shared 3D printing resources.
+
+---
 
 ## Project Topic Area
 Development of a web-based platform for the 3D Print Lab, with server integration for cloud-based print management. The system will allow students to submit print jobs online, lab managers to approve and monitor jobs, and admins to manage printer resources, maintenance, and user access.
