@@ -56,6 +56,11 @@ No direct expenses were required for this project. We used personal computers, f
 
 ---
 
+## Meeting Schedule
+The team met regularly every **Tuesday and Thursday from 7:00 PM to 8:00 PM** throughout the project. These recurring meetings were used to review progress, discuss implementation issues, divide tasks, test features, and plan upcoming work. This meeting schedule serves as part of the evidence supporting team effort and collaboration across the semester.
+
+---
+
 ## Effort Summary
 All team members met the required effort:
 
