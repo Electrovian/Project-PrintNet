@@ -18,7 +18,7 @@ from gui.Windows.controller.activity_sync import (  # noqa: E402
 class ActivitySyncDeviceQueueTests(unittest.TestCase):
     def test_resolve_uploaded_model_path_uses_configured_upload_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
-            expected = Path(tmp).joinpath("queued-part.stl")
+            expected = Path(tmp).joinpath("queued-part.stl").resolve()
             expected.write_text("solid part", encoding="utf-8")
             with mock.patch.dict(os.environ, {"EON_WEB_QUEUE_UPLOAD_DIR": tmp}, clear=False):
                 resolved = _resolve_uploaded_model_path("../queued-part.stl")

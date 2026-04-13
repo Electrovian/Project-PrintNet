@@ -173,7 +173,10 @@ def _project_root_path() -> Path:
 def _web_queue_upload_dir() -> Path:
     configured = str(os.environ.get("EON_WEB_QUEUE_UPLOAD_DIR", "")).strip()
     if configured:
-        return Path(configured).expanduser().resolve()
+        configured_path = Path(configured).expanduser()
+        if configured_path.is_absolute():
+            return configured_path
+        return configured_path.resolve()
     return _project_root_path().joinpath("Website", "backend", "runtime", "uploads")
 
 
@@ -183,7 +186,7 @@ def _resolve_uploaded_model_path(model_name: object) -> Path | None:
         return None
     candidate = _web_queue_upload_dir().joinpath(normalized_name)
     if candidate.is_file():
-        return candidate
+        return candidate.resolve()
     return None
 
 
