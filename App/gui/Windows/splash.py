@@ -34,7 +34,7 @@ class SplashScreen(QtWidgets.QDialog):
         self._progress_bar = bar
         self._progress_anim = None
 
-        version_label = QtWidgets.QLabel("Version: 0.1", outer)
+        version_label = QtWidgets.QLabel("Version: 1.0.0", outer)
         version_label.setObjectName("SplashVersion")
         version_label.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
 

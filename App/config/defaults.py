@@ -6,7 +6,7 @@ DEFAULTS = {
         "status_ready": "Ready",
     },
     "viewer": {
-        "default_view": {"distance": 300.0, "elevation": 30.0, "azimuth": -45.0},
+        "default_view": {"distance": 300.0, "elevation": 30.0, "azimuth": 45.0},
         "grid_size": (250, 200, 0),
         "grid_spacing": (10, 10, 1),
         "snap_enabled": False,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 
-from .extrusion_flow import build_extrusion_flow_model
+from .extrusion_flow import FEATURE_PERIMETER, build_extrusion_flow_model
 from .gcode_emission import emit_gcode_semantics
 from .gcode_validation import validate_gcode_semantics
 from .geometry import EPSILON
@@ -143,6 +143,42 @@ def _macro_value(value: object) -> list[str] | str:
     return []
 
 
+def _value_from_mapping_or_attr(value: object, key: str, default: object = None) -> object:
+    if isinstance(value, dict):
+        return value.get(key, default)
+    return getattr(value, key, default)
+
+
+def _point_xy(item: object) -> tuple[float, float]:
+    if isinstance(item, (list, tuple)) and len(item) >= 2:
+        return (_to_float(item[0], 0.0), _to_float(item[1], 0.0))
+    return (
+        _to_float(getattr(item, "x", 0.0), 0.0),
+        _to_float(getattr(item, "y", 0.0), 0.0),
+    )
+
+
+def _normalize_loop_points(points: object) -> tuple[tuple[float, float], ...]:
+    if not isinstance(points, (list, tuple)):
+        return ()
+    normalized: list[tuple[float, float]] = []
+    for item in points:
+        x, y = _point_xy(item)
+        if normalized:
+            prev_x, prev_y = normalized[-1]
+            if abs(prev_x - x) <= EPSILON and abs(prev_y - y) <= EPSILON:
+                continue
+        normalized.append((x, y))
+    if len(normalized) > 1:
+        first_x, first_y = normalized[0]
+        last_x, last_y = normalized[-1]
+        if abs(first_x - last_x) <= EPSILON and abs(first_y - last_y) <= EPSILON:
+            normalized.pop()
+    if len(normalized) < 3:
+        return ()
+    return tuple(normalized)
+
+
 def _layer_polygons(layer_contours: object, layer_index: int) -> list[object]:
     if not isinstance(layer_contours, list):
         return []
@@ -165,6 +201,55 @@ def _layer_polygons(layer_contours: object, layer_index: int) -> list[object]:
     return polygons
 
 
+def _best_point_index(points: tuple[object, ...], target: tuple[float, float]) -> int:
+    best_index = 0
+    best_dist = float("inf")
+    tx, ty = target
+    for idx in range(len(points)):
+        px, py = _point_xy(points[idx])
+        dist = ((px - tx) ** 2) + ((py - ty) ** 2)
+        if dist < best_dist:
+            best_dist = dist
+            best_index = idx
+    return best_index
+
+
+def _seam_index_for_points(
+    *,
+    points: tuple[object, ...],
+    seam_position: str,
+    layer_index: int,
+    rng: random.Random,
+    aligned_reference: tuple[float, float] | None,
+    previous_target: tuple[float, float] | None,
+) -> tuple[int, tuple[float, float] | None]:
+    if not points:
+        return 0, aligned_reference
+
+    strategy = str(seam_position or "aligned").strip().lower()
+    if strategy == "random":
+        idx = rng.randrange(len(points))
+    elif strategy == "rear":
+        idx = min(
+            range(len(points)),
+            key=lambda candidate: (_point_xy(points[candidate])[1], _point_xy(points[candidate])[0]),
+        )
+    elif strategy == "nearest" and previous_target is not None:
+        idx = _best_point_index(points, previous_target)
+    elif strategy == "aligned":
+        if aligned_reference is None:
+            idx = min(
+                range(len(points)),
+                key=lambda candidate: (_point_xy(points[candidate])[1], _point_xy(points[candidate])[0]),
+            )
+            aligned_reference = _point_xy(points[idx])
+        else:
+            idx = _best_point_index(points, aligned_reference)
+    else:
+        idx = layer_index % len(points)
+    return idx, aligned_reference
+
+
 def _seam_point_for_polygon(
     *,
     points: tuple[object, ...],
@@ -177,47 +262,15 @@ def _seam_point_for_polygon(
     if not points:
         return 0.0, 0.0, aligned_reference
 
-    def _point_xy(index: int) -> tuple[float, float]:
-        item = points[index]
-        return (
-            _to_float(getattr(item, "x", 0.0), 0.0),
-            _to_float(getattr(item, "y", 0.0), 0.0),
-        )
-
-    def _best_by_distance(target: tuple[float, float]) -> int:
-        best_index = 0
-        best_dist = float("inf")
-        tx, ty = target
-        for idx in range(len(points)):
-            px, py = _point_xy(idx)
-            dist = ((px - tx) ** 2) + ((py - ty) ** 2)
-            if dist < best_dist:
-                best_dist = dist
-                best_index = idx
-        return best_index
-
-    strategy = str(seam_position or "aligned").strip().lower()
-    if strategy == "random":
-        idx = rng.randrange(len(points))
-    elif strategy == "rear":
-        idx = min(
-            range(len(points)),
-            key=lambda candidate: (_point_xy(candidate)[1], _point_xy(candidate)[0]),
-        )
-    elif strategy == "nearest" and previous_target is not None:
-        idx = _best_by_distance(previous_target)
-    elif strategy == "aligned":
-        if aligned_reference is None:
-            idx = min(
-                range(len(points)),
-                key=lambda candidate: (_point_xy(candidate)[1], _point_xy(candidate)[0]),
-            )
-            aligned_reference = _point_xy(idx)
-        else:
-            idx = _best_by_distance(aligned_reference)
-    else:
-        idx = layer_index % len(points)
-    x, y = _point_xy(idx)
+    idx, aligned_reference = _seam_index_for_points(
+        points=points,
+        seam_position=seam_position,
+        layer_index=layer_index,
+        rng=rng,
+        aligned_reference=aligned_reference,
+        previous_target=previous_target,
+    )
+    x, y = _point_xy(points[idx])
     return x, y, aligned_reference
 
 
@@ -308,6 +361,109 @@ def _build_layer_xy_targets(
     return targets
 
 
+def _build_layer_perimeter_paths(
+    *,
+    perimeters_artifact: dict,
+    mesh_artifact: dict,
+    bed_x_mm: float,
+    bed_y_mm: float,
+    layer_count: int,
+    seam_position: str,
+    seam_seed: int,
+) -> list[list[dict[str, object]]]:
+    bed_x = max(10.0, float(bed_x_mm))
+    bed_y = max(10.0, float(bed_y_mm))
+    bed_center_x = bed_x * 0.5
+    bed_center_y = bed_y * 0.5
+
+    mesh_x_min = _to_float(mesh_artifact.get("x_min_mm", 0.0), 0.0)
+    mesh_x_max = _to_float(mesh_artifact.get("x_max_mm", mesh_x_min), mesh_x_min)
+    mesh_y_min = _to_float(mesh_artifact.get("y_min_mm", 0.0), 0.0)
+    mesh_y_max = _to_float(mesh_artifact.get("y_max_mm", mesh_y_min), mesh_y_min)
+    mesh_center_x = (mesh_x_min + mesh_x_max) * 0.5
+    mesh_center_y = (mesh_y_min + mesh_y_max) * 0.5
+
+    raw_layer_plans = perimeters_artifact.get("layer_plans", [])
+    if not isinstance(raw_layer_plans, list):
+        return [[] for _ in range(max(1, int(layer_count)))]
+
+    loops_by_layer: dict[int, list[object]] = {}
+    for fallback_index, plan in enumerate(raw_layer_plans):
+        layer_index = _to_int(_value_from_mapping_or_attr(plan, "layer_index", fallback_index), fallback_index)
+        loops = _value_from_mapping_or_attr(plan, "loops", [])
+        if isinstance(loops, tuple):
+            loops_by_layer[layer_index] = list(loops)
+        elif isinstance(loops, list):
+            loops_by_layer[layer_index] = loops
+
+    seam_mode = str(seam_position or "aligned").strip().lower()
+    seam_rng = random.Random(int(seam_seed))
+    aligned_reference_xy: tuple[float, float] | None = None
+    previous_extrude_xy: tuple[float, float] | None = None
+
+    layer_paths: list[list[dict[str, object]]] = []
+    for layer_index in range(max(1, int(layer_count))):
+        loops_for_layer = loops_by_layer.get(layer_index, [])
+        paths_for_layer: list[dict[str, object]] = []
+        for loop in loops_for_layer:
+            points = _normalize_loop_points(_value_from_mapping_or_attr(loop, "points", ()))
+            if len(points) < 3:
+                continue
+            seam_index, aligned_reference_xy = _seam_index_for_points(
+                points=tuple(points),
+                seam_position=seam_mode,
+                layer_index=layer_index,
+                rng=seam_rng,
+                aligned_reference=aligned_reference_xy,
+                previous_target=previous_extrude_xy,
+            )
+            ordered_points = list(points[seam_index:]) + list(points[:seam_index])
+            translated_points = tuple(
+                (
+                    float(point[0] - mesh_center_x + bed_center_x),
+                    float(point[1] - mesh_center_y + bed_center_y),
+                )
+                for point in ordered_points
+            )
+            paths_for_layer.append(
+                {
+                    "layer_index": layer_index,
+                    "island_index": _to_int(_value_from_mapping_or_attr(loop, "island_index", 0), 0),
+                    "role": str(_value_from_mapping_or_attr(loop, "role", "outer")),
+                    "shell_index": _to_int(_value_from_mapping_or_attr(loop, "shell_index", 0), 0),
+                    "path_length_mm": _to_float(_value_from_mapping_or_attr(loop, "path_length_mm", 0.0), 0.0),
+                    "points": translated_points,
+                }
+            )
+            previous_extrude_xy = ordered_points[0]
+        layer_paths.append(paths_for_layer)
+    return layer_paths
+
+
+def _feature_metric_values(
+    layer_flow_plans: object,
+    *,
+    feature_name: str,
+    attr_name: str,
+) -> list[float]:
+    if not isinstance(layer_flow_plans, list):
+        return []
+    normalized_feature = str(feature_name).strip().lower()
+    values: list[float] = []
+    for layer_plan in layer_flow_plans:
+        features = _value_from_mapping_or_attr(layer_plan, "features", [])
+        value = 0.0
+        if isinstance(features, list):
+            for feature in features:
+                feature_key = str(_value_from_mapping_or_attr(feature, "feature", "")).strip().lower()
+                if feature_key != normalized_feature:
+                    continue
+                value = _to_float(_value_from_mapping_or_attr(feature, attr_name, 0.0), 0.0)
+                break
+        values.append(value)
+    return values
+
+
 def run(context: SlicerContext) -> dict:
     mesh_artifact = context.stage_artifacts.get("mesh", {})
     slice_grid_artifact = context.stage_artifacts.get("slice_grid", {})
@@ -389,6 +545,11 @@ def run(context: SlicerContext) -> dict:
 
     layer_path_lengths = [plan.path_length_mm_total for plan in layer_flow_plans]
     layer_filament_lengths = [plan.filament_length_mm_total for plan in layer_flow_plans]
+    layer_perimeter_filament_lengths = _feature_metric_values(
+        layer_flow_plans,
+        feature_name=FEATURE_PERIMETER,
+        attr_name="filament_length_mm",
+    )
 
     layer_travel_move_counts = _collect_int_list(travel_artifact.get("layer_travel_move_counts", []))
     layer_travel_lengths = _collect_float_list(travel_artifact.get("layer_travel_lengths_mm", []))
@@ -404,10 +565,13 @@ def run(context: SlicerContext) -> dict:
         if fallback_travel_length > 0.0:
             layer_travel_lengths = [fallback_travel_length]
 
-    absolute_extrusion = bool(context.resolved_settings.get("gcode_absolute_extrusion", True))
+    absolute_extrusion_setting = context.resolved_settings.get("gcode_absolute_extrusion")
+    absolute_extrusion = absolute_extrusion_setting if isinstance(absolute_extrusion_setting, bool) else None
     firmware_flavor = str(context.resolved_settings.get("gcode_firmware_flavor", "marlin"))
     startup_macro = _macro_value(context.resolved_settings.get("gcode_startup_macro", ()))
     end_macro = _macro_value(context.resolved_settings.get("gcode_end_macro", ()))
+    nozzle_temperature_c = _parse_float(context.resolved_settings.get("nozzle_temperature_c"))
+    bed_temperature_c = _parse_float(context.resolved_settings.get("bed_temperature_c"))
     retract_length = _to_float(context.resolved_settings.get("gcode_retract_length_mm", 0.8), 0.8)
     emit_layer_comments = bool(context.resolved_settings.get("gcode_emit_layer_comments", True))
     gcode_validation_enabled = bool(context.resolved_settings.get("gcode_validation_enabled", True))
@@ -424,7 +588,7 @@ def run(context: SlicerContext) -> dict:
     gcode_validation_allow_absolute_retract = bool(
         context.resolved_settings.get("gcode_validation_allow_absolute_retract", True)
     )
-    gcode_validation_allow_negative_xy = bool(context.resolved_settings.get("gcode_validation_allow_negative_xy", False))
+    gcode_validation_allow_negative_xy = False
     gcode_validation_line_length_limit = _to_int(
         context.resolved_settings.get("gcode_validation_line_length_limit", 512),
         512,
@@ -439,6 +603,11 @@ def run(context: SlicerContext) -> dict:
     )
     cpu_threads = resolve_cpu_threads(context.runtime_settings, default=1)
     gpu_mode = resolve_gpu_mode(context.runtime_settings, default="auto")
+    seam_seed = (
+        seam_random_seed
+        if seam_random_seed > 0
+        else sum((index + 1) * ord(ch) for index, ch in enumerate(str(context.job_id))) % 2_147_483_647
+    )
     layer_xy_targets = _build_layer_xy_targets(
         regions_artifact=regions_artifact,
         mesh_artifact=mesh_artifact,
@@ -446,11 +615,16 @@ def run(context: SlicerContext) -> dict:
         bed_y_mm=gcode_validation_bed_y,
         layer_count=len(layer_heights),
         seam_position=seam_position,
-        seam_seed=(
-            seam_random_seed
-            if seam_random_seed > 0
-            else sum((index + 1) * ord(ch) for index, ch in enumerate(str(context.job_id))) % 2_147_483_647
-        ),
+        seam_seed=seam_seed,
+    )
+    layer_perimeter_paths = _build_layer_perimeter_paths(
+        perimeters_artifact=perimeters_artifact,
+        mesh_artifact=mesh_artifact,
+        bed_x_mm=gcode_validation_bed_x,
+        bed_y_mm=gcode_validation_bed_y,
+        layer_count=len(layer_heights),
+        seam_position=seam_position,
+        seam_seed=seam_seed,
     )
 
     layer_gcode_plans, lines, gcode_report = emit_gcode_semantics(
@@ -458,6 +632,7 @@ def run(context: SlicerContext) -> dict:
         layer_z_values_mm=layer_z_values,
         layer_path_lengths_mm=layer_path_lengths,
         layer_filament_lengths_mm=layer_filament_lengths,
+        layer_perimeter_filament_lengths_mm=layer_perimeter_filament_lengths,
         layer_travel_move_counts=layer_travel_move_counts,
         layer_travel_lengths_mm=layer_travel_lengths,
         layer_retract_counts=layer_retract_counts,
@@ -468,17 +643,20 @@ def run(context: SlicerContext) -> dict:
         firmware_flavor=firmware_flavor,
         startup_macro=startup_macro,
         end_macro=end_macro,
+        nozzle_temperature_c=nozzle_temperature_c,
+        bed_temperature_c=bed_temperature_c,
         retract_length_mm=retract_length,
         emit_layer_comments=emit_layer_comments,
         bed_x_mm=gcode_validation_bed_x,
         bed_y_mm=gcode_validation_bed_y,
         layer_xy_targets=layer_xy_targets,
+        layer_perimeter_paths=layer_perimeter_paths,
     )
 
     if gcode_validation_enabled:
         validation_report = validate_gcode_semantics(
             lines,
-            absolute_extrusion=absolute_extrusion,
+            absolute_extrusion=bool(gcode_report.absolute_extrusion),
             strict=gcode_validation_strict,
             bed_x_mm=gcode_validation_bed_x,
             bed_y_mm=gcode_validation_bed_y,
@@ -536,11 +714,13 @@ def run(context: SlicerContext) -> dict:
         "extrusion_flow_warnings": flow_report.warnings,
         "extrusion_flow": flow_report.to_dict(),
         "layer_extrusion_plans": layer_flow_plans,
-        "gcode_absolute_extrusion": absolute_extrusion,
-        "gcode_firmware_flavor": firmware_flavor,
+        "gcode_absolute_extrusion": bool(gcode_report.absolute_extrusion),
+        "gcode_firmware_flavor": gcode_report.firmware_flavor,
         "seam_position": seam_position,
         "seam_random_seed": seam_random_seed,
         "layer_xy_targets": layer_xy_targets,
+        "layer_perimeter_path_counts": [len(paths) for paths in layer_perimeter_paths],
+        "layer_perimeter_paths": layer_perimeter_paths,
         "gcode_command_count_total": gcode_report.command_count_total,
         "gcode_setup_command_count": gcode_report.setup_command_count,
         "gcode_teardown_command_count": gcode_report.teardown_command_count,

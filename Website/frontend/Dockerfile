@@ -10,9 +10,15 @@ RUN npm run build
 
 FROM nginx:1-alpine-slim
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+RUN apk add --no-cache gettext openssl
+
+COPY nginx.conf /etc/printnet/nginx.conf.template
+COPY runtime-config.template.js /etc/printnet/runtime-config.js.template
+COPY docker-entrypoint.d/30-printnet-runtime.sh /docker-entrypoint.d/30-printnet-runtime.sh
 COPY --from=build /app/dist /usr/share/nginx/html
+RUN chmod +x /docker-entrypoint.d/30-printnet-runtime.sh
 
 EXPOSE 80
+EXPOSE 443
 
 CMD ["nginx", "-g", "daemon off;"]

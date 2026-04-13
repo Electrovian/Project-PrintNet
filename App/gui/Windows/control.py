@@ -1,6 +1,7 @@
 from PyQt5 import QtCore, QtWidgets
 
 from ..i18n import tr
+from ..printer_selection import connector_endpoint, connector_name
 from ..theme import theme_css
 from config.defaults import DEFAULTS
 
@@ -288,29 +289,33 @@ class ControlView(QtWidgets.QWidget):
 
     def set_printers(self, printers):
         self._printers = list(printers or [])
-        self._printer_combo.clear()
-        if not self._printers:
-            self._printer_combo.addItem(tr("control.printer.none_configured"))
-            self._printer_combo.setEnabled(False)
-            self._printer_details.setText(tr("control.printer.none_selected"))
-            return
-        self._printer_combo.setEnabled(True)
-        default_name = ""
-        main = self.parent()
-        runtime_state = getattr(main, "runtime_printer_state", None) if main is not None else None
-        if runtime_state is not None:
-            default_name = str(getattr(runtime_state, "name", "")).strip().lower()
-        if not default_name:
-            default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
-        default_index = None
-        for idx, printer in enumerate(self._printers):
-            name = printer.get("name") if isinstance(printer, dict) else None
-            self._printer_combo.addItem(name or tr("control.printer.default_name"))
-            if default_name and str(name or "").strip().lower() == default_name:
-                default_index = idx
-        if default_index is not None:
-            self._printer_combo.setCurrentIndex(default_index)
-        self._update_details()
+        block = self._printer_combo.blockSignals(True)
+        try:
+            self._printer_combo.clear()
+            if not self._printers:
+                self._printer_combo.addItem(tr("control.printer.none_configured"))
+                self._printer_combo.setEnabled(False)
+                self._printer_details.setText(tr("control.printer.none_selected"))
+                return
+            self._printer_combo.setEnabled(True)
+            default_name = ""
+            main = self.parent()
+            runtime_state = getattr(main, "runtime_printer_state", None) if main is not None else None
+            if runtime_state is not None:
+                default_name = str(getattr(runtime_state, "name", "")).strip().lower()
+            if not default_name:
+                default_name = str(DEFAULTS.get("printer", {}).get("name", "")).strip().lower()
+            default_index = None
+            for idx, printer in enumerate(self._printers):
+                name = printer.get("name") if isinstance(printer, dict) else None
+                self._printer_combo.addItem(name or tr("control.printer.default_name"))
+                if default_name and str(name or "").strip().lower() == default_name:
+                    default_index = idx
+            if default_index is not None:
+                self._printer_combo.setCurrentIndex(default_index)
+        finally:
+            self._printer_combo.blockSignals(block)
+        self._update_details(emit_signal=False)
 
     def current_printer(self):
         if not self._printers:
@@ -350,12 +355,12 @@ class ControlView(QtWidgets.QWidget):
                 z=printer.get("bed_z", "n/a"),
             ),
         ]
-        url = printer.get("octoprint_url")
-        if url:
-            desc.append(tr("control.printer.octoprint", url=url))
-        connector = str(printer.get("connector_type", "")).strip()
+        connector = connector_name(printer)
         if connector:
-            desc.append(tr("control.printer.connector", connector=connector))
+            desc.append(tr("control.printer.connector", "Connector: {connector}", connector=connector))
+        endpoint = connector_endpoint(printer)
+        if endpoint:
+            desc.append(tr("control.printer.endpoint", "Endpoint: {endpoint}", endpoint=endpoint))
         self._printer_details.setText(" | ".join(desc))
         if emit_signal:
             self.printer_changed.emit(printer)

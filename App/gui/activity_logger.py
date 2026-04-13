@@ -2,13 +2,13 @@ import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from PyQt5 import QtCore, QtWidgets
 
 
 def _utc_timestamp():
-    return datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _short_text(value, max_len=160):
@@ -113,6 +113,31 @@ class ActivityLogger:
             return
         self._event_filter = ActivityEventFilter(self)
         app.installEventFilter(self._event_filter)
+
+    def uninstall(self, app=None):
+        target_app = app or QtWidgets.QApplication.instance()
+        if target_app is not None and self._event_filter is not None:
+            try:
+                target_app.removeEventFilter(self._event_filter)
+            except Exception:
+                pass
+            try:
+                self._event_filter.deleteLater()
+            except Exception:
+                pass
+        self._event_filter = None
+        self._tracked_ids.clear()
+
+        for handler in list(self._logger.handlers):
+            self._logger.removeHandler(handler)
+            try:
+                handler.flush()
+            except Exception:
+                pass
+            try:
+                handler.close()
+            except Exception:
+                pass
 
     def log_action(self, action_name, **payload):
         record = {"ts": _utc_timestamp(), "event": "action", "action": action_name}

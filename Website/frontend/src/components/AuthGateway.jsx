@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { FrontendShareCard } from "./FrontendShareCard.jsx";
 
 const HUBS = [
   { x: 20, y: 38, spreadX: 10, spreadY: 8, weight: 36 }, // North America
@@ -337,160 +338,164 @@ export function AuthGateway({ onAuthenticate, statusLine }) {
     <div className="auth-scene">
       <ConnectionMapBackdrop graph={graph} />
 
-      <section className="auth-card" aria-label="Authentication">
-        <div className="auth-brand">
-          <h1>EON PrintNet</h1>
-          <p>Connected print operations across every lab.</p>
-        </div>
+      <div className="auth-stage">
+        <section className="auth-card" aria-label="Authentication">
+          <div className="auth-brand">
+            <h1>EON PrintNet</h1>
+            <p>Connected print operations across every lab.</p>
+          </div>
 
-        <div className="auth-tabs" role="tablist" aria-label="Authentication Modes">
-          <button
-            className={mode === "signin" || mode === "verify" ? "auth-tab is-active" : "auth-tab"}
-            type="button"
-            onClick={() => switchMode("signin")}
-          >
-            Sign In
-          </button>
-          <button
-            className={mode === "signup" ? "auth-tab is-active" : "auth-tab"}
-            type="button"
-            onClick={() => switchMode("signup")}
-          >
-            Sign Up
-          </button>
-          <button
-            className={mode === "sso" ? "auth-tab is-active" : "auth-tab"}
-            type="button"
-            onClick={() => switchMode("sso")}
-          >
-            SSO
-          </button>
-        </div>
-
-        {mode === "sso" ? (
-          <div className="auth-sso-panel">
-            <button type="button" className="sso-btn sso-facebook" onClick={() => signInWith("facebook")}>
-              Enter with Facebook
+          <div className="auth-tabs" role="tablist" aria-label="Authentication Modes">
+            <button
+              className={mode === "signin" || mode === "verify" ? "auth-tab is-active" : "auth-tab"}
+              type="button"
+              onClick={() => switchMode("signin")}
+            >
+              Sign In
             </button>
-            <button type="button" className="sso-btn sso-google" onClick={() => signInWith("google")}>
-              Enter with Google
+            <button
+              className={mode === "signup" ? "auth-tab is-active" : "auth-tab"}
+              type="button"
+              onClick={() => switchMode("signup")}
+            >
+              Sign Up
             </button>
-            <button type="button" className="sso-btn sso-microsoft" onClick={() => signInWith("microsoft")}>
-              Enter with Microsoft
+            <button
+              className={mode === "sso" ? "auth-tab is-active" : "auth-tab"}
+              type="button"
+              onClick={() => switchMode("sso")}
+            >
+              SSO
             </button>
           </div>
-        ) : (
-          <form className="auth-form" onSubmit={submitAuth}>
-            {isVerify ? (
-              <>
+
+          {mode === "sso" ? (
+            <div className="auth-sso-panel">
+              <button type="button" className="sso-btn sso-facebook" onClick={() => signInWith("facebook")}>
+                Enter with Facebook
+              </button>
+              <button type="button" className="sso-btn sso-google" onClick={() => signInWith("google")}>
+                Enter with Google
+              </button>
+              <button type="button" className="sso-btn sso-microsoft" onClick={() => signInWith("microsoft")}>
+                Enter with Microsoft
+              </button>
+            </div>
+          ) : (
+            <form className="auth-form" onSubmit={submitAuth}>
+              {isVerify ? (
+                <>
+                  <label className="auth-label">
+                    <span>Verification Destination</span>
+                    <input
+                      type="text"
+                      value={String(pendingVerification?.delivery?.destination || "")}
+                      readOnly
+                    />
+                  </label>
+                  <label className="auth-label">
+                    <span>Verification Code</span>
+                    <input
+                      type="text"
+                      value={form.verificationCode}
+                      onChange={(event) => setField("verificationCode", event.target.value)}
+                      autoComplete="one-time-code"
+                      placeholder="6-digit code"
+                      required
+                    />
+                  </label>
+                </>
+              ) : isSignUp ? (
                 <label className="auth-label">
-                  <span>Verification Destination</span>
+                  <span>Display Name (Optional)</span>
                   <input
                     type="text"
-                    value={String(pendingVerification?.delivery?.destination || "")}
-                    readOnly
+                    value={form.username}
+                    onChange={(event) => setField("username", event.target.value)}
+                    placeholder="Alex Rivera"
+                    autoComplete="name"
                   />
                 </label>
+              ) : (
                 <label className="auth-label">
-                  <span>Verification Code</span>
+                  <span>Username or Email</span>
                   <input
                     type="text"
-                    value={form.verificationCode}
-                    onChange={(event) => setField("verificationCode", event.target.value)}
-                    autoComplete="one-time-code"
-                    placeholder="6-digit code"
+                    value={form.email}
+                    onChange={(event) => setField("email", event.target.value)}
+                    placeholder="you@school.edu"
+                    autoComplete="username"
                     required
                   />
                 </label>
-              </>
-            ) : isSignUp ? (
-              <label className="auth-label">
-                <span>Display Name (Optional)</span>
-                <input
-                  type="text"
-                  value={form.username}
-                  onChange={(event) => setField("username", event.target.value)}
-                  placeholder="Alex Rivera"
-                  autoComplete="name"
-                />
-              </label>
-            ) : (
-              <label className="auth-label">
-                <span>Username or Email</span>
-                <input
-                  type="text"
-                  value={form.email}
-                  onChange={(event) => setField("email", event.target.value)}
-                  placeholder="you@school.edu"
-                  autoComplete="username"
-                  required
-                />
-              </label>
-            )}
+              )}
 
-            {isSignUp ? (
-              <label className="auth-label">
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(event) => setField("email", event.target.value)}
-                  placeholder="you@school.edu"
-                  autoComplete="email"
-                  required
-                />
-              </label>
-            ) : null}
+              {isSignUp ? (
+                <label className="auth-label">
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(event) => setField("email", event.target.value)}
+                    placeholder="you@school.edu"
+                    autoComplete="email"
+                    required
+                  />
+                </label>
+              ) : null}
 
-            {isSignUp ? (
-              <label className="auth-label">
-                <span>Organization</span>
-                <input
-                  type="text"
-                  value={form.org}
-                  onChange={(event) => setField("org", event.target.value)}
-                  placeholder="University Print Lab"
-                />
-              </label>
-            ) : null}
+              {isSignUp ? (
+                <label className="auth-label">
+                  <span>Organization</span>
+                  <input
+                    type="text"
+                    value={form.org}
+                    onChange={(event) => setField("org", event.target.value)}
+                    placeholder="University Print Lab"
+                  />
+                </label>
+              ) : null}
 
-            <label className="auth-label">
-              <span>Password</span>
-              <input
-                type="password"
-                value={form.password}
-                onChange={(event) => setField("password", event.target.value)}
-                autoComplete={isSignUp ? "new-password" : "current-password"}
-                required
-              />
-            </label>
-
-            {isSignUp ? (
               <label className="auth-label">
-                <span>Confirm Password</span>
+                <span>Password</span>
                 <input
                   type="password"
-                  value={form.confirmPassword}
-                  onChange={(event) => setField("confirmPassword", event.target.value)}
-                  autoComplete="new-password"
+                  value={form.password}
+                  onChange={(event) => setField("password", event.target.value)}
+                  autoComplete={isSignUp ? "new-password" : "current-password"}
                   required
                 />
               </label>
-            ) : null}
 
-            <button className="auth-submit" type="submit" disabled={busy}>
-              {busy ? "Connecting..." : submitLabel}
-            </button>
-          </form>
-        )}
+              {isSignUp ? (
+                <label className="auth-label">
+                  <span>Confirm Password</span>
+                  <input
+                    type="password"
+                    value={form.confirmPassword}
+                    onChange={(event) => setField("confirmPassword", event.target.value)}
+                    autoComplete="new-password"
+                    required
+                  />
+                </label>
+              ) : null}
 
-        <div className="auth-footnote">
-          <span>{message || (busy ? statusLine : "Secure session ready.")}</span>
-          <a href="#forgot-password" onClick={(event) => event.preventDefault()}>
-            Forgot password?
-          </a>
-        </div>
-      </section>
+              <button className="auth-submit" type="submit" disabled={busy}>
+                {busy ? "Connecting..." : submitLabel}
+              </button>
+            </form>
+          )}
+
+          <div className="auth-footnote">
+            <span>{message || (busy ? statusLine : "Secure session ready.")}</span>
+            <a href="#forgot-password" onClick={(event) => event.preventDefault()}>
+              Forgot password?
+            </a>
+          </div>
+        </section>
+
+        <FrontendShareCard />
+      </div>
     </div>
   );
 }

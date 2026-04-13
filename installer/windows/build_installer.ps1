@@ -1,6 +1,6 @@
 param(
   [string]$AppExePath = "dist/EON-OpenSlicer.exe",
-  [string]$AppVersion = "0.1.0"
+  [string]$AppVersion = "1.0.0"
 )
 
 $ErrorActionPreference = "Stop"

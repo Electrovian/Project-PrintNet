@@ -68,7 +68,7 @@ except Exception:  # pragma: no cover - fallback path
             return decorator
 
     class FastAPI:
-        def __init__(self, *, title: str = "Backend", version: str = "0.1.0", **_kwargs: Any):
+        def __init__(self, *, title: str = "Backend", version: str = "1.0.0", **_kwargs: Any):
             self.title = str(title)
             self.version = str(version)
             self._routes: list[_Route] = []

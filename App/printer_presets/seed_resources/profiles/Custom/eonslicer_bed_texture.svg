@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="180.62mm" height="180.62mm" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="none"/>
+  <rect x="185.9" y="441.26" width="52.46" height="52.46" rx="6.28" ry="6.28" fill="#e9e9e9"/>
+  <path d="M203.5 456.8h18.1c5.59 0 9.08 2.96 9.08 7.76 0 3.14-1.59 5.58-4.39 6.73 2.8 1.14 4.39 3.57 4.39 6.7 0 4.85-3.49 7.85-9.08 7.85H203.5v-29.04Z" fill="#292826"/>
+  <path d="M212.3 464.1h12.9v3.95h-12.9v-3.95Zm0 8.28h10.97v3.95H212.3v-3.95Zm0 8.27h12.9v3.95h-12.9v-3.95Z" fill="#009789"/>
+  <text x="248" y="468" fill="#009789" font-family="Segoe UI, DejaVu Sans, Arial, sans-serif" font-size="35" font-weight="700" letter-spacing="1">EON</text>
+  <text x="248" y="491" fill="#e9e9e9" font-family="Segoe UI, DejaVu Sans, Arial, sans-serif" font-size="18" font-weight="600" letter-spacing="0.6">OpenSlicer</text>
+  <path d="M511.15 502.65c0 4.7-3.81 8.5-8.5 8.5h-10.07v.85H512v-19.42h-.85v10.07Z" fill="#009789"/>
+  <path d="M9.35 511.15c-4.7 0-8.5-3.81-8.5-8.5v-10.07H0V512h19.42v-.85H9.35Z" fill="#009789"/>
+  <path d="M.85 9.35C.85 4.65 4.65.85 9.35.85h10.07V0H0v19.42h.85V9.35Z" fill="#009789"/>
+  <path d="M502.65.85c4.7 0 8.5 3.81 8.5 8.5v10.07H512V0h-19.42v.85h10.07Z" fill="#009789"/>
+</svg>

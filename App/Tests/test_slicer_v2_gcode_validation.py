@@ -2,6 +2,7 @@ import os
 import sys
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
@@ -141,6 +142,28 @@ class TestSlicerV2GCodeValidation(unittest.TestCase):
         )
         with self.assertRaises(SlicerV2GCodeValidationError):
             run_gcode_stage(context)
+
+    def test_gcode_stage_forces_negative_xy_validation_off(self) -> None:
+        context = _build_stage_context({"gcode_validation_allow_negative_xy": True})
+
+        class _ValidationReport:
+            ok = True
+            error_count = 0
+            warning_count = 0
+
+            def to_dict(self) -> dict[str, object]:
+                return {
+                    "ok": True,
+                    "error_count": 0,
+                    "warning_count": 0,
+                    "line_count": 0,
+                    "strict_mode": False,
+                    "issues": [],
+                }
+
+        with mock.patch("slicer_v2.gcode.validate_gcode_semantics", return_value=_ValidationReport()) as patched:
+            run_gcode_stage(context)
+        self.assertFalse(bool(patched.call_args.kwargs["allow_negative_xy"]))
 
 
 if __name__ == "__main__":

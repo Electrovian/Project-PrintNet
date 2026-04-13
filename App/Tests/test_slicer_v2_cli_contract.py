@@ -79,6 +79,7 @@ class TestSlicerV2CliContract(unittest.TestCase):
             self.assertEqual(payload["plate_index"], 1)
             self.assertIn("prepare_time", payload)
             self.assertIn("export_time", payload)
+            self.assertEqual(payload["cli_config_source"], "")
             self.assertEqual(len(payload["sliced_plates"]), 1)
             self.assertTrue((outdir / "part.gcode").exists())
 
@@ -183,6 +184,7 @@ class TestSlicerV2CliContract(unittest.TestCase):
                 payload_known["downward_compatible_machine"],
                 ["PresetB 0.4 nozzle", "PresetC 0.4 nozzle"],
             )
+            self.assertEqual(payload_known["cli_config_source"], str(cli_config.resolve()))
 
             result_unknown = root / "result_unknown.json"
             exit_unknown = slicer_v2_cli_main(
@@ -203,6 +205,61 @@ class TestSlicerV2CliContract(unittest.TestCase):
             self.assertEqual(exit_unknown, int(CliExitCode.CLI_SUCCESS))
             payload_unknown = json.loads(result_unknown.read_text(encoding="utf-8"))
             self.assertEqual(payload_unknown["downward_compatible_machine"], [])
+            self.assertEqual(payload_unknown["cli_config_source"], str(cli_config.resolve()))
+
+    def test_default_embedded_cli_config_is_used_when_path_is_omitted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            mesh = root / "part.stl"
+            _write_minimal_stl(mesh)
+            result_path = root / "result.json"
+
+            exit_code = slicer_v2_cli_main(
+                [
+                    "--mesh-path",
+                    str(mesh),
+                    "--downward-check",
+                    "--printer-model",
+                    "Bambu Lab A1",
+                    "--printer-name",
+                    "Bambu Lab A1 0.4 nozzle",
+                    "--result-path",
+                    str(result_path),
+                ]
+            )
+
+            self.assertEqual(exit_code, int(CliExitCode.CLI_SUCCESS))
+            payload = json.loads(result_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["cli_config_source"], "embedded:profiles/BBL/cli_config.json")
+            self.assertGreaterEqual(len(payload["downward_compatible_machine"]), 1)
+
+    def test_explicit_missing_cli_config_path_returns_not_found(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            mesh = root / "part.stl"
+            _write_minimal_stl(mesh)
+            result_path = root / "result.json"
+            missing_cli_config = root / "missing_cli_config.json"
+
+            exit_code = slicer_v2_cli_main(
+                [
+                    "--mesh-path",
+                    str(mesh),
+                    "--downward-check",
+                    "--cli-config-path",
+                    str(missing_cli_config),
+                    "--printer-model",
+                    "Bambu Lab A1",
+                    "--printer-name",
+                    "Bambu Lab A1 0.4 nozzle",
+                    "--result-path",
+                    str(result_path),
+                ]
+            )
+
+            self.assertEqual(exit_code, int(CliExitCode.CLI_FILE_NOTFOUND))
+            payload = json.loads(result_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["return_code"], int(CliExitCode.CLI_FILE_NOTFOUND))
 
     def test_unsupported_operations_are_guarded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

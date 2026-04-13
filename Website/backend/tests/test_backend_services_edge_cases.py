@@ -60,7 +60,10 @@ class BackendServicesEdgeCasesTests(unittest.TestCase):
 
     def test_model_store_dir_normalization(self):
         resolved = _normalize_model_store_dir("")
-        self.assertTrue(resolved.endswith(os.path.join("Website", "backend", "uploads")))
+        self.assertTrue(resolved.endswith(os.path.join("Website", "backend", "runtime", "uploads")))
+        self.assertEqual(resolved, BackendState().model_store_dir)
+        self.assertEqual(_normalize_model_store_dir("Website/backend/uploads"), resolved)
+        self.assertEqual(_normalize_model_store_dir("Website/backend/Website/backend/uploads"), resolved)
         custom = _normalize_model_store_dir("Website/backend/custom_uploads")
         self.assertTrue(custom.endswith(os.path.join("Website", "backend", "custom_uploads")))
 
@@ -126,6 +129,22 @@ class BackendServicesEdgeCasesTests(unittest.TestCase):
             )
             self.assertIn("model_name", result)
             self.assertGreater(int(result["size_bytes"]), 0)
+            self.assertTrue(os.path.exists(str(result["stored_path"])))
+
+    def test_store_uploaded_model_repairs_owner_writable_directory(self):
+        if os.name == "nt":
+            self.skipTest("chmod-based directory mode repair is not portable on Windows hosts")
+        with tempfile.TemporaryDirectory() as tmp:
+            upload_dir = os.path.join(tmp, "uploads")
+            os.makedirs(upload_dir, exist_ok=True)
+            os.chmod(upload_dir, 0o555)
+            state = BackendState(model_store_dir=upload_dir)
+            payload = base64.b64encode(b"solid stl bytes").decode("ascii")
+            result = state.store_uploaded_model(
+                file_name="part.stl",
+                data_base64=payload,
+                requested_by="student-1",
+            )
             self.assertTrue(os.path.exists(str(result["stored_path"])))
 
     def test_status_and_observability_snapshots(self):

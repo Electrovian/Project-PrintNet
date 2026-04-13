@@ -48,6 +48,7 @@ class BackendFastApiMonolithTests(unittest.TestCase):
                 "BACKEND_AUTH_VERIFICATION_CODE_TTL_SECONDS": "900",
                 "BACKEND_AUTH_VERIFICATION_MAX_ATTEMPTS": "4",
                 "BACKEND_AUTH_EXPOSE_DEBUG_CODE": "1",
+                "BACKEND_AUTH_EMAIL_REQUIRE_SMTP": "1",
                 "BACKEND_AUTH_EMAIL_FROM": "security@example.com",
                 "BACKEND_SMTP_HOST": "smtp.example.com",
                 "BACKEND_SMTP_PORT": "2525",
@@ -84,6 +85,7 @@ class BackendFastApiMonolithTests(unittest.TestCase):
         self.assertEqual(settings.auth_verification_code_ttl_seconds, 900)
         self.assertEqual(settings.auth_verification_max_attempts, 4)
         self.assertTrue(settings.auth_expose_debug_code)
+        self.assertTrue(settings.auth_email_require_smtp)
         self.assertEqual(settings.auth_email_from, "security@example.com")
         self.assertEqual(settings.smtp_host, "smtp.example.com")
         self.assertEqual(settings.smtp_port, 2525)

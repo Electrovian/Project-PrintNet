@@ -7,7 +7,7 @@ import os
 @dataclass(frozen=True)
 class BackendSettings:
     app_name: str = "EON-OpenSlicer Backend"
-    app_version: str = "0.1.0"
+    app_version: str = "1.0.0"
     api_prefix: str = "/api/v1"
     backend_env: str = "development"
     default_role: str = "student"
@@ -32,6 +32,7 @@ class BackendSettings:
     auth_verification_code_ttl_seconds: int = 600
     auth_verification_max_attempts: int = 5
     auth_expose_debug_code: bool = False
+    auth_email_require_smtp: bool = False
     auth_email_from: str = "no-reply@printnet.local"
     smtp_host: str = ""
     smtp_port: int = 587
@@ -50,7 +51,7 @@ class BackendSettings:
     def from_env(env: dict[str, str] | None = None) -> "BackendSettings":
         source = env or dict(os.environ)
         app_name = str(source.get("BACKEND_APP_NAME", "EON-OpenSlicer Backend")).strip() or "EON-OpenSlicer Backend"
-        app_version = str(source.get("BACKEND_APP_VERSION", "0.1.0")).strip() or "0.1.0"
+        app_version = str(source.get("BACKEND_APP_VERSION", "1.0.0")).strip() or "1.0.0"
         api_prefix = str(source.get("BACKEND_API_PREFIX", "/api/v1")).strip() or "/api/v1"
         if not api_prefix.startswith("/"):
             api_prefix = "/" + api_prefix
@@ -155,6 +156,11 @@ class BackendSettings:
             key="BACKEND_AUTH_EXPOSE_DEBUG_CODE",
             default=False,
         )
+        auth_email_require_smtp = _read_bool(
+            source,
+            key="BACKEND_AUTH_EMAIL_REQUIRE_SMTP",
+            default=False,
+        )
         auth_email_from = str(source.get("BACKEND_AUTH_EMAIL_FROM", "no-reply@printnet.local")).strip()
         smtp_host = str(source.get("BACKEND_SMTP_HOST", "")).strip()
         smtp_port = _read_int(
@@ -208,6 +214,7 @@ class BackendSettings:
             auth_verification_code_ttl_seconds=auth_verification_code_ttl_seconds,
             auth_verification_max_attempts=auth_verification_max_attempts,
             auth_expose_debug_code=auth_expose_debug_code,
+            auth_email_require_smtp=auth_email_require_smtp,
             auth_email_from=auth_email_from,
             smtp_host=smtp_host,
             smtp_port=smtp_port,

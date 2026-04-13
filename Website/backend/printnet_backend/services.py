@@ -9,6 +9,7 @@ import os
 import re
 import secrets
 import smtplib
+import stat
 from email.message import EmailMessage
 from typing import Any, Mapping
 
@@ -45,6 +46,7 @@ class BackendState:
     auth_verification_code_ttl_seconds: int = 600
     auth_verification_max_attempts: int = 5
     auth_expose_debug_code: bool = False
+    auth_email_require_smtp: bool = False
     auth_email_from: str = "no-reply@printnet.local"
     smtp_host: str = ""
     smtp_port: int = 587
@@ -58,7 +60,7 @@ class BackendState:
         "queue_worker_operational",
         "kubernetes_packaging_validated",
     )
-    model_store_dir: str = "Website/backend/uploads"
+    model_store_dir: str = "Website/backend/runtime/uploads"
 
     def __post_init__(self):
         self.default_role = normalize_role(self.default_role)
@@ -118,6 +120,7 @@ class BackendState:
             maximum=10,
         )
         self.auth_expose_debug_code = bool(self.auth_expose_debug_code)
+        self.auth_email_require_smtp = bool(self.auth_email_require_smtp)
         self.auth_email_from = str(self.auth_email_from or "no-reply@printnet.local").strip() or "no-reply@printnet.local"
         self.smtp_host = str(self.smtp_host or "").strip()
         self.smtp_port = _as_bounded_int(
@@ -188,7 +191,7 @@ class BackendState:
             ),
         ]
         self._bootstrap_super_admin_account()
-        os.makedirs(self.model_store_dir, exist_ok=True)
+        _ensure_writable_directory(self.model_store_dir)
 
     def create_session(self, *, user_id: str, role: str, trusted_role: bool = False) -> SessionRecord:
         user = str(user_id or "").strip()
@@ -418,8 +421,15 @@ class BackendState:
                         client.login(self.smtp_username, self.smtp_password)
                     client.send_message(message)
                 return "smtp", destination
-            except Exception:
-                pass
+            except Exception as exc:
+                if self.auth_email_require_smtp:
+                    raise BackendOrchestrationError(
+                        f"AUTH_VERIFICATION_DELIVERY_FAILED: unable to send verification email via SMTP ({exc})."
+                    ) from exc
+        if self.auth_email_require_smtp:
+            raise BackendOrchestrationError(
+                "AUTH_VERIFICATION_DELIVERY_UNAVAILABLE: SMTP delivery is required but SMTP is not configured."
+            )
         print(
             f"AUTH_VERIFICATION_CODE user={target_user_id} code={code} expires_at={expires_at_utc}",
             flush=True,
@@ -588,6 +598,7 @@ class BackendState:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
         stored_name = f"{stamp}_{normalized_user}_{normalized_name}"
         stored_path = os.path.join(self.model_store_dir, stored_name)
+        _ensure_writable_directory(self.model_store_dir)
         try:
             with open(stored_path, "wb") as handle:
                 handle.write(blob)
@@ -915,13 +926,28 @@ def _project_root_dir() -> str:
     return os.path.abspath(os.path.join(_backend_root_dir(), "..", ".."))
 
 
+def _backend_runtime_dir() -> str:
+    return os.path.abspath(os.path.join(_backend_root_dir(), "runtime"))
+
+
+def _default_model_store_dir() -> str:
+    return os.path.abspath(os.path.join(_backend_runtime_dir(), "uploads"))
+
+
 def _normalize_model_store_dir(value: object) -> str:
     text = str(value or "").strip()
     if not text:
-        return os.path.abspath(os.path.join(_backend_root_dir(), "uploads"))
+        return _default_model_store_dir()
     if os.path.isabs(text):
         return os.path.abspath(text)
     normalized = text.replace("\\", "/")
+    legacy_normalized = normalized.lower().strip("/")
+    if (
+        legacy_normalized in {"uploads", "backend/uploads", "website/backend/uploads"}
+        or legacy_normalized.endswith("/backend/uploads")
+        or legacy_normalized.endswith("/website/backend/uploads")
+    ):
+        return _default_model_store_dir()
     if normalized.startswith("Website/"):
         project_root = _project_root_dir()
         if os.path.isdir(os.path.join(project_root, "Website")):
@@ -929,6 +955,8 @@ def _normalize_model_store_dir(value: object) -> str:
         normalized = normalized[len("Website/") :]
         if normalized.startswith("backend/"):
             normalized = normalized[len("backend/") :]
+    if normalized.startswith("runtime/"):
+        return os.path.abspath(os.path.join(_backend_root_dir(), normalized))
     return os.path.abspath(os.path.join(_backend_root_dir(), normalized))
 
 
@@ -949,6 +977,44 @@ def _sanitize_upload_file_name(value: object) -> str:
     if lower.endswith(".stl") or lower.endswith(".step") or lower.endswith(".stp"):
         return cleaned
     return f"{cleaned}.stl"
+
+
+def _ensure_writable_directory(path: object) -> str:
+    directory = os.path.abspath(str(path or "").strip())
+    if not directory:
+        raise BackendValidationError("MODEL_STORE_DIR_REQUIRED: model_store_dir is required.")
+    chain = _directory_chain(directory)
+    if not chain:
+        raise BackendOrchestrationError(f"MODEL_STORE_DIR_INVALID: {directory}")
+    existing_ancestor = chain[0]
+    _ensure_owner_directory_access(existing_ancestor)
+    for candidate in chain[1:]:
+        os.makedirs(candidate, exist_ok=True)
+        _ensure_owner_directory_access(candidate)
+    return directory
+
+
+def _directory_chain(path: str) -> list[str]:
+    target = os.path.abspath(path)
+    pending: list[str] = []
+    current = target
+    while True:
+        pending.append(current)
+        if os.path.isdir(current):
+            return list(reversed(pending))
+        parent = os.path.dirname(current)
+        if parent == current:
+            return []
+        current = parent
+
+
+def _ensure_owner_directory_access(path: str) -> None:
+    if not os.path.isdir(path):
+        return
+    current_mode = stat.S_IMODE(os.stat(path).st_mode)
+    desired_mode = current_mode | stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
+    if desired_mode != current_mode:
+        os.chmod(path, desired_mode)
 
 
 def _normalize_user_id_set(values: object) -> tuple[str, ...]:

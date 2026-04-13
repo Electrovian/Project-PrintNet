@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Mapping
 
 from PyQt5 import QtCore, QtWidgets
 
+from config.bootstrap import user_cache_dir
 from ...workers import Worker
 from ...i18n import tr
 from integrations.web_backend_activity import WebBackendActivityClient, WebBackendActivityError
+
+
+_ACTIVITY_CACHE_VERSION = 1
+_ACTIVITY_SYNC_CONFIG_VERSION = 1
+_DEVICE_QUEUE_VISIBLE_STATUSES = frozenset({"pending_printer", "queued"})
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -154,6 +162,142 @@ def _job_sort_key(job: Mapping[str, Any]) -> tuple[int, float]:
     return seq, updated_ts
 
 
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _project_root_path() -> Path:
+    return Path(__file__).resolve().parents[4]
+
+
+def _web_queue_upload_dir() -> Path:
+    configured = str(os.environ.get("EON_WEB_QUEUE_UPLOAD_DIR", "")).strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return _project_root_path().joinpath("Website", "backend", "runtime", "uploads")
+
+
+def _resolve_uploaded_model_path(model_name: object) -> Path | None:
+    normalized_name = Path(str(model_name or "").strip()).name
+    if not normalized_name:
+        return None
+    candidate = _web_queue_upload_dir().joinpath(normalized_name)
+    if candidate.is_file():
+        return candidate
+    return None
+
+
+def _activity_jobs_cache_path() -> Path:
+    return user_cache_dir().joinpath("activity_jobs_cache.json")
+
+
+def _activity_sync_config_path() -> Path:
+    return user_cache_dir().joinpath("activity_sync_config.json")
+
+
+def _load_activity_sync_config(path: Path | None = None) -> dict[str, Any]:
+    config_path = path or _activity_sync_config_path()
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"available": False, "base_url": "", "service_token": "", "me_user": ""}
+    if not isinstance(payload, Mapping):
+        return {"available": False, "base_url": "", "service_token": "", "me_user": ""}
+    if payload.get("version") != _ACTIVITY_SYNC_CONFIG_VERSION:
+        return {"available": False, "base_url": "", "service_token": "", "me_user": ""}
+    base_url = str(payload.get("base_url", "")).strip().rstrip("/")
+    service_token = str(payload.get("service_token", "")).strip()
+    me_user = str(payload.get("me_user", "")).strip().lower()
+    if not base_url or not service_token:
+        return {"available": False, "base_url": "", "service_token": "", "me_user": me_user}
+    return {
+        "available": True,
+        "base_url": base_url,
+        "service_token": service_token,
+        "me_user": me_user,
+    }
+
+
+def _load_activity_jobs_cache(path: Path | None = None) -> dict[str, Any]:
+    cache_path = path or _activity_jobs_cache_path()
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"available": False, "jobs_by_id": {}, "cursor": 0}
+    if not isinstance(payload, dict):
+        return {"available": False, "jobs_by_id": {}, "cursor": 0}
+    if payload.get("version") != _ACTIVITY_CACHE_VERSION:
+        return {"available": False, "jobs_by_id": {}, "cursor": 0}
+
+    raw_jobs = payload.get("jobs")
+    if not isinstance(raw_jobs, list):
+        return {"available": False, "jobs_by_id": {}, "cursor": 0}
+
+    jobs_by_id: dict[str, dict[str, Any]] = {}
+    for item in raw_jobs:
+        if not isinstance(item, Mapping):
+            continue
+        job = _normalize_job_payload(item)
+        job_id = str(job.get("job_id", "")).strip()
+        if job_id:
+            jobs_by_id[job_id] = job
+
+    return {
+        "available": True,
+        "jobs_by_id": jobs_by_id,
+        "cursor": _coerce_int(payload.get("cursor", 0), default=0, minimum=0, maximum=2_000_000_000),
+    }
+
+
+def _save_activity_jobs_cache(
+    jobs_by_id: Mapping[str, Mapping[str, Any]],
+    cursor: object,
+    path: Path | None = None,
+) -> None:
+    cache_path = path or _activity_jobs_cache_path()
+    ordered_jobs: list[dict[str, Any]] = []
+    for job in jobs_by_id.values():
+        if not isinstance(job, Mapping):
+            continue
+        normalized = _normalize_job_payload(job)
+        if str(normalized.get("job_id", "")).strip():
+            ordered_jobs.append(normalized)
+    ordered_jobs.sort(key=_job_sort_key, reverse=True)
+    payload = {
+        "version": _ACTIVITY_CACHE_VERSION,
+        "saved_at_utc": _utc_now_iso(),
+        "cursor": _coerce_int(cursor, default=0, minimum=0, maximum=2_000_000_000),
+        "jobs": ordered_jobs,
+    }
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
+        temp_path.write_text(json.dumps(payload, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+        temp_path.replace(cache_path)
+    except Exception:
+        return
+
+
+def _rows_from_jobs_by_id(jobs_by_id: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+    ordered_jobs = sorted(
+        [dict(item) for item in jobs_by_id.values() if isinstance(item, Mapping)],
+        key=_job_sort_key,
+        reverse=True,
+    )
+    rows: list[dict[str, Any]] = [_job_to_activity_entry(item) for item in ordered_jobs]
+    rows.sort(
+        key=lambda row: (
+            _coerce_int(row.get("_seq", 0), default=0, minimum=0, maximum=2_000_000_000),
+            float(row.get("_sort_ts", 0.0)),
+        ),
+        reverse=True,
+    )
+    for row in rows:
+        row.pop("_sort_ts", None)
+        row.pop("_seq", None)
+    return rows
+
+
 def _merge_feed_items(
     jobs_by_id: dict[str, dict[str, Any]],
     feed_items: list[Mapping[str, Any]],
@@ -258,6 +402,41 @@ def _job_to_activity_entry(job: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _device_queue_rows_from_jobs_by_id(jobs_by_id: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+    ordered_jobs = sorted(
+        [dict(item) for item in jobs_by_id.values() if isinstance(item, Mapping)],
+        key=_job_sort_key,
+        reverse=True,
+    )
+    rows: list[dict[str, Any]] = []
+    for job in ordered_jobs:
+        status = str(job.get("status", "")).strip().lower()
+        if status not in _DEVICE_QUEUE_VISIBLE_STATUSES:
+            continue
+        model_name = str(job.get("model_name", "")).strip()
+        import_path = _resolve_uploaded_model_path(model_name)
+        if import_path is not None:
+            import_hint = str(import_path)
+        else:
+            expected_path = _web_queue_upload_dir().joinpath(Path(model_name).name) if model_name else _web_queue_upload_dir()
+            import_hint = f"Model file not found: {expected_path}"
+        rows.append(
+            {
+                "job_id": str(job.get("job_id", "")).strip(),
+                "job_label": model_name or str(job.get("job_id", "")).strip() or "job",
+                "model_name": model_name,
+                "status": str(job.get("status", "")).strip() or "unknown",
+                "user": str(job.get("requested_by", "")).strip() or "unknown",
+                "printer": str(job.get("printer_id", "")).strip() or "Unassigned",
+                "when": _format_when(_parse_iso_datetime(job.get("created_at_utc")), fallback=str(job.get("created_at_utc", ""))),
+                "importable": import_path is not None,
+                "import_path": str(import_path) if import_path is not None else "",
+                "import_hint": import_hint,
+            }
+        )
+    return rows
+
+
 class ActivitySyncMixin:
     def _init_activity_sync(self) -> None:
         timer = getattr(self, "_activity_sync_timer", None)
@@ -269,12 +448,14 @@ class ActivitySyncMixin:
         self._activity_sync_last_error = ""
         self._activity_sync_last_count = -1
         self._activity_rows_cache = []
+        self._activity_cache_notice = ""
         self._compliance_blocked = False
         self._compliance_reason_code = ""
         self._compliance_detail = ""
         self._compliance_dialog_shown = False
         self._activity_jobs_by_id: dict[str, dict[str, Any]] = {}
         self._activity_cursor = 0
+        self._activity_jobs_cache_file = _activity_jobs_cache_path()
         self._activity_me_user = self._resolve_activity_me_user()
 
         self._activity_sync_client = self._build_activity_sync_client()
@@ -293,11 +474,19 @@ class ActivitySyncMixin:
         self._activity_sync_timer = QtCore.QTimer(self)
         self._activity_sync_timer.setInterval(self._activity_sync_interval_ms)
         self._activity_sync_timer.timeout.connect(self._on_activity_sync_timer)
+        self._clear_activity_cache_notice()
         self._refresh_compliance_status()
-        if self._activity_sync_client is not None:
-            if not bool(getattr(self, "_compliance_blocked", False)):
+        if not bool(getattr(self, "_compliance_blocked", False)):
+            notice_key = (
+                "activity.cache.notice.restored"
+                if self._activity_sync_client is not None
+                else "activity.cache.notice.not_configured"
+            )
+            self._restore_activity_rows_from_cache(notice_key=notice_key)
+            if self._activity_sync_client is not None:
                 self._activity_sync_timer.start()
         self._apply_compliance_banner()
+        self._refresh_device_queue_rows()
 
     def _refresh_compliance_status(self) -> None:
         client = getattr(self, "_activity_sync_client", None)
@@ -322,6 +511,7 @@ class ActivitySyncMixin:
         timer = getattr(self, "_activity_sync_timer", None)
         if isinstance(timer, QtCore.QTimer):
             timer.stop()
+        self._clear_activity_cache_notice()
         self._apply_compliance_banner()
         status_text = tr(
             "compliance.desktop.blocked_status",
@@ -358,10 +548,67 @@ class ActivitySyncMixin:
         else:
             self.activity_view.set_compliance_banner("")
 
+    def _show_activity_cache_notice(self, message: str = "") -> None:
+        text = str(message or "").strip()
+        self._activity_cache_notice = text
+        if hasattr(self, "activity_view") and hasattr(self.activity_view, "set_cache_banner"):
+            self.activity_view.set_cache_banner(text)
+
+    def _clear_activity_cache_notice(self) -> None:
+        self._show_activity_cache_notice("")
+
+    def _apply_activity_rows(self, rows: list[dict[str, Any]]) -> None:
+        normalized_rows = [dict(item) for item in rows if isinstance(item, Mapping)]
+        self._activity_rows_cache = normalized_rows
+        me_rows = self._build_me_rows(normalized_rows)
+        if hasattr(self, "activity_view"):
+            self.activity_view.set_me_activity(me_rows)
+            self.activity_view.set_printer_activity(normalized_rows)
+        self._refresh_device_queue_rows()
+
+    def _refresh_device_queue_rows(self) -> None:
+        if not hasattr(self, "device_view") or not hasattr(self.device_view, "set_queue_jobs"):
+            return
+        jobs_by_id = getattr(self, "_activity_jobs_by_id", {})
+        if not isinstance(jobs_by_id, Mapping):
+            self.device_view.set_queue_jobs([])
+            return
+        self.device_view.set_queue_jobs(_device_queue_rows_from_jobs_by_id(jobs_by_id))
+
+    def _restore_activity_rows_from_cache(self, *, notice_key: str) -> bool:
+        if bool(getattr(self, "_compliance_blocked", False)):
+            return False
+        cache_file = getattr(self, "_activity_jobs_cache_file", _activity_jobs_cache_path())
+        payload = _load_activity_jobs_cache(cache_file)
+        if not bool(payload.get("available", False)):
+            return False
+        raw_jobs = payload.get("jobs_by_id", {})
+        jobs_by_id = {
+            str(key): dict(value)
+            for key, value in raw_jobs.items()
+            if isinstance(value, Mapping)
+        }
+        self._activity_jobs_by_id = jobs_by_id
+        self._activity_cursor = _coerce_int(
+            payload.get("cursor", 0),
+            default=0,
+            minimum=0,
+            maximum=2_000_000_000,
+        )
+        self._apply_activity_rows(_rows_from_jobs_by_id(jobs_by_id))
+        self._show_activity_cache_notice(tr(notice_key, "Showing cached activity data."))
+        return True
+
     def _resolve_activity_me_user(self) -> str:
         explicit = str(os.environ.get("EON_ACTIVITY_ME_USER", "")).strip().lower()
         if explicit:
             return explicit
+        config = _load_activity_sync_config()
+        configured = str(config.get("me_user", "")).strip().lower()
+        if configured:
+            return configured
+        if bool(config.get("available", False)):
+            return ""
         username = str(os.environ.get("USERNAME", "")).strip().lower()
         return username
 
@@ -370,11 +617,20 @@ class ActivitySyncMixin:
         if not enabled:
             return None
 
-        base_url = str(os.environ.get("EON_ACTIVITY_BACKEND_URL", "http://127.0.0.1:8000/api/v1")).strip()
+        config = _load_activity_sync_config()
+        base_url = str(os.environ.get("EON_ACTIVITY_BACKEND_URL", "")).strip()
+        if not base_url:
+            base_url = str(config.get("base_url", "")).strip()
+        if not base_url:
+            base_url = "http://127.0.0.1:8000/api/v1"
         if not base_url:
             return None
 
         service_token = str(os.environ.get("EON_ACTIVITY_SERVICE_TOKEN", "")).strip()
+        if not service_token:
+            service_token = str(os.environ.get("BACKEND_ACTIVITY_SERVICE_TOKEN", "")).strip()
+        if not service_token:
+            service_token = str(config.get("service_token", "")).strip()
         if not service_token:
             return None
         timeout_ms = _env_int(
@@ -392,6 +648,32 @@ class ActivitySyncMixin:
         except WebBackendActivityError:
             return None
 
+    def _ensure_activity_sync_client(self) -> WebBackendActivityClient | None:
+        client = getattr(self, "_activity_sync_client", None)
+        if client is not None:
+            return client
+        client = self._build_activity_sync_client()
+        if client is None:
+            return None
+        self._activity_sync_client = client
+        self._activity_me_user = self._resolve_activity_me_user()
+        self._refresh_compliance_status()
+        if not bool(getattr(self, "_compliance_blocked", False)):
+            timer = getattr(self, "_activity_sync_timer", None)
+            if timer is not None and hasattr(timer, "start"):
+                timer.start()
+        self._apply_compliance_banner()
+        return client
+
+    def _on_activity_view_refresh_requested(self) -> None:
+        if bool(getattr(self, "_compliance_blocked", False)):
+            self._apply_compliance_banner()
+            return
+        if self._ensure_activity_sync_client() is not None:
+            self._request_activity_refresh(force=True)
+            return
+        self._restore_activity_rows_from_cache(notice_key="activity.cache.notice.not_configured")
+
     def _on_activity_sync_timer(self) -> None:
         if str(getattr(self, "_active_mode", "")).strip().lower() != "activity":
             return
@@ -402,7 +684,10 @@ class ActivitySyncMixin:
             return
         if bool(getattr(self, "_compliance_blocked", False)):
             return
-        if self._activity_sync_client is None:
+        client = self._ensure_activity_sync_client()
+        if client is None:
+            if force:
+                self._restore_activity_rows_from_cache(notice_key="activity.cache.notice.not_configured")
             return
         if not force and str(getattr(self, "_active_mode", "")).strip().lower() != "activity":
             return
@@ -444,21 +729,8 @@ class ActivitySyncMixin:
             feed_items = [item for item in raw_items if isinstance(item, Mapping)]
         jobs_by_id = _merge_feed_items(jobs_by_id, feed_items)
         cursor_out = _coerce_int(feed.get("cursor_out", cursor), default=cursor, minimum=0, maximum=2_000_000_000)
-
-        ordered_jobs = sorted(jobs_by_id.values(), key=_job_sort_key, reverse=True)
-        rows: list[dict[str, Any]] = [_job_to_activity_entry(item) for item in ordered_jobs]
-        rows.sort(
-            key=lambda row: (
-                _coerce_int(row.get("_seq", 0), default=0, minimum=0, maximum=2_000_000_000),
-                float(row.get("_sort_ts", 0.0)),
-            ),
-            reverse=True,
-        )
-        for row in rows:
-            row.pop("_sort_ts", None)
-            row.pop("_seq", None)
         return {
-            "rows": rows,
+            "rows": _rows_from_jobs_by_id(jobs_by_id),
             "jobs_by_id": jobs_by_id,
             "cursor": cursor_out,
             "job_count": len(jobs_by_id),
@@ -473,25 +745,33 @@ class ActivitySyncMixin:
                 rows = [dict(item) for item in raw_rows if isinstance(item, Mapping)]
             raw_jobs = payload.get("jobs_by_id", {})
             if isinstance(raw_jobs, Mapping):
-                self._activity_jobs_by_id = {
-                    str(key): dict(value)
-                    for key, value in raw_jobs.items()
-                    if isinstance(value, Mapping)
-                }
+                normalized_jobs: dict[str, dict[str, Any]] = {}
+                for _key, value in raw_jobs.items():
+                    if not isinstance(value, Mapping):
+                        continue
+                    normalized = _normalize_job_payload(value)
+                    job_id = str(normalized.get("job_id", "")).strip()
+                    if not job_id:
+                        continue
+                    normalized_jobs[job_id] = normalized
+                self._activity_jobs_by_id = normalized_jobs
             self._activity_cursor = _coerce_int(
                 payload.get("cursor", getattr(self, "_activity_cursor", 0)),
                 default=int(getattr(self, "_activity_cursor", 0)),
                 minimum=0,
                 maximum=2_000_000_000,
             )
-        self._activity_rows_cache = rows
-
-        me_rows = self._build_me_rows(rows)
-        if hasattr(self, "activity_view"):
-            self.activity_view.set_me_activity(me_rows)
-            self.activity_view.set_printer_activity(rows)
+        if not rows:
+            rows = _rows_from_jobs_by_id(getattr(self, "_activity_jobs_by_id", {}))
+        self._apply_activity_rows(rows)
+        _save_activity_jobs_cache(
+            getattr(self, "_activity_jobs_by_id", {}),
+            getattr(self, "_activity_cursor", 0),
+            getattr(self, "_activity_jobs_cache_file", _activity_jobs_cache_path()),
+        )
 
         self._activity_sync_last_error = ""
+        self._clear_activity_cache_notice()
         self._apply_compliance_banner()
         if str(getattr(self, "_active_mode", "")).strip().lower() == "activity":
             count = len(rows)
@@ -511,6 +791,39 @@ class ActivitySyncMixin:
             self._activity_sync_last_error = detail
             if str(getattr(self, "_active_mode", "")).strip().lower() == "activity":
                 self.statusBar().showMessage(f"Activity sync unavailable: {detail}")
+        if list(getattr(self, "_activity_rows_cache", [])):
+            self._show_activity_cache_notice(
+                tr(
+                    "activity.cache.notice.unavailable",
+                    "Showing cached activity because live sync is unavailable.",
+                )
+            )
+
+    def _on_device_queue_import_requested(self, job: object) -> None:
+        if not isinstance(job, Mapping):
+            return
+        model_name = str(job.get("model_name", "")).strip()
+        job_id = str(job.get("job_id", "")).strip()
+        import_path = str(job.get("import_path", "")).strip()
+        resolved = Path(import_path) if import_path else _resolve_uploaded_model_path(model_name)
+        if resolved is None or not resolved.exists():
+            expected = _web_queue_upload_dir().joinpath(Path(model_name).name) if model_name else _web_queue_upload_dir()
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                tr("device.queue.import.title", "Import queued job"),
+                tr(
+                    "device.queue.import.missing",
+                    "Queued model file is unavailable.\n\nExpected: {path}",
+                    path=str(expected),
+                ),
+            )
+            return
+        if hasattr(self, "_activate_mode"):
+            self._activate_mode("prepare")
+        if hasattr(self, "statusBar"):
+            label = model_name or job_id or resolved.name
+            self.statusBar().showMessage(f"Importing queued job: {label}")
+        self._add_model_from_path_async(str(resolved))
 
     def _build_me_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not rows:

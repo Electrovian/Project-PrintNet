@@ -1,29 +1,35 @@
-# EON-OpenSlicer - Final Design Report
+# Project-PrintNet
 
-## Team Name
-EON-OpenSlicer
+Project-PrintNet is a slicer and print workflow codebase with the active application in `App/`.
 
-## Team Members
-- Mitchell Koski - Computer Science, University of Cincinnati - koskima@mail.uc.edu
-- Muhanad Al-Khasawneh - Computer Science, University of Cincinnati - alkhasmr@mail.uc.edu
-- Muneer Al-Khasawneh - Computer Science, University of Cincinnati - alkhasme@mail.uc.edu
+## Start Here
 
-**Advisor:** Jeremy Hill
+- `docs/LAUNCH_READINESS.md` for the authoritative repo-wide launch and smoke runbook.
+- `App/README.md` for the current app entrypoint, smoke suite, and parity runner.
+- `docs/TASKS.md` for the live task tracker.
+- `App/Tests/run_tests.py` for the curated smoke and full test entrypoints.
 
+## Common Commands
 ---
 ## Project Description
 PrintNet is a web-based 3D printing management platform designed for university use. It allows students to upload models, configure print settings through an in-browser slicer, and submit jobs for approval. Administrators can manage queues and printers efficiently. The system improves accessibility, organization, and overall efficiency of shared 3D printing resources.
 
 ---
 
-## Project Topic Area
-Development of a web-based platform for the 3D Print Lab, with server integration for cloud-based print management. The system will allow students to submit print jobs online, lab managers to approve and monitor jobs, and admins to manage printer resources, maintenance, and user access.
+```powershell
+cd App
+python main.py
+python .\Tests\run_tests.py --scope smoke
+python -m App.testing.fff_parity --manifest <manifest.json> --profile <profile.json> --output <report.json>
+```
 
----
+Repo-wide launch readiness:
 
-## Project Abstract
-EON-OpenSlicer is a centralized 3D printing lab management system designed to streamline the submission, tracking, and completion of print jobs. It improves workflow efficiency by organizing requests, managing printer resources, and providing clear communication between users and operators.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\launch_readiness.ps1
+```
 
+The parity command now fails loudly when its corpus meshes are missing and does not return a false-green result when nothing can be compared.
 ---
 
 ## Table of Contents

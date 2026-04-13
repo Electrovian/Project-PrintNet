@@ -1,0 +1,2 @@
+window.__PRINTNET_API_BASE_URL = "";
+window.__PRINTNET_FRONTEND_SHARE_URL = "";

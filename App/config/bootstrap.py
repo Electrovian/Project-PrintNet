@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import Any, Mapping
 
+_HOST_PATH = type(Path())
+
 
 def bootstrap_defaults() -> dict[str, Any]:
     return {
@@ -19,14 +21,32 @@ def bootstrap_defaults() -> dict[str, Any]:
     }
 
 
+def _host_path(value: str) -> Path:
+    return _HOST_PATH(value)
+
+
+def _host_home() -> Path:
+    return _HOST_PATH.home()
+
+
 def user_config_dir() -> Path:
     if os.name == "nt":
-        root = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA") or str(Path.home())
-        return Path(root).joinpath("EON-OpenSlicer")
+        root = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA") or str(_host_home())
+        return _host_path(root).joinpath("EON-OpenSlicer")
     xdg = str(os.environ.get("XDG_CONFIG_HOME", "")).strip()
     if xdg:
         return Path(xdg).joinpath("eon-openslicer")
     return Path.home().joinpath(".config", "eon-openslicer")
+
+
+def user_cache_dir() -> Path:
+    if os.name == "nt":
+        root = os.environ.get("LOCALAPPDATA") or str(_host_home())
+        return _host_path(root).joinpath("EON-OpenSlicer", "cache")
+    xdg = str(os.environ.get("XDG_CACHE_HOME", "")).strip()
+    if xdg:
+        return Path(xdg).joinpath("eon-openslicer")
+    return Path.home().joinpath(".cache", "eon-openslicer")
 
 
 def bootstrap_config_path() -> Path:
@@ -116,4 +136,3 @@ def setup_completed(payload: Mapping[str, Any] | None) -> bool:
     if not stamp:
         return False
     return True
-

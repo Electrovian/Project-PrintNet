@@ -193,7 +193,7 @@ class TestSlicerV2SupportPlanning(unittest.TestCase):
         self.assertGreater(report.support_path_count_total, 0)
         self.assertGreater(report.support_path_length_mm_total, 0.0)
 
-    def test_tree_mode_has_mvp_warning(self) -> None:
+    def test_tree_mode_emits_factual_warnings_without_mvp_wording(self) -> None:
         layer0 = build_layer_island_graph([_square(0.0, 0.0, 8.0)], layer_index=0, z_height_mm=0.2)
         layer1 = build_layer_island_graph([_square(20.0, 0.0, 8.0)], layer_index=1, z_height_mm=0.4)
         graphs = [layer0, layer1]
@@ -211,7 +211,9 @@ class TestSlicerV2SupportPlanning(unittest.TestCase):
             support_interface_layers=2,
             extrusion_width_mm=0.4,
         )
-        self.assertIn("support_planning:tree_mode_mvp_estimate", report.warnings)
+        self.assertNotIn("support_planning:tree_mode_mvp_estimate", report.warnings)
+        self.assertIn("support_planning:tree_branch_graph_enabled", report.warnings)
+        self.assertIn("support_planning:tree_style=tree", report.warnings)
         self.assertGreater(report.support_path_count_total, 0)
         self.assertGreaterEqual(report.tree_branch_count_total, 1)
         self.assertGreaterEqual(len(report.tree_branches), 1)
@@ -219,6 +221,29 @@ class TestSlicerV2SupportPlanning(unittest.TestCase):
         self.assertGreaterEqual(report.tree_pruned_branch_count_total, 0)
         self.assertGreaterEqual(report.tree_parent_assignment_count_total, 0)
         self.assertGreaterEqual(report.tree_trunk_count_total, 0)
+
+    def test_organic_tree_mode_surfaces_style_without_mvp_wording(self) -> None:
+        layer0 = build_layer_island_graph([_square(0.0, 0.0, 8.0)], layer_index=0, z_height_mm=0.2)
+        layer1 = build_layer_island_graph([_square(20.0, 0.0, 8.0)], layer_index=1, z_height_mm=0.4)
+        graphs = [layer0, layer1]
+        vertical_edges = build_vertical_adjacency(graphs)
+
+        _layer_plans, report = build_support_plan(
+            graphs,
+            vertical_edges=vertical_edges,
+            support_enabled=True,
+            support_type=SUPPORT_TYPE_TREE,
+            support_style="organic",
+            support_density_percent=20.0,
+            support_spacing_mm=2.5,
+            support_xy_gap_mm=0.25,
+            support_z_gap_mm=0.2,
+            support_interface_layers=2,
+            extrusion_width_mm=0.4,
+        )
+        self.assertNotIn("support_planning:tree_mode_mvp_estimate", report.warnings)
+        self.assertIn("support_planning:tree_style=organic", report.warnings)
+        self.assertTrue(any(warning.startswith("tree_support:bounds") for warning in report.warnings))
 
     def test_supports_stage_integration(self) -> None:
         layer0 = build_layer_island_graph([_square(0.0, 0.0, 8.0)], layer_index=0, z_height_mm=0.2)
@@ -275,6 +300,16 @@ class TestSlicerV2SupportPlanning(unittest.TestCase):
         self.assertIn("tree_support_branch_diameter_angle_deg", artifact)
         self.assertIn("tree_support_branch_angle_organic_deg", artifact)
         self.assertIn("tree_support_branch_diameter_organic_mm", artifact)
+        self.assertIn("preview_diagnostics", artifact)
+        self.assertIsInstance(artifact["preview_diagnostics"], dict)
+        self.assertEqual(
+            artifact["preview_diagnostics"]["support_region_count"],
+            artifact["support_region_count"],
+        )
+        self.assertEqual(
+            artifact["preview_diagnostics"]["support_path_count"],
+            artifact["support_path_count"],
+        )
 
     def test_invalid_support_density_rejected(self) -> None:
         graph = build_layer_island_graph([_square(0.0, 0.0, 8.0)], layer_index=0, z_height_mm=0.2)

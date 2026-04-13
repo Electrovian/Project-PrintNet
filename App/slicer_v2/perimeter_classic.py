@@ -24,6 +24,7 @@ class PerimeterLoopPlan:
     shell_index: int
     point_count: int
     path_length_mm: float
+    points: tuple[Point2, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -150,6 +151,7 @@ def _build_loops_for_polygon(
                 island_index=island_index,
                 role=role,
                 shell_index=shell_index,
+                points=tuple(offset_polygon.points),
                 point_count=len(offset_polygon.points),
                 path_length_mm=float(offset_polygon.perimeter),
             )

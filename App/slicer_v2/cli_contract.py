@@ -51,6 +51,11 @@ class CliRunResult:
     prepare_time: float = 0.0
     export_time: float = 0.0
     sliced_plates: list[SlicedPlateInfo] = field(default_factory=list)
+    profile_setting_paths: list[str] = field(default_factory=list)
+    profile_filament_paths: list[str] = field(default_factory=list)
+    profile_warnings: list[str] = field(default_factory=list)
+    cli_config_source: str = ""
+    cli_config_warnings: list[str] = field(default_factory=list)
     downward_compatible_machine: list[str] = field(default_factory=list)
 
     def to_contract_payload(self) -> dict[str, object]:
@@ -61,6 +66,11 @@ class CliRunResult:
             "prepare_time": float(self.prepare_time),
             "export_time": float(self.export_time),
             "sliced_plates": [item.to_dict() for item in self.sliced_plates],
+            "profile_setting_paths": [str(item) for item in self.profile_setting_paths],
+            "profile_filament_paths": [str(item) for item in self.profile_filament_paths],
+            "profile_warnings": [str(item) for item in self.profile_warnings],
+            "cli_config_source": str(self.cli_config_source),
+            "cli_config_warnings": [str(item) for item in self.cli_config_warnings],
             "downward_compatible_machine": [str(item) for item in self.downward_compatible_machine],
         }
 

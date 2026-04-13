@@ -19,9 +19,12 @@ python App/Tests/run_tests.py
 
 ```bash
 python -m pip install -r Mobile/requirements-mobile.txt
+python -m Mobile.preflight
 briefcase create android
 briefcase build android
 ```
+
+The mobile launch path for this demo is Toga/Briefcase. The Flutter runner under `Mobile/flutter_runner/` is experimental and should not be treated as the supported launch route.
 
 ## Guidelines
 

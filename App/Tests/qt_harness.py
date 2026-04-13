@@ -1,4 +1,14 @@
 import unittest
+import os
+
+
+def _configure_qt_test_environment() -> None:
+    os.environ.setdefault("QT_OPENGL", "software")
+    os.environ.setdefault("EON_OPENGL_MODE", "software")
+    os.environ.setdefault("QT_QUICK_BACKEND", "software")
+
+
+_configure_qt_test_environment()
 
 try:
     from PyQt5 import QtWidgets, QtCore

@@ -6,14 +6,14 @@ import sys
 import threading
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import quote
 
 from PyQt5 import QtCore, QtGui
 
 
 def _utc_timestamp():
-    return datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _safe_text(value, max_len=200):
@@ -37,7 +37,7 @@ class CrashReporter:
         self.log_dir = log_dir or self._default_log_dir()
         self.issue_url = (
             issue_url
-            or "https://github.com/Electrovian/Project-EON-OpenSlicer/issues/new"
+            or "https://github.com/Electrovian/Project-PrintNet/issues/new"
         )
         self._installed = False
         self._handling = False
@@ -53,21 +53,28 @@ class CrashReporter:
         self._main_thread_id = threading.main_thread().ident
         self._fault_file = None
         self._fault_path = None
+        self._faulthandler_was_enabled = False
+        self._watchdog_stop_event = threading.Event()
+        self._installed_hook = None
+        self._installed_thread_hook = None
 
     def install(self):
         if self._installed:
             return
         self._installed = True
         self._prev_hook = sys.excepthook
-        sys.excepthook = self._excepthook
+        self._installed_hook = self._excepthook
+        sys.excepthook = self._installed_hook
         if hasattr(threading, "excepthook"):
             self._prev_thread_hook = threading.excepthook
-            threading.excepthook = self._thread_excepthook
+            self._installed_thread_hook = self._thread_excepthook
+            threading.excepthook = self._installed_thread_hook
 
     def install_faulthandler(self):
         if self._fault_file is not None:
             return
         try:
+            self._faulthandler_was_enabled = bool(faulthandler.is_enabled())
             os.makedirs(self.log_dir, exist_ok=True)
             stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             self._fault_path = os.path.join(self.log_dir, f"fault_{stamp}.log")
@@ -88,6 +95,7 @@ class CrashReporter:
         self._watchdog_interval = max(100, int(interval_ms))
         self._watchdog_timeout = max(1.0, float(timeout_s))
         self._last_heartbeat = time.monotonic()
+        self._watchdog_stop_event.clear()
 
         self._heartbeat_timer = QtCore.QTimer(app)
         self._heartbeat_timer.setInterval(self._watchdog_interval)
@@ -105,9 +113,11 @@ class CrashReporter:
         self._last_heartbeat = time.monotonic()
 
     def _watchdog_loop(self):
-        while True:
+        while not self._watchdog_stop_event.is_set():
             interval = self._watchdog_interval or 500
             time.sleep(interval / 1000.0)
+            if self._watchdog_stop_event.is_set():
+                return
             if self._hang_handled or self._handling:
                 return
             last = self._last_heartbeat
@@ -211,9 +221,60 @@ class CrashReporter:
                     log_path=log_path,
                     reason=_safe_text(reason),
                 )
-            self._hang_handled = True
+                self._hang_handled = True
         finally:
             self._handling = False
+
+    def uninstall(self, app=None):
+        timer = self._heartbeat_timer
+        self._heartbeat_timer = None
+        if timer is not None:
+            try:
+                timer.stop()
+            except Exception:
+                pass
+            try:
+                timer.deleteLater()
+            except Exception:
+                pass
+
+        self._watchdog_stop_event.set()
+        watchdog = self._watchdog_thread
+        self._watchdog_thread = None
+        if watchdog is not None and watchdog.is_alive() and watchdog is not threading.current_thread():
+            try:
+                watchdog.join(timeout=1.0)
+            except Exception:
+                pass
+
+        if self._installed:
+            if self._installed_hook is not None and sys.excepthook is self._installed_hook:
+                sys.excepthook = self._prev_hook
+            if (
+                hasattr(threading, "excepthook")
+                and self._installed_thread_hook is not None
+                and threading.excepthook is self._installed_thread_hook
+            ):
+                threading.excepthook = self._prev_thread_hook
+            self._installed = False
+
+        self._installed_hook = None
+        self._installed_thread_hook = None
+
+        if self._fault_file is not None:
+            try:
+                if self._faulthandler_was_enabled:
+                    faulthandler.enable(all_threads=True)
+                else:
+                    faulthandler.disable()
+            except Exception:
+                pass
+            try:
+                self._fault_file.close()
+            except Exception:
+                pass
+            self._fault_file = None
+            self._fault_path = None
 
     def _open_issue(self, log_path, trace_text, exc_type, exc, activity_path):
         if not self.issue_url:

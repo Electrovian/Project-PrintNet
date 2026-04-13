@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_BINARY="${1:-$ROOT_DIR/dist/EON-OpenSlicer}"
-APP_VERSION="${2:-0.1.0}"
+APP_VERSION="${2:-1.0.0}"
 APP_ARCH="${3:-amd64}"
 
 if [[ ! -f "$APP_BINARY" ]]; then

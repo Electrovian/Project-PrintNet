@@ -23,7 +23,7 @@ docker compose logs --tail=100 backend worker frontend
 
 ## Endpoints
 
-- Frontend: `http://localhost:8080`
+- Frontend: `https://localhost:8080`
 - Backend API: `http://localhost:8000/api/v1/health/live`
 
 ## Stop Stack

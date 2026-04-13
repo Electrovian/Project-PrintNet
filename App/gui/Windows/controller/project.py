@@ -2,12 +2,33 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import trimesh
 from PyQt5 import QtCore, QtGui, QtWidgets
+
+
+def _settings_to_dict(settings: Any) -> dict[str, Any]:
+    if settings is None:
+        return {}
+    if is_dataclass(settings):
+        return asdict(settings)
+    if isinstance(settings, dict):
+        return dict(settings)
+    try:
+        return dict(settings)
+    except Exception:
+        pass
+    try:
+        return {
+            str(key): value
+            for key, value in vars(settings).items()
+            if not str(key).startswith("_")
+        }
+    except Exception:
+        return {}
 
 
 class ProjectMixin:
@@ -38,7 +59,7 @@ class ProjectMixin:
         self._clear_all_models()
 
     def _open_feedback(self):
-        url = "https://github.com/Electrovian/Project-EON-OpenSlicer/issues"
+        url = "https://github.com/Electrovian/Project-PrintNet/issues"
         reply = QtWidgets.QMessageBox.question(
             self.main,
             "User Feedback",
@@ -115,22 +136,33 @@ class ProjectMixin:
 
         if "settings" in data:
             self.settings_panel.apply_settings(data.get("settings") or {})
-
-        models = data.get("models", [])
-        if not isinstance(models, list):
-            QtWidgets.QMessageBox.warning(self.main, "Open error", "Project models list is invalid.")
-            return
-
+        version = int(data.get("version", 1) or 1)
         missing = []
-        new_ids = []
 
         self._undo_in_progress = True
         try:
-            lw = self.model_panel.list_widget
-            block = lw.blockSignals(True)
-            try:
+            if version >= 2 and isinstance(data.get("plates"), list):
+                payload = {
+                    "version": 2,
+                    "plates": data.get("plates", []),
+                    "objects": data.get("objects", []),
+                    "parts": data.get("parts", []),
+                    "instances": data.get("instances", []),
+                    "selected_plate_id": data.get("selected_plate_id"),
+                    "selected_entity_ids": data.get("selected_entity_ids", []),
+                    "tool_state": data.get("tool_state", {}),
+                }
+                self.viewer.restore_scene(payload)
+                if hasattr(self.model_panel, "refresh_from_viewer"):
+                    self.model_panel.refresh_from_viewer(self.viewer)
+            else:
+                models = data.get("models", [])
+                if not isinstance(models, list):
+                    QtWidgets.QMessageBox.warning(self.main, "Open error", "Project models list is invalid.")
+                    return
                 self.viewer.clear_all_models()
-                self.model_panel.list_widget.clear()
+                if hasattr(self.model_panel, "list_widget"):
+                    self.model_panel.list_widget.clear()
                 for entry in models:
                     if not isinstance(entry, dict):
                         continue
@@ -156,41 +188,44 @@ class ProjectMixin:
                         except Exception:
                             use_path = False
 
-                    if not use_path:
-                        if vertices is None or faces is None:
-                            missing.append(model_path or name or "Unnamed model")
-                            continue
+                    if not use_path and (vertices is None or faces is None):
+                        missing.append(model_path or name or "Unnamed model")
+                        continue
+
                     model_id = self.viewer.add_model_from_data(
                         name,
                         resolved_path if use_path else model_path,
                         vertices,
                         faces,
                     )
-                    self.model_panel.add_model(name, model_id)
-
                     self.viewer.set_model_transform(
                         model_id,
                         scale=entry.get("scale"),
                         rotation_xyz=entry.get("rotation"),
                         offset_xyz=entry.get("offset"),
                     )
-                    new_ids.append(model_id)
-            finally:
-                lw.blockSignals(block)
+                if hasattr(self.model_panel, "refresh_from_viewer"):
+                    self.model_panel.refresh_from_viewer(self.viewer)
         finally:
             self._undo_in_progress = False
 
-        selected_index = data.get("selected_index")
-        selected_id = None
-        if new_ids:
-            if isinstance(selected_index, int) and 0 <= selected_index < len(new_ids):
-                selected_id = new_ids[selected_index]
-            else:
-                selected_id = new_ids[-1]
-        self.current_model_id = selected_id
-        self.viewer.set_selected_model(selected_id)
-        if selected_id is not None:
-            self._select_model_in_panel(selected_id)
+        selected = []
+        if version >= 2:
+            selected = list(data.get("selected_entity_ids", []) or [])
+        else:
+            model_ids = self.viewer.get_all_model_ids() if hasattr(self.viewer, "get_all_model_ids") else self.viewer.get_model_ids()
+            selected_index = data.get("selected_index")
+            if model_ids:
+                if isinstance(selected_index, int) and 0 <= selected_index < len(model_ids):
+                    selected = [model_ids[selected_index]]
+                else:
+                    selected = [model_ids[-1]]
+        self.current_model_id = selected[0] if selected else None
+        self.viewer.set_selected_models(selected, emit_signal=False)
+        if selected:
+            self._select_model_in_panel(selected)
+        elif hasattr(self.model_panel, "clear_selection"):
+            self.model_panel.clear_selection()
         else:
             self.model_panel.list_widget.clearSelection()
         self._sync_popups()
@@ -208,28 +243,8 @@ class ProjectMixin:
             )
 
     def _serialize_project(self) -> dict:
-        models = []
-        for m in self.viewer.models.values():
-            scale = self._scale_to_vec(m.get("scale", 1.0))
-            rotation = self._vec3(m.get("rotation", [0.0, 0.0, 0.0]))
-            offset = self._vec3(m.get("offset", [0.0, 0.0, 0.0]))
-            entry = {
-                "name": m.get("name", ""),
-                "path": m.get("path", ""),
-                "scale": [float(v) for v in scale],
-                "rotation": [float(v) for v in rotation],
-                "offset": [float(v) for v in offset],
-            }
-            if not entry["path"]:
-                entry["vertices"] = np.asarray(m.get("base_vertices", []), dtype=float).tolist()
-                entry["faces"] = np.asarray(m.get("faces", []), dtype=int).tolist()
-            models.append(entry)
-
         settings = self.settings_panel.to_settings()
-        return {
-            "version": 1,
-            "models": models,
-            "settings": asdict(settings),
-            "selected_index": self._selected_model_index(),
-        }
+        payload = self.viewer.serialize_scene() if hasattr(self.viewer, "serialize_scene") else {"version": 1, "models": []}
+        payload["settings"] = _settings_to_dict(settings)
+        return payload
 
